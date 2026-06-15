@@ -69,7 +69,17 @@ export function switchInputType(type) {
   pane.classList.add('active');
 }
 
-// ─── LOADING OVERLAY ──────────────────────────────────────────────
+// ─── LOADING OVERLAY ──────────────────────────────────────────────────────
+
+/**
+ * Desabilita ou reabilita todos os botões de submit.
+ * @param {boolean} disabled
+ */
+function setSubmitButtonsDisabled(disabled) {
+  [dom.btnSubmitSingle, dom.btnSubmitBatch, dom.btnSubmitLattes].forEach(btn => {
+    if (btn) btn.disabled = disabled;
+  });
+}
 
 /**
  * Exibe o overlay de carregamento premium.
@@ -79,6 +89,7 @@ export function switchInputType(type) {
  */
 export function showLoadingState(title = 'Processando Periódico', subtitle = 'Consultando bases oficiais e aplicando critérios CAPES...', iconName = 'search') {
   document.body.style.cursor = 'wait';
+  setSubmitButtonsDisabled(true);
   if (dom.loadingOverlay) {
     dom.loadingTitle.textContent = title;
     dom.loadingSubtitle.textContent = subtitle;
@@ -103,6 +114,7 @@ export function showLoadingState(title = 'Processando Periódico', subtitle = 'C
  */
 export function hideLoadingState() {
   document.body.style.cursor = 'default';
+  setSubmitButtonsDisabled(false);
   if (dom.loadingOverlay) {
     dom.loadingOverlay.classList.remove('active');
   }

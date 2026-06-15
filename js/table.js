@@ -46,7 +46,7 @@ export function renderResultsTable() {
   if (filtered.length === 0) {
     dom.resultsTableBody.innerHTML = `
       <tr>
-        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
+        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
           Nenhum artigo correspondente aos filtros aplicados.
         </td>
       </tr>
@@ -84,18 +84,17 @@ export function renderResultsTable() {
     }).join('');
     const cuidenVal = (item.metrics && item.metrics.cuiden) ? item.metrics.cuiden : null;
 
+    // Área como badge inline no título (antes era coluna separada)
+    const areaBadge = `<span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">${safeArea}</span>`;
+
     row.innerHTML = `
       <td>
-        <div style="font-weight: 500; color: var(--text-primary); max-width: 250px; overflow: hidden; text-overflow: ellipsis;" title="${safeTitle}">
+        <div class="table-title-cell" title="${safeTitle}">
           ${safeTitle}
         </div>
+        ${areaBadge}
       </td>
       <td style="font-family: monospace; font-size: 13px;">${safeIssn}</td>
-      <td>
-        <span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">
-          ${safeArea}
-        </span>
-      </td>
       <td>${item.jcr !== null ? item.jcr.toFixed(2) : `
         <span class="metric-missing" data-tooltip="Métrica JCR não disponível para este periódico na base de dados.">
           - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>

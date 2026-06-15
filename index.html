@@ -68,7 +68,7 @@
                 <input type="text" id="single-issn-input" class="text-input"
                   placeholder="Ex: 0104-1169 ou Revista Latino-Americana de Enfermagem" required>
               </div>
-              <button type="submit" class="btn" style="width: 100%;">Classificar Periódico</button>
+              <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar Periódico</button>
             </form>
           </div>
 
@@ -80,7 +80,7 @@
                 <textarea id="batch-issn-input" class="text-input"
                   placeholder="Ex:&#10;0104-1169&#10;0034-7167&#10;0021-9746" required></textarea>
               </div>
-              <button type="submit" class="btn btn-secondary" style="width: 100%;">Classificar Lote</button>
+              <button type="submit" id="btn-submit-batch" class="btn btn-secondary" style="width: 100%;">Classificar Lote</button>
             </form>
           </div>
 
@@ -112,7 +112,7 @@
                 <textarea id="lattes-text-input" class="text-input"
                   placeholder="Cole aqui a seção de artigos do Lattes..." required style="min-height: 120px;"></textarea>
               </div>
-              <button type="submit" class="btn" style="width: 100%;">Analisar Currículo</button>
+              <button type="submit" id="btn-submit-lattes" class="btn" style="width: 100%;">Analisar Currículo</button>
             </form>
           </div>
         </div>
@@ -179,9 +179,9 @@
             <!-- Cards de Métricas de Resumo (KPIs) -->
             <div class="kpi-container">
               <div class="kpi-card">
-                <span class="kpi-title">Total de Artigos</span>
+                <span class="kpi-title">Produção Intelectual</span>
                 <span class="kpi-value" id="kpi-total">0</span>
-                <span class="kpi-sub">Artigos identificados</span>
+                <span class="kpi-sub" id="kpi-area-distribution">Artigos analisados</span>
               </div>
               <div class="kpi-card">
                 <span class="kpi-title">Produção Qualificada</span>
@@ -303,7 +303,6 @@
                     <tr>
                       <th scope="col">Título / Revista</th>
                       <th scope="col">ISSN</th>
-                      <th scope="col">Área Encontrada</th>
                       <th scope="col">JCR</th>
                       <th scope="col">CiteScore</th>
                       <th scope="col">Indexadores Ativos</th>

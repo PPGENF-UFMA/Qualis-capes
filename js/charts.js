@@ -118,6 +118,17 @@ export function updateAnalytics() {
   const internationalPercent = total > 0 ? Math.round((internationalCount / total) * 100) : 0;
   dom.kpiInternationalCoverage.textContent = `${internationalPercent}%`;
 
+  // Distribuição por Área (Enfermagem vs Outras)
+  const enfCount = items.filter(item => item.area === 'Enfermagem').length;
+  const outrasCount = total - enfCount;
+  if (dom.kpiAreaDistribution) {
+    if (outrasCount === 0) {
+      dom.kpiAreaDistribution.textContent = `100% Enfermagem`;
+    } else {
+      dom.kpiAreaDistribution.textContent = `${enfCount} Enfermagem · ${outrasCount} Outras Áreas`;
+    }
+  }
+
   // ─── DADOS PARA GRÁFICOS ─────────────────────────────────────
 
   const { qualisCounts, indexerCounts, yearCounts, yearAvgScores } = processChartData(items);

@@ -36,6 +36,7 @@ const dom = {
   kpiAvgScoreSub: document.getElementById('kpi-avg-score-sub'),
   kpiNcCount: document.getElementById('kpi-nc-count'),
   kpiInternationalCoverage: document.getElementById('kpi-international-coverage'),
+  kpiAreaDistribution: document.getElementById('kpi-area-distribution'),
   qualisChart: document.getElementById('qualis-chart'),
   indexersChart: document.getElementById('indexers-chart'),
   publicationsYearChart: document.getElementById('publications-year-chart'),
@@ -82,7 +83,12 @@ const dom = {
   lattesResearcherName: document.getElementById('lattes-researcher-name'),
   lattesTextInput: document.getElementById('lattes-text-input'),
   sessionResearcherTitle: document.getElementById('session-researcher-title'),
-  researcherNameDisplay: document.getElementById('researcher-name-display')
+  researcherNameDisplay: document.getElementById('researcher-name-display'),
+
+  // Botões de Submit (para desabilitar durante loading)
+  btnSubmitSingle: document.getElementById('btn-submit-single'),
+  btnSubmitBatch: document.getElementById('btn-submit-batch'),
+  btnSubmitLattes: document.getElementById('btn-submit-lattes')
 };
 
 export default dom;

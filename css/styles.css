@@ -38,6 +38,14 @@
   --font-title: 'Outfit', sans-serif;
   --font-body: 'Inter', sans-serif;
 
+  /* Escala de Espaçamento 8pt */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --radius: 16px;
   --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
@@ -65,6 +73,16 @@ body.light-theme {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Acessibilidade: Respeitar preferência de movimento reduzido */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Acessibilidade: visível apenas para leitores de tela */
@@ -316,6 +334,15 @@ textarea.text-input {
   box-shadow: none;
 }
 
+.btn:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  pointer-events: none;
+}
+
 /* Área de Drop do Arquivo CSV */
 .dropzone {
   border: 2px dashed rgba(255, 255, 255, 0.15);
@@ -529,14 +556,25 @@ textarea.text-input {
   background: var(--estrato-nc);
 }
 
+/* Célula de Título na Tabela */
+.table-title-cell {
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
 /* Badges de Área */
 .area-badge {
   display: inline-block;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.5px;
+  margin-top: 4px;
 }
 
 .area-badge.enfermagem {
