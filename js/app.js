@@ -19,7 +19,8 @@ import {
   showLoadingState, hideLoadingState,
   showSearchModal, closeSearchModal,
   initTheme, toggleTheme, showToast,
-  addRecentSearch, renderRecentSearches
+  addRecentSearch, renderRecentSearches,
+  updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal
 } from './ui.js';
 
 // ─── Inicialização ───────────────────────────────────────────────
@@ -87,10 +88,14 @@ function setupEventListeners() {
 
     // Processamento em lotes paralelos (5 por vez) para melhor performance
     const CONCURRENCY = 5;
+    let processedCount = 0;
+    updateLoadingProgress(0, rawIssns.length);
     for (let i = 0; i < rawIssns.length; i += CONCURRENCY) {
       const chunk = rawIssns.slice(i, i + CONCURRENCY);
       const results = await Promise.all(chunk.map(issn => enrichAndClassify(issn)));
       results.forEach(addClassifiedItem);
+      processedCount += chunk.length;
+      updateLoadingProgress(processedCount, rawIssns.length);
     }
 
     dom.batchIssnInput.value = '';
@@ -153,6 +158,24 @@ function setupEventListeners() {
     });
   }
 
+  // Modal de Preview Lattes
+  if (dom.btnCloseLattesPreview) {
+    dom.btnCloseLattesPreview.addEventListener('click', closeLattesPreviewModal);
+  }
+  if (dom.btnCancelLattes) {
+    dom.btnCancelLattes.addEventListener('click', closeLattesPreviewModal);
+  }
+  if (dom.lattesPreviewModal) {
+    dom.lattesPreviewModal.addEventListener('click', (e) => {
+      if (e.target === dom.lattesPreviewModal) closeLattesPreviewModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dom.lattesPreviewModal && dom.lattesPreviewModal.style.display === 'flex') {
+      closeLattesPreviewModal();
+    }
+  });
+
   // Abas de Resultados
   if (dom.tabTable) dom.tabTable.addEventListener('click', () => switchTab('table'));
   if (dom.tabAnalytics) dom.tabAnalytics.addEventListener('click', () => switchTab('analytics'));
@@ -162,6 +185,14 @@ function setupEventListeners() {
   if (dom.selectorBatch) dom.selectorBatch.addEventListener('click', () => switchInputType('batch'));
   if (dom.selectorUpload) dom.selectorUpload.addEventListener('click', () => switchInputType('upload'));
   if (dom.selectorLattes) dom.selectorLattes.addEventListener('click', () => switchInputType('lattes'));
+
+  // Ajuda do Lattes
+  if (dom.btnLattesHelp && dom.lattesHelpContent) {
+    dom.btnLattesHelp.addEventListener('click', () => {
+      const isHidden = dom.lattesHelpContent.style.display === 'none';
+      dom.lattesHelpContent.style.display = isHidden ? 'block' : 'none';
+    });
+  }
 
   // Lattes Form Submit
   if (dom.lattesForm) {
@@ -183,36 +214,20 @@ function setupEventListeners() {
           return;
         }
 
-        let countNew = 0;
-        for (const article of parsedArticles) {
-          const classified = await enrichAndClassify(article.matchedIssn || article.journal);
-          
-          if (article.title && classified.title === 'Periódico Não Identificado na Base') {
-            classified.title = `[Não Identificado] ${article.journal}`;
-          } else if (article.title && classified.title) {
-            classified.title = `${article.title} (${classified.title})`;
-          }
-
-          classified.year = article.year;
-
-          addClassifiedItem(classified);
-          countNew++;
-        }
-
-        if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
-          dom.researcherNameDisplay.textContent = researcherName;
-          dom.sessionResearcherTitle.style.display = 'block';
-        }
-
-        dom.lattesTextInput.value = '';
-        
         hideLoadingState();
-        renderResultsTable();
-        switchTab('analytics');
-        showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
+        const modalOpened = showLattesPreviewModal(parsedArticles, async () => {
+          await processLattesArticles(parsedArticles, researcherName);
+        });
+
+        if (!modalOpened) {
+          // Fallback: processa os artigos diretamente se o modal nao abrir
+          console.log('[Lattes] Modal preview indisponivel, processando diretamente...');
+          showLoadingState('Analisando Currículo Lattes', 'Classificando os artigos...', 'file-text');
+          await processLattesArticles(parsedArticles, researcherName);
+        }
       } catch (err) {
         console.error("[Lattes Submit Error]", err);
-        hideLoadingState();
+        try { hideLoadingState(); } catch (e) { /* silencioso */ }
         showToast('Erro crítico ao processar o Currículo Lattes.', 'error');
       }
     });
@@ -288,6 +303,46 @@ function initUnitTests() {
   } catch (err) {
     console.error('Falha crítica ao executar a suíte de testes unitários:', err);
   }
+}
+
+/**
+ * Processa a lista de artigos do Lattes: enriquece, classifica e atualiza a UI.
+ * @param {Object[]} parsedArticles Artigos parseados pelo lattesParser
+ * @param {string} researcherName Nome do pesquisador
+ */
+async function processLattesArticles(parsedArticles, researcherName) {
+  showLoadingState('Analisando Currículo Lattes', 'Classificando os artigos...', 'file-text');
+  
+  let countNew = 0;
+  updateLoadingProgress(0, parsedArticles.length);
+  
+  for (const article of parsedArticles) {
+    const classified = await enrichAndClassify(article.matchedIssn || article.journal);
+    
+    if (article.title && classified.title === 'Periódico Não Identificado na Base') {
+      classified.title = `[Não Identificado] ${article.journal}`;
+    } else if (article.title && classified.title) {
+      classified.title = `${article.title} (${classified.title})`;
+    }
+
+    classified.year = article.year;
+
+    addClassifiedItem(classified);
+    countNew++;
+    updateLoadingProgress(countNew, parsedArticles.length);
+  }
+
+  if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
+    dom.researcherNameDisplay.textContent = researcherName;
+    dom.sessionResearcherTitle.style.display = 'block';
+  }
+
+  dom.lattesTextInput.value = '';
+  
+  hideLoadingState();
+  renderResultsTable();
+  switchTab('analytics');
+  showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
 }
 
 /**

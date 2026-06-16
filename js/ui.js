@@ -105,6 +105,13 @@ export function showLoadingState(title = 'Processando Periódico', subtitle = 'C
       }
     }
 
+    if (dom.loadingProgressContainer) {
+      dom.loadingProgressContainer.style.display = 'none';
+      if (dom.loadingProgressBar) dom.loadingProgressBar.style.width = '0%';
+      if (dom.loadingProgressText) dom.loadingProgressText.textContent = '';
+      if (dom.loadingProgressPercent) dom.loadingProgressPercent.textContent = '0%';
+    }
+
     dom.loadingOverlay.classList.add('active');
   }
 }
@@ -120,7 +127,94 @@ export function hideLoadingState() {
   }
 }
 
-// ─── MODAL DE BUSCA ───────────────────────────────────────────────
+/**
+ * Atualiza a barra de progresso do loading overlay.
+ * @param {number} current Item atual
+ * @param {number} total Total de itens
+ */
+export function updateLoadingProgress(current, total) {
+  if (dom.loadingProgressContainer) {
+    dom.loadingProgressContainer.style.display = 'block';
+    
+    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+    
+    if (dom.loadingProgressBar) dom.loadingProgressBar.style.width = `${percent}%`;
+    if (dom.loadingProgressText) dom.loadingProgressText.textContent = `Processando ${current} de ${total}...`;
+    if (dom.loadingProgressPercent) dom.loadingProgressPercent.textContent = `${percent}%`;
+  }
+}
+
+// ─── MODAL DE PREVIEW LATTES ──────────────────────────────────────
+
+let confirmLattesHandler = null;
+
+export function showLattesPreviewModal(articles, onConfirm) {
+  if (!dom.lattesPreviewModal) {
+    console.warn('[Lattes Preview] Modal element #lattes-preview-modal not found in DOM. Falling back to direct processing.');
+    return false;
+  }
+  if (!dom.lattesPreviewList) {
+    console.warn('[Lattes Preview] List element #lattes-preview-list not found in DOM. Falling back to direct processing.');
+    return false;
+  }
+
+  dom.lattesPreviewModal.style.display = 'flex';
+  
+  if (dom.lattesPreviewCountText) {
+    dom.lattesPreviewCountText.textContent = `Foram detectados ${articles.length} artigos no texto fornecido. Confirme a lista abaixo para iniciar a classificacao.`;
+  }
+  if (dom.lattesPreviewList) {
+    dom.lattesPreviewList.innerHTML = '';
+    
+    articles.forEach((article, index) => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'search-result-item';
+      itemEl.style.cursor = 'default';
+      itemEl.style.display = 'flex';
+      itemEl.style.justifyContent = 'space-between';
+      itemEl.style.alignItems = 'center';
+      
+      const safeTitle = escapeHTML(article.title || article.journal || 'Artigo sem titulo');
+      const safeYear = escapeHTML(article.year || '-');
+      
+      itemEl.innerHTML = `
+        <div class="search-result-info" style="flex: 1; overflow: hidden;">
+          <div class="search-result-title" title="${safeTitle}" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px;">${index + 1}. ${safeTitle}</div>
+          <div class="search-result-meta" style="font-size: 11px;">Revista: ${escapeHTML(article.journal || '-')} ${article.matchedIssn ? `(ISSN: ${escapeHTML(article.matchedIssn)})` : ''}</div>
+        </div>
+        <div style="font-weight: 600; color: var(--primary-color); font-size: 13px; margin-left: 10px;">
+          ${safeYear}
+        </div>
+      `;
+      dom.lattesPreviewList.appendChild(itemEl);
+    });
+  }
+  
+  // Clean up previous listeners
+  if (confirmLattesHandler && dom.btnConfirmLattes) {
+    dom.btnConfirmLattes.removeEventListener('click', confirmLattesHandler);
+  }
+  
+  confirmLattesHandler = () => {
+    closeLattesPreviewModal();
+    if (onConfirm) onConfirm();
+  };
+  
+  if (dom.btnConfirmLattes) {
+    dom.btnConfirmLattes.addEventListener('click', confirmLattesHandler);
+  }
+
+  console.log(`[Lattes Preview] Modal opened with ${articles.length} articles.`);
+  return true;
+}
+
+export function closeLattesPreviewModal() {
+  if (dom.lattesPreviewModal) {
+    dom.lattesPreviewModal.style.display = 'none';
+  }
+}
+
+// ─── TABS & PANELS ─────────────────────────────────────────────────
 
 /**
  * Exibe o modal com a lista de resultados da busca por nome.

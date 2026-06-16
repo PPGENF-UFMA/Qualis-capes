@@ -108,7 +108,19 @@
                   placeholder="Ex: Carlos Leonardo F. Cunha" required>
               </div>
               <div class="form-group">
-                <label for="lattes-text-input">Cole a lista de artigos do Lattes:</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label for="lattes-text-input" style="margin-bottom: 0;">Cole a lista de artigos do Lattes:</label>
+                  <button type="button" id="btn-lattes-help" class="btn-text-small" style="background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Como copiar?
+                  </button>
+                </div>
+                <div id="lattes-help-content" class="lattes-help-content" style="display: none; background: rgba(99, 102, 241, 0.05); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">
+                  <ol style="margin-left: 20px; margin-top: 5px;">
+                    <li style="margin-bottom: 4px;">Abra o Currículo Lattes.</li>
+                    <li style="margin-bottom: 4px;">Vá até <strong>"Produções" &gt; "Artigos completos publicados em periódicos"</strong>.</li>
+                    <li>Selecione <strong>todo o texto</strong> dos artigos e cole abaixo.</li>
+                  </ol>
+                </div>
                 <textarea id="lattes-text-input" class="text-input"
                   placeholder="Cole aqui a seção de artigos do Lattes..." required style="min-height: 120px;"></textarea>
               </div>
@@ -150,9 +162,26 @@
         <!-- Estado Vazio (Empty State) -->
         <div id="empty-state" class="card empty-state">
           <div class="empty-state-icon"><i data-lucide="bar-chart-3"></i></div>
-          <h3>Aguardando Dados para Análise</h3>
-          <p>Insira um ISSN na consulta individual, adicione uma lista em lote ou faça o upload de uma planilha CSV na
-            barra lateral para classificar os periódicos e visualizar os gráficos estatísticos do Qualis CAPES.</p>
+          <h3 style="margin-bottom: 16px;">Bem-vindo ao Classificador Qualis</h3>
+          <p style="margin-bottom: 24px; max-width: 600px; margin-inline: auto;">Esta ferramenta automatiza a classificação de periódicos seguindo as regras da CAPES (Área: Enfermagem).</p>
+          
+          <div class="onboarding-steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left; max-width: 800px; margin: 0 auto;">
+            <div class="onboarding-step-card">
+              <div style="color: var(--primary-color); margin-bottom: 8px;"><i data-lucide="mouse-pointer-click"></i></div>
+              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">1. Escolha o Método</h4>
+              <p style="font-size: 13px; color: var(--text-secondary);">Use o menu lateral para selecionar entre busca individual, lote, arquivo CSV ou Currículo Lattes.</p>
+            </div>
+            <div class="onboarding-step-card">
+              <div style="color: var(--warning); margin-bottom: 8px;"><i data-lucide="cpu"></i></div>
+              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">2. Processamento</h4>
+              <p style="font-size: 13px; color: var(--text-secondary);">O sistema buscará os dados em múltiplas bases (Qualis, SciELO, Scopus, JCR) e calculará o melhor estrato.</p>
+            </div>
+            <div class="onboarding-step-card">
+              <div style="color: var(--success); margin-bottom: 8px;"><i data-lucide="pie-chart"></i></div>
+              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">3. Análise</h4>
+              <p style="font-size: 13px; color: var(--text-secondary);">Examine a tabela detalhada, exporte para CSV ou analise os gráficos de distribuição no dashboard.</p>
+            </div>
+          </div>
         </div>
 
         <!-- Resultados e Analítica (Exibidos dinamicamente) -->
@@ -344,6 +373,24 @@
     </div>
   </div>
 
+  <!-- Modal de Preview do Lattes -->
+  <div id="lattes-preview-modal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="lattes-preview-title" style="display: none;">
+    <div class="search-modal-card" style="max-width: 600px;">
+      <div class="search-modal-header">
+        <h3 id="lattes-preview-title" class="search-modal-title"><i data-lucide="file-check"></i> Revisar Artigos Detectados</h3>
+        <button id="btn-close-lattes-preview" class="btn-close-modal" aria-label="Fechar modal"><i data-lucide="x"></i></button>
+      </div>
+      <p class="search-modal-subtitle" id="lattes-preview-count-text">Foram detectados X artigos no texto fornecido. Confirme a lista abaixo para iniciar a classificação.</p>
+      <div id="lattes-preview-list" class="search-results-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px;">
+        <!-- Itens injetados via JS -->
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btn-cancel-lattes" class="btn btn-secondary">Cancelar</button>
+        <button id="btn-confirm-lattes" class="btn">Confirmar Processamento</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Overlay de Carregamento Premium -->
   <div id="loading-overlay" class="loading-overlay" role="alert" aria-live="assertive" aria-label="Carregando">
     <div class="loading-card">
@@ -355,6 +402,17 @@
       </div>
       <h3 id="loading-title" class="loading-title">Processando Periódico</h3>
       <p id="loading-subtitle" class="loading-subtitle">Consultando bases oficiais e aplicando critérios CAPES...</p>
+      
+      <!-- Barra de Progresso (M2) -->
+      <div id="loading-progress-container" style="display: none; margin-top: 20px; width: 100%;">
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
+          <span id="loading-progress-text">Processando 0 de 0...</span>
+          <span id="loading-progress-percent">0%</span>
+        </div>
+        <div class="loading-progress-track">
+          <div id="loading-progress-bar" class="loading-progress-fill"></div>
+        </div>
+      </div>
     </div>
   </div>
 

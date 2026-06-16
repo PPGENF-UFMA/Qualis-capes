@@ -88,7 +88,25 @@ const dom = {
   // Botões de Submit (para desabilitar durante loading)
   btnSubmitSingle: document.getElementById('btn-submit-single'),
   btnSubmitBatch: document.getElementById('btn-submit-batch'),
-  btnSubmitLattes: document.getElementById('btn-submit-lattes')
+  btnSubmitLattes: document.getElementById('btn-submit-lattes'),
+
+  // Instruções Lattes
+  btnLattesHelp: document.getElementById('btn-lattes-help'),
+  lattesHelpContent: document.getElementById('lattes-help-content'),
+
+  // Modal de Preview Lattes
+  lattesPreviewModal: document.getElementById('lattes-preview-modal'),
+  btnCloseLattesPreview: document.getElementById('btn-close-lattes-preview'),
+  lattesPreviewCountText: document.getElementById('lattes-preview-count-text'),
+  lattesPreviewList: document.getElementById('lattes-preview-list'),
+  btnCancelLattes: document.getElementById('btn-cancel-lattes'),
+  btnConfirmLattes: document.getElementById('btn-confirm-lattes'),
+
+  // Barra de Progresso
+  loadingProgressContainer: document.getElementById('loading-progress-container'),
+  loadingProgressText: document.getElementById('loading-progress-text'),
+  loadingProgressPercent: document.getElementById('loading-progress-percent'),
+  loadingProgressBar: document.getElementById('loading-progress-bar')
 };
 
 export default dom;

@@ -674,6 +674,49 @@ body.light-theme .empty-state h3 {
   }
 }
 
+/* --- ONBOARDING STEP CARDS (EMPTY STATE) --- */
+.onboarding-step-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 16px;
+  border-radius: 12px;
+  transition: var(--transition);
+}
+
+.onboarding-step-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+body.light-theme .onboarding-step-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+body.light-theme .onboarding-step-card:hover {
+  border-color: var(--primary-color);
+  background: #f1f5f9;
+}
+
+/* --- LOADING PROGRESS BAR --- */
+.loading-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+body.light-theme .loading-progress-track {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.loading-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--primary-gradient);
+  transition: width 0.3s ease;
+}
+
 /* --- CARDS DE METRICAS (KPIs) --- */
 .kpi-container {
   display: grid;
