@@ -158,6 +158,7 @@ export function showLattesPreviewModal(articles, onConfirm) {
     return false;
   }
 
+  dom.lattesPreviewModal.classList.add('active');
   dom.lattesPreviewModal.style.display = 'flex';
   
   if (dom.lattesPreviewCountText) {
@@ -210,6 +211,7 @@ export function showLattesPreviewModal(articles, onConfirm) {
 
 export function closeLattesPreviewModal() {
   if (dom.lattesPreviewModal) {
+    dom.lattesPreviewModal.classList.remove('active');
     dom.lattesPreviewModal.style.display = 'none';
   }
 }

@@ -126,6 +126,11 @@ export function segmentLattesText(text) {
   // Substituir interrogações estranhas (falhas de encoding comuns no Lattes) por aspas ou apóstrofo
   let cleanText = text.replace(/M\?BATNA/gi, "M'BATNA");
   
+  // Remover injeções textuais de extensões de navegador (ex: Qualis Lattes) antes de linearizar
+  cleanText = cleanText.replace(/.*Qualis\s*\(ISSN:.*\n?/gi, "");
+  cleanText = cleanText.replace(/.*fonte Qualis\/CAPES.*\n?/gi, "");
+  cleanText = cleanText.replace(/.*Não classificado,\s*ISSN.*\n?/gi, "");
+
   // Linearizar o texto substituindo quebras de linha simples
   cleanText = cleanText.replace(/\r?\n/g, " ");
   cleanText = cleanText.replace(/\s+/g, " ");
@@ -156,8 +161,8 @@ export function parseSingleArticle(articleText) {
   // Remover numerações iniciais (ex: "2. ")
   cleanText = cleanText.replace(/^\s*\d+\.\s*/, "");
 
-  // Regex para capturar os dados de publicação no final (Periódico, Volume, Página, Ano)
-  const pubRegex = /\.([^.]+),\s*(?:v\.\s*([^,]+),)?\s*(?:p\.\s*([^,]+),)?\s*(\d{4})\.?$/i;
+  // Regex para capturar os dados de publicação no final (Volume, Página, Ano)
+  const pubRegex = /,\s*(?:v\.\s*([^,]+),)?\s*(?:p\.\s*([^,]+),)?\s*(\d{4})\.?$/i;
   const match = cleanText.match(pubRegex);
 
   let authors = "Autores Não Identificados";
@@ -168,35 +173,55 @@ export function parseSingleArticle(articleText) {
   let pages = "";
 
   if (match) {
-    journal = match[1].trim();
-    volume = match[2] ? match[2].trim() : "";
-    pages = match[3] ? match[3].trim() : "";
-    year = parseInt(match[4], 10);
+    volume = match[1] ? match[1].trim() : "";
+    pages = match[2] ? match[2].trim() : "";
+    year = parseInt(match[3], 10);
 
-    // O que ficou antes da revista é Autores + Título
+    // O que ficou antes é Autores + Título + Periódico
     const mainBlock = cleanText.substring(0, match.index).trim();
     
+    // Encontrar o último ponto final fora de parênteses no mainBlock para isolar o Periódico (Revista)
+    let nesting = 0;
+    let lastDotIndex = -1;
+    for (let i = 0; i < mainBlock.length; i++) {
+      if (mainBlock[i] === '(') {
+        nesting++;
+      } else if (mainBlock[i] === ')') {
+        nesting--;
+      } else if (mainBlock[i] === '.' && nesting === 0) {
+        lastDotIndex = i;
+      }
+    }
+
+    let remainingBlock = mainBlock;
+    if (lastDotIndex !== -1) {
+      journal = mainBlock.substring(lastDotIndex + 1).trim();
+      remainingBlock = mainBlock.substring(0, lastDotIndex).trim();
+    } else {
+      journal = mainBlock;
+    }
+    
     // Separar autores e título no ponto final após o último ponto-e-vírgula (;)
-    const lastSemicolon = mainBlock.lastIndexOf(";");
+    const lastSemicolon = remainingBlock.lastIndexOf(";");
     if (lastSemicolon !== -1) {
-      const firstDotAfterSemicolon = mainBlock.indexOf(".", lastSemicolon);
+      const firstDotAfterSemicolon = remainingBlock.indexOf(".", lastSemicolon);
       if (firstDotAfterSemicolon !== -1) {
-        authors = mainBlock.substring(0, firstDotAfterSemicolon).trim();
-        title = mainBlock.substring(firstDotAfterSemicolon + 1).trim();
+        authors = remainingBlock.substring(0, firstDotAfterSemicolon).trim();
+        title = remainingBlock.substring(firstDotAfterSemicolon + 1).trim();
       } else {
         // Fallback se não achar o ponto final
-        authors = mainBlock.substring(0, lastSemicolon).trim();
-        title = mainBlock.substring(lastSemicolon + 1).trim();
+        authors = remainingBlock.substring(0, lastSemicolon).trim();
+        title = remainingBlock.substring(lastSemicolon + 1).trim();
       }
     } else {
       // Se não houver ponto-e-vírgula (autor único)
       // Encontrar o primeiro ponto final após o sobrenome (geralmente maiúsculo)
-      const firstDot = mainBlock.indexOf(".");
-      if (firstDot !== -1 && firstDot < mainBlock.length - 15) {
-        authors = mainBlock.substring(0, firstDot).trim();
-        title = mainBlock.substring(firstDot + 1).trim();
+      const firstDot = remainingBlock.indexOf(".");
+      if (firstDot !== -1 && firstDot < remainingBlock.length - 15) {
+        authors = remainingBlock.substring(0, firstDot).trim();
+        title = remainingBlock.substring(firstDot + 1).trim();
       } else {
-        title = mainBlock;
+        title = remainingBlock;
       }
     }
   } else {
