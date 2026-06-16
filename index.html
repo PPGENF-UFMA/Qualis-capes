@@ -218,7 +218,7 @@
                 <span class="kpi-sub" id="kpi-qualified-sub">0% do total (A1 + A2)</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-title">Qualidade do Currículo</span>
+                <span class="kpi-title">Score de Produção</span>
                 <span class="kpi-value" id="kpi-avg-score-value">0 / 100</span>
                 <span class="kpi-sub" id="kpi-avg-score-sub">Estrato Médio: -</span>
               </div>
@@ -259,7 +259,7 @@
                 </div>
               </div>
               <div class="card chart-card">
-                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução da Qualidade (Score Qualis)</h2>
+                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução do Score de Produção</h2>
                 <div class="chart-wrapper">
                   <canvas id="qualis-evolution-chart"></canvas>
                 </div>
@@ -322,6 +322,13 @@
                   <option value="A7">Qualis A7</option>
                   <option value="A8">Qualis A8</option>
                   <option value="NC">Não Classificado (NC)</option>
+                </select>
+                <label for="filter-year" class="sr-only">Filtrar por ano/quadriênio</label>
+                <select id="filter-year" class="select-filter" aria-label="Filtrar por ano/quadriênio">
+                  <option value="ALL">Todos os Anos</option>
+                  <option value="2025-2028">Quadriênio 2025-2028</option>
+                  <option value="2021-2024">Quadriênio 2021-2024</option>
+                  <option value="2017-2020">Quadriênio 2017-2020</option>
                 </select>
               </div>
 

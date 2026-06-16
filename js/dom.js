@@ -21,6 +21,7 @@ const dom = {
 
   searchBox: document.getElementById('search-box'),
   filterEstrato: document.getElementById('filter-estrato'),
+  filterYear: document.getElementById('filter-year'),
   btnExport: document.getElementById('btn-export'),
   btnClear: document.getElementById('btn-clear'),
 

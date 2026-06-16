@@ -72,10 +72,8 @@ function getChartThemeConfig() {
 /**
  * Recalcula métricas (KPIs) e atualiza gráficos dinamicamente.
  */
-export function updateAnalytics() {
-  const items = appState.classifiedItems;
-
-  if (items.length === 0) {
+export function updateAnalytics(items = appState.classifiedItems) {
+  if (appState.classifiedItems.length === 0) {
     dom.emptyState.style.display = 'flex';
     dom.analyticsResults.style.display = 'none';
     destroyAllCharts();
@@ -84,6 +82,38 @@ export function updateAnalytics() {
 
   dom.emptyState.style.display = 'none';
   dom.analyticsResults.style.display = 'block';
+
+  if (items.length === 0) {
+    // Zerar KPIs
+    dom.kpiTotal.textContent = 0;
+    dom.kpiQualifiedValue.textContent = 0;
+    dom.kpiQualifiedSub.textContent = '0% do total (A1 + A2)';
+    dom.kpiAvgScoreValue.textContent = '0 / 100';
+    dom.kpiAvgScoreSub.textContent = 'Estrato Médio: NC';
+    dom.kpiNcCount.textContent = 0;
+    dom.kpiInternationalCoverage.textContent = '0%';
+    if (dom.kpiAreaDistribution) {
+      dom.kpiAreaDistribution.textContent = '0 artigos';
+    }
+    
+    // Destruir gráficos pois não há dados
+    destroyAllCharts();
+    
+    // Limpar periódicos e insights
+    if (dom.topJournalsTableBody) dom.topJournalsTableBody.innerHTML = '';
+    if (dom.curriculumInsightsList) {
+      dom.curriculumInsightsList.innerHTML = `
+        <div class="insight-item">
+          <div class="insight-icon"><i data-lucide="info"></i></div>
+          <p class="insight-text">Nenhum artigo corresponde aos filtros de ano/quadriênio aplicados.</p>
+        </div>
+      `;
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons({ node: dom.curriculumInsightsList });
+      }
+    }
+    return;
+  }
 
   const total = items.length;
   dom.kpiTotal.textContent = total;
@@ -131,12 +161,12 @@ export function updateAnalytics() {
 
   // ─── DADOS PARA GRÁFICOS ─────────────────────────────────────
 
-  const { qualisCounts, indexerCounts, yearCounts, yearAvgScores } = processChartData(items);
+  const { qualisCounts, indexerCounts, yearAvgScores, yearEstratoCounts } = processChartData(items);
 
   // ─── RENDER ──────────────────────────────────────────────────
   renderQualisChart(qualisCounts);
   renderIndexersChart(indexerCounts);
-  renderPublicationsYearChart(yearCounts);
+  renderPublicationsYearChart(yearEstratoCounts);
   renderQualisEvolutionChart(yearAvgScores);
   renderTopJournals(items);
   renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent, internationalPercent, ncCount);
@@ -157,10 +187,11 @@ function processChartData(items) {
   };
   const yearCounts = {};
   const yearScores = {};
+  const yearEstratoCounts = {};
 
   items.forEach(item => {
     // Qualis
-    const estrato = item.classification.estrato;
+    const estrato = item.classification.estrato || 'NC';
     qualisCounts[estrato] !== undefined ? qualisCounts[estrato]++ : qualisCounts.NC++;
 
     // Indexadores
@@ -182,6 +213,15 @@ function processChartData(items) {
       const score = SCORE_WEIGHTS[estrato] || 0;
       yearCounts[yr] = (yearCounts[yr] || 0) + 1;
       yearScores[yr] = (yearScores[yr] || 0) + score;
+
+      if (!yearEstratoCounts[yr]) {
+        yearEstratoCounts[yr] = { A1: 0, A2: 0, A3: 0, A4: 0, A5: 0, A6: 0, A7: 0, A8: 0, NC: 0 };
+      }
+      if (yearEstratoCounts[yr][estrato] !== undefined) {
+        yearEstratoCounts[yr][estrato]++;
+      } else {
+        yearEstratoCounts[yr].NC++;
+      }
     }
   });
 
@@ -191,7 +231,7 @@ function processChartData(items) {
     yearAvgScores[yr] = Math.round(yearScores[yr] / yearCounts[yr]);
   });
 
-  return { qualisCounts, indexerCounts, yearCounts, yearAvgScores };
+  return { qualisCounts, indexerCounts, yearCounts, yearAvgScores, yearEstratoCounts };
 }
 
 // ─── LIFECYCLE ─────────────────────────────────────────────────────
@@ -352,42 +392,63 @@ function renderIndexersChart(counts) {
 }
 
 /** Renderiza o gráfico de volume de produção por ano. */
-function renderPublicationsYearChart(counts) {
+function renderPublicationsYearChart(yearEstratoCounts) {
   const ctx = prepareChart('publicationsYear', dom.publicationsYearChart);
   if (!ctx) return;
 
-  const sortedYears = Object.keys(counts).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-  const data = sortedYears.map(yr => counts[yr]);
+  const sortedYears = Object.keys(yearEstratoCounts).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
   if (sortedYears.length === 0) return;
 
   const theme = getChartThemeConfig();
+  const colorMapping = {
+    A1: '#f59e0b', A2: '#94a3b8', A3: '#b7791f', A4: '#db2777',
+    A5: '#1d4ed8', A6: '#0891b2', A7: '#0f766e', A8: '#047857', NC: '#4b5563'
+  };
+
+  const datasets = [];
+  // Stacked order: NC at the bottom, A1 at the top
+  const estratos = ['NC', 'A8', 'A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1'];
+  
+  estratos.forEach(estrato => {
+    const estratoData = sortedYears.map(yr => yearEstratoCounts[yr][estrato] || 0);
+    const hasData = estratoData.some(val => val > 0);
+    if (hasData) {
+      datasets.push({
+        label: `Qualis ${estrato}`,
+        data: estratoData,
+        backgroundColor: colorMapping[estrato],
+        hoverBackgroundColor: colorMapping[estrato],
+        borderRadius: 0,
+        borderWidth: 0
+      });
+    }
+  });
 
   appState.charts.publicationsYear = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: sortedYears,
-      datasets: [{
-        label: 'Artigos Publicados',
-        data,
-        backgroundColor: 'rgba(99, 102, 241, 0.85)',
-        hoverBackgroundColor: '#6366f1',
-        borderRadius: 6,
-        borderWidth: 0
-      }]
+      datasets: datasets
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: 'top',
+          labels: theme.legendLabels
+        },
         tooltip: theme.tooltip
       },
       scales: {
         x: {
+          stacked: true,
           grid: { display: false },
           ticks: { color: theme.tickPrimaryColor, font: theme.tickFont }
         },
         y: {
+          stacked: true,
           grid: { color: theme.gridColor },
           ticks: { color: theme.tickColor, stepSize: 1, precision: 0 }
         }
@@ -407,12 +468,76 @@ function renderQualisEvolutionChart(scores) {
 
   const theme = getChartThemeConfig();
 
+  // Plugin inline customizado para desenhar as faixas de qualidade e limites
+  const scoreBandsPlugin = {
+    id: 'scoreBands',
+    beforeDraw(chart) {
+      const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = chart;
+      ctx.save();
+      
+      const y100 = y.getPixelForValue(100);
+      const y85 = y.getPixelForValue(85);
+      const y40 = y.getPixelForValue(40);
+      const y0 = y.getPixelForValue(0);
+
+      const isDark = !document.body.classList.contains('light-theme');
+      
+      // Cores semitransparentes harmonizadas
+      const colorExcellent = isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.05)';
+      const colorRegular = isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.03)';
+      const colorAttention = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)';
+      
+      // Preenche os retângulos de fundo
+      // Excelente (85 a 100)
+      ctx.fillStyle = colorExcellent;
+      ctx.fillRect(left, y100, right - left, y85 - y100);
+      
+      // Regular (40 a 85)
+      ctx.fillStyle = colorRegular;
+      ctx.fillRect(left, y85, right - left, y40 - y85);
+      
+      // Atenção (0 a 40)
+      ctx.fillStyle = colorAttention;
+      ctx.fillRect(left, y40, right - left, y0 - y40);
+
+      // Limites pontilhados das faixas
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)';
+      
+      // Limite Excelente (85)
+      ctx.beginPath();
+      ctx.moveTo(left, y85);
+      ctx.lineTo(right, y85);
+      ctx.stroke();
+      
+      // Limite Atenção (40)
+      ctx.beginPath();
+      ctx.moveTo(left, y40);
+      ctx.lineTo(right, y40);
+      ctx.stroke();
+
+      // Rótulos de texto
+      ctx.setLineDash([]);
+      ctx.font = '600 10px Outfit, sans-serif';
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)';
+      ctx.textAlign = 'right';
+      
+      const textX = right - 10;
+      
+      ctx.fillText('Excelente (≥85)', textX, y85 - 6);
+      ctx.fillText('Atenção (<40)', textX, y40 + 14);
+      
+      ctx.restore();
+    }
+  };
+
   appState.charts.qualisEvolution = new Chart(ctx, {
     type: 'line',
     data: {
       labels: sortedYears,
       datasets: [{
-        label: 'Score Qualis Médio',
+        label: 'Score de Produção Médio',
         data,
         borderColor: '#a855f7',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
@@ -426,6 +551,7 @@ function renderQualisEvolutionChart(scores) {
         pointHoverRadius: 8
       }]
     },
+    plugins: [scoreBandsPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -436,7 +562,7 @@ function renderQualisEvolutionChart(scores) {
           callbacks: {
             label: function(context) {
               const val = context.raw;
-              return ` Score: ${val}/100 (Médio: Qualis ${getEstratoFromScore(val)})`;
+              return ` Score de Produção: ${val}/100 (Médio: Qualis ${getEstratoFromScore(val)})`;
             }
           }
         }
@@ -519,17 +645,59 @@ function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent,
     insights.push({ icon: 'check-circle-2', text: `<strong>Dados Coerentes:</strong> 100% dos periódicos analisados estão classificados no Qualis CAPES.` });
   }
 
-  // Insight 4: Avaliação do Score
+  // Insight 4: Avaliação do Score de Produção
   let scoreText = '';
-  if (avgScore >= 75) scoreText = 'Perfil com altíssimo impacto científico (Excelente).';
-  else if (avgScore >= 55) scoreText = 'Produção qualificada e consistente (Forte).';
-  else if (avgScore >= 30) scoreText = 'Produção em desenvolvimento científico (Regular).';
-  else scoreText = 'Baixo impacto relativo nas bases CAPES.';
+  if (avgScore >= 85) scoreText = 'Perfil com altíssimo impacto científico (Excelente).';
+  else if (avgScore >= 40) scoreText = 'Produção qualificada e consistente (Regular).';
+  else scoreText = 'Baixo impacto relativo nas bases CAPES (Atenção).';
 
   insights.push({
     icon: 'activity',
-    text: `<strong>Score do Currículo:</strong> Nota <strong>${avgScore}/100</strong> (Estrato Médio equivalente a <strong>${avgEstrato}</strong>). ${scoreText}`
+    text: `<strong>Score de Produção:</strong> Nota <strong>${avgScore}/100</strong> (Estrato Médio equivalente a <strong>${avgEstrato}</strong>). ${scoreText}`
   });
+
+  // Insight 5: Concentração excessiva em um único periódico (mais de 30% das publicações)
+  const journalCounts = {};
+  items.forEach(item => {
+    const journalName = item.journal || item.title || 'Desconhecido';
+    let cleanJournalName = journalName;
+    if (journalName.includes('(') && journalName.endsWith(')')) {
+      const parts = journalName.split('(');
+      cleanJournalName = parts[parts.length - 1].replace(')', '').trim();
+    }
+    journalCounts[cleanJournalName] = (journalCounts[cleanJournalName] || 0) + 1;
+  });
+
+  const totalItems = items.length;
+  let maxJournal = '';
+  let maxCount = 0;
+  Object.entries(journalCounts).forEach(([journal, count]) => {
+    if (count > maxCount) {
+      maxCount = count;
+      maxJournal = journal;
+    }
+  });
+
+  const concentrationPercent = totalItems > 0 ? Math.round((maxCount / totalItems) * 100) : 0;
+  if (concentrationPercent > 30 && totalItems >= 3) {
+    insights.push({
+      icon: 'alert-circle',
+      text: `<strong>Alta Concentração:</strong> ${concentrationPercent}% das publicações estão concentradas no periódico <strong>${maxJournal}</strong> (máx. recomendado: 30%). Recomenda-se diversificar os canais para fortalecer o currículo frente aos critérios CAPES.`
+    });
+  }
+
+  // Insight 6: Potencial de upgrade de artigos A4/A5 para MEDLINE/SciELO
+  const upgradeableItems = items.filter(item => {
+    const estrato = item.classification.estrato;
+    return ['A4', 'A5', 'A6', 'A7', 'A8'].includes(estrato);
+  });
+
+  if (upgradeableItems.length > 0) {
+    insights.push({
+      icon: 'sparkles',
+      text: `<strong>Oportunidade de Upgrade:</strong> Há <strong>${upgradeableItems.length} artigos</strong> classificados entre A4 e A8. Priorizar submissões em periódicos indexados na <strong>SciELO</strong> ou <strong>MEDLINE</strong> pode elevar a classificação de trabalhos futuros para estratos mais altos (mínimo A4 e A3).`
+    });
+  }
 
   container.innerHTML = insights.map(ins => `
     <div class="insight-item">

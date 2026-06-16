@@ -51,7 +51,7 @@ function setupEventListeners() {
   dom.themeToggle.addEventListener('click', () => {
     toggleTheme();
     if (appState.classifiedItems.length > 0) {
-      updateAnalytics();
+      renderResultsTable();
     }
   });
 
@@ -124,6 +124,9 @@ function setupEventListeners() {
   // Filtros da tabela
   dom.searchBox.addEventListener('input', () => renderResultsTable());
   dom.filterEstrato.addEventListener('change', () => renderResultsTable());
+  if (dom.filterYear) {
+    dom.filterYear.addEventListener('change', () => renderResultsTable());
+  }
 
   // Limpar e Exportar
   dom.btnClear.addEventListener('click', () => {
@@ -131,6 +134,9 @@ function setupEventListeners() {
     if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
       dom.sessionResearcherTitle.style.display = 'none';
       dom.researcherNameDisplay.textContent = '-';
+    }
+    if (dom.filterYear) {
+      dom.filterYear.value = 'ALL';
     }
     renderResultsTable();
     switchTab('table');

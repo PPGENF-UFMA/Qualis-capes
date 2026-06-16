@@ -29,10 +29,12 @@ function formatDate(dateStr) {
 export function renderResultsTable() {
   const searchVal = dom.searchBox.value;
   const filterVal = dom.filterEstrato.value;
-  const filtered = getFilteredItems(searchVal, filterVal);
+  const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
+  const filtered = getFilteredItems(searchVal, filterVal, filterYearVal);
 
-  // Sempre atualiza os KPIs e gráficos com base na lista geral da sessão
-  updateAnalytics();
+  // Atualiza os KPIs e gráficos com base nos itens filtrados pelo ano selecionado
+  const dashboardItems = getFilteredItems('', 'ALL', filterYearVal);
+  updateAnalytics(dashboardItems);
 
   dom.resultsTableBody.innerHTML = '';
 

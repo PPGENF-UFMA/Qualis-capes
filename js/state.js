@@ -40,18 +40,34 @@ export function clearClassifiedItems() {
 }
 
 /**
- * Retorna os itens classificados aplicando filtros de busca e estrato.
+ * Retorna os itens classificados aplicando filtros de busca, estrato e ano/quadriênio.
  * @param {string} searchVal Texto de busca (título ou ISSN)
  * @param {string} filterVal Estrato selecionado ('ALL' ou 'A1'..'NC')
+ * @param {string} filterYearVal Ano ou Quadriênio selecionado ('ALL' ou '2025-2028' ou '2021-2024' ou '2017-2020')
  * @returns {Object[]} Itens filtrados
  */
-export function getFilteredItems(searchVal = '', filterVal = 'ALL') {
+export function getFilteredItems(searchVal = '', filterVal = 'ALL', filterYearVal = 'ALL') {
   const search = searchVal.toLowerCase().trim();
   return appState.classifiedItems.filter(item => {
     const matchesSearch = item.issn.toLowerCase().includes(search) ||
       item.title.toLowerCase().includes(search);
     const matchesFilter = filterVal === 'ALL' || item.classification.estrato === filterVal;
-    return matchesSearch && matchesFilter;
+    
+    let matchesYear = true;
+    if (filterYearVal !== 'ALL') {
+      const year = parseInt(item.year, 10);
+      if (filterYearVal === '2025-2028') {
+        matchesYear = year >= 2025 && year <= 2028;
+      } else if (filterYearVal === '2021-2024') {
+        matchesYear = year >= 2021 && year <= 2024;
+      } else if (filterYearVal === '2017-2020') {
+        matchesYear = year >= 2017 && year <= 2020;
+      } else {
+        matchesYear = year === parseInt(filterYearVal, 10);
+      }
+    }
+    
+    return matchesSearch && matchesFilter && matchesYear;
   });
 }
 
