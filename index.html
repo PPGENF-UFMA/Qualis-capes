@@ -9,6 +9,7 @@
     content="Ferramenta automatizada para enriquecimento de métricas e classificação de periódicos científicos de acordo com as regras da CAPES para Enfermagem e Outras Áreas.">
   <link rel="stylesheet" href="css/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/lucide@0.469.0" crossorigin="anonymous"></script>
 </head>
 
@@ -58,6 +59,10 @@
               <i data-lucide="file-text"></i>
               <span>Currículo</span>
             </button>
+            <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
+              <i data-lucide="git-compare"></i>
+              <span>Comparar</span>
+            </button>
           </div>
 
           <!-- Painel 1: Consulta Individual -->
@@ -90,11 +95,11 @@
               <label>Arraste e solte seu arquivo CSV:</label>
               <div id="dropzone" class="dropzone">
                 <div class="dropzone-icon"><i data-lucide="file-spreadsheet"></i></div>
-                <p>Arraste seu arquivo <strong>CSV</strong> aqui ou <span class="highlight">clique para
+                <p>Arraste seu arquivo <strong>CSV ou Excel</strong> aqui ou <span class="highlight">clique para
                     selecionar</span></p>
                 <p style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Recomendado conter uma coluna
                   chamada 'ISSN' (delimitador , ou ;)</p>
-                <input type="file" id="file-input" accept=".csv">
+                <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
               </div>
             </div>
           </div>
@@ -187,6 +192,15 @@
         <!-- Resultados e Analítica (Exibidos dinamicamente) -->
         <div id="analytics-results" style="display: none;">
 
+          <!-- Cabeçalho do Relatório (visível apenas na impressão) -->
+          <div id="print-report-header" class="print-only">
+            <div class="print-logo-line">
+              <img src="logo.svg" class="print-logo" alt="Logo">
+              <h1>Relatório de Classificação Qualis CAPES</h1>
+            </div>
+            <p class="print-date" id="print-report-date"></p>
+          </div>
+
           <!-- Título Dinâmico do Pesquisador em Análise -->
           <div id="session-researcher-title" style="display: none; margin-bottom: 15px; padding: 12px 20px; background: rgba(99, 102, 241, 0.08); border-left: 4px solid var(--primary-color); border-radius: 8px;">
             <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Currículo Analisado</span>
@@ -197,6 +211,7 @@
           <div id="results-tabs" class="tab-navigation" style="margin-bottom: 20px;">
             <button id="tab-table" class="tab-btn active"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
             <button id="tab-analytics" class="tab-btn"><i data-lucide="pie-chart"></i> Estatísticas & Dashboard</button>
+            <button id="tab-comparison" class="tab-btn" style="display: none;"><i data-lucide="git-compare"></i> Comparação</button>
           </div>
 
           <!-- Aba do Painel Estatístico & Dashboard -->
@@ -213,12 +228,12 @@
                 <span class="kpi-sub" id="kpi-area-distribution">Artigos analisados</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-title">Produção Qualificada</span>
+                <span class="kpi-title">Produção Qualificada (A1+A2)</span>
                 <span class="kpi-value" id="kpi-qualified-value">0</span>
                 <span class="kpi-sub" id="kpi-qualified-sub">0% do total (A1 + A2)</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-title">Score de Produção</span>
+                <span class="kpi-title">Nota CAPES</span>
                 <span class="kpi-value" id="kpi-avg-score-value">0 / 100</span>
                 <span class="kpi-sub" id="kpi-avg-score-sub">Estrato Médio: -</span>
               </div>
@@ -259,7 +274,7 @@
                 </div>
               </div>
               <div class="card chart-card">
-                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução do Score de Produção</h2>
+                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução da Nota CAPES</h2>
                 <div class="chart-wrapper">
                   <canvas id="qualis-evolution-chart"></canvas>
                 </div>
@@ -294,6 +309,49 @@
             </div>
           </div>
 
+          <!-- Aba de Comparação de Currículos -->
+          <div id="tab-content-comparison" class="tab-pane">
+            <div class="analytics-header" style="margin-bottom: 25px;">
+              <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i data-lucide="git-compare"></i> Comparação de Currículos</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Análise comparativa lado a lado dos indicadores de produção intelectual dos pesquisadores.</p>
+            </div>
+
+            <!-- Tabela de KPIs Comparativos -->
+            <div class="card" style="margin-bottom: 20px; padding: 24px;">
+              <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="table"></i> Indicadores Comparativos</h3>
+              <div class="table-responsive" style="margin-top: 10px;">
+                <table class="results-table comparison-kpis-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Indicador</th>
+                      <th scope="col" class="profile-a-header">Perfil A</th>
+                      <th scope="col" class="profile-b-header">Perfil B</th>
+                    </tr>
+                  </thead>
+                  <tbody id="comparison-kpis-body">
+                    <!-- Preenchido via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Grade de Gráficos Comparativos -->
+            <div class="analytics-grid" style="margin-bottom: 20px;">
+              <div class="card chart-card" style="height: 380px;">
+                <h2 class="card-title"><i data-lucide="radar"></i> Radar Comparativo</h2>
+                <div class="chart-wrapper">
+                  <canvas id="comparison-radar-chart"></canvas>
+                </div>
+              </div>
+              <div class="card chart-card" style="height: 380px;">
+                <h2 class="card-title"><i data-lucide="bar-chart-3"></i> Distribuição por Estrato</h2>
+                <div class="chart-wrapper">
+                  <canvas id="comparison-estrato-chart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Aba da Tabela Detalhada -->
           <div id="tab-content-table" class="tab-pane active">
             <!-- Tabela de Periódicos Classificados -->
@@ -301,6 +359,7 @@
               <div class="results-header">
                 <h2 class="results-title"><i data-lucide="clipboard-list"></i> Tabela de Classificação Detalhada</h2>
                 <div class="results-actions">
+                  <button id="btn-report" class="btn btn-secondary"><i data-lucide="printer"></i> Gerar Relatório</button>
                   <button id="btn-export" class="btn"><i data-lucide="download"></i> Exportar CSV</button>
                   <button id="btn-clear" class="btn btn-secondary"><i data-lucide="trash-2"></i> Limpar Tudo</button>
                 </div>
@@ -395,6 +454,47 @@
         <button id="btn-cancel-lattes" class="btn btn-secondary">Cancelar</button>
         <button id="btn-confirm-lattes" class="btn">Confirmar Processamento</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal de Comparação de Currículos -->
+  <div id="comparison-modal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="comparison-modal-title" style="display: none;">
+    <div class="search-modal-card" style="max-width: 900px;">
+      <div class="search-modal-header">
+        <h3 id="comparison-modal-title" class="search-modal-title"><i data-lucide="git-compare"></i> Comparar Currículos</h3>
+        <button id="btn-close-comparison-modal" class="btn-close-modal" aria-label="Fechar modal"><i data-lucide="x"></i></button>
+      </div>
+      <p class="search-modal-subtitle">Insira os dados dos dois pesquisadores para comparar os indicadores de produção intelectual.</p>
+      <form id="comparison-form">
+        <div class="compare-profiles-grid">
+          <div class="compare-profile-col">
+            <h4 class="compare-profile-label"><i data-lucide="user"></i> Perfil A</h4>
+            <div class="form-group">
+              <label for="comparison-name-a">Nome do Pesquisador:</label>
+              <input type="text" id="comparison-name-a" class="text-input" placeholder="Ex: Carlos F. Cunha" required>
+            </div>
+            <div class="form-group">
+              <label for="comparison-text-a">Cole a lista de artigos do Lattes:</label>
+              <textarea id="comparison-text-a" class="text-input" placeholder="Cole aqui os artigos do Perfil A..." required style="min-height: 180px;"></textarea>
+            </div>
+          </div>
+          <div class="compare-profile-col">
+            <h4 class="compare-profile-label"><i data-lucide="user"></i> Perfil B</h4>
+            <div class="form-group">
+              <label for="comparison-name-b">Nome do Pesquisador:</label>
+              <input type="text" id="comparison-name-b" class="text-input" placeholder="Ex: Ana P. Silva" required>
+            </div>
+            <div class="form-group">
+              <label for="comparison-text-b">Cole a lista de artigos do Lattes:</label>
+              <textarea id="comparison-text-b" class="text-input" placeholder="Cole aqui os artigos do Perfil B..." required style="min-height: 180px;"></textarea>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 8px;">
+          <button type="button" id="btn-cancel-comparison" class="btn btn-secondary">Cancelar</button>
+          <button type="submit" id="btn-submit-comparison" class="btn">Comparar Currículos</button>
+        </div>
+      </form>
     </div>
   </div>
 

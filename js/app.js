@@ -6,18 +6,20 @@
  */
 
 import { loadDatabase, enrichAndClassify, normalizeISSN } from './enricher.js';
-import { parseCSV, processCSVData, generateCSV, downloadFile } from './utils.js';
+import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 import { runTests } from './tests.js';
 
 import dom from './dom.js';
-import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults } from './state.js';
+import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js';
 import { parseLattesText } from './lattesParser.js';
+import { updateComparisonDashboard } from './compare.js';
 import {
   switchTab, switchInputType,
   showLoadingState, hideLoadingState,
   showSearchModal, closeSearchModal,
+  showComparisonModal, closeComparisonModal,
   initTheme, toggleTheme, showToast,
   addRecentSearch, renderRecentSearches,
   updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal
@@ -29,12 +31,21 @@ window.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupEventListeners();
   restoreResults();
+  restoreComparisonProfiles();
   renderRecentSearches();
   await initDatabase();
 
   // Se havia resultados restaurados da sessão anterior, renderiza-os
   if (appState.classifiedItems.length > 0) {
     renderResultsTable();
+  }
+
+  // Se havia dados de comparação restaurados, renderiza-os
+  if (appState.comparisonProfiles.length >= 2) {
+    if (dom.analyticsResults) dom.analyticsResults.style.display = 'block';
+    if (dom.emptyState) dom.emptyState.style.display = 'none';
+    if (dom.tabComparison) dom.tabComparison.style.display = 'flex';
+    updateComparisonDashboard(appState.comparisonProfiles);
   }
 
   initUnitTests();
@@ -154,6 +165,56 @@ function setupEventListeners() {
     showToast('Arquivo CSV exportado com sucesso!', 'success');
   });
 
+  // Gerar Relatório PDF (via @media print com gráficos e KPIs)
+  if (dom.btnReport) {
+    dom.btnReport.addEventListener('click', () => {
+      if (appState.classifiedItems.length === 0) return;
+
+      // Preencher data no cabeçalho do relatório
+      const reportDate = document.getElementById('print-report-date');
+      if (reportDate) {
+        const now = new Date();
+        reportDate.textContent = `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      }
+
+      // Salvar estado do tema
+      const wasDark = !document.body.classList.contains('light-theme');
+
+      // Forçar tema claro para gráficos legíveis em papel
+      if (wasDark) {
+        document.body.classList.add('light-theme');
+      }
+
+      // Garantir que a aba de analytics está ativa (gráficos precisam de dimensões)
+      const originalTab = document.querySelector('.tab-btn.active');
+      switchTab('analytics');
+
+      // Re-renderizar gráficos com tema claro
+      const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
+      const dashboardItems = getFilteredItems('', 'ALL', filterYearVal);
+      updateAnalytics(dashboardItems);
+
+      // Aguardar renderização dos gráficos (Chart.js é assíncrono)
+      setTimeout(() => {
+        window.print();
+
+        // Restaurar após fechar o diálogo de impressão
+        const cleanup = () => {
+          window.removeEventListener('afterprint', cleanup);
+          if (wasDark) {
+            document.body.classList.remove('light-theme');
+          }
+          if (originalTab && originalTab.id === 'tab-table') {
+            switchTab('table');
+          }
+          // Re-renderizar com o tema original
+          updateAnalytics(dashboardItems);
+        };
+        window.addEventListener('afterprint', cleanup, { once: true });
+      }, 400);
+    });
+  }
+
   // Modal de Busca
   if (dom.btnCloseModal) {
     dom.btnCloseModal.addEventListener('click', closeSearchModal);
@@ -180,17 +241,35 @@ function setupEventListeners() {
     if (e.key === 'Escape' && dom.lattesPreviewModal && dom.lattesPreviewModal.style.display === 'flex') {
       closeLattesPreviewModal();
     }
+    if (e.key === 'Escape' && dom.comparisonModal && dom.comparisonModal.classList.contains('active')) {
+      closeComparisonModal();
+    }
   });
+
+  // Modal de Comparação
+  if (dom.btnCloseComparisonModal) {
+    dom.btnCloseComparisonModal.addEventListener('click', closeComparisonModal);
+  }
+  if (dom.btnCancelComparison) {
+    dom.btnCancelComparison.addEventListener('click', closeComparisonModal);
+  }
+  if (dom.comparisonModal) {
+    dom.comparisonModal.addEventListener('click', (e) => {
+      if (e.target === dom.comparisonModal) closeComparisonModal();
+    });
+  }
 
   // Abas de Resultados
   if (dom.tabTable) dom.tabTable.addEventListener('click', () => switchTab('table'));
   if (dom.tabAnalytics) dom.tabAnalytics.addEventListener('click', () => switchTab('analytics'));
+  if (dom.tabComparison) dom.tabComparison.addEventListener('click', () => switchTab('comparison'));
 
   // Seletor Segmentado (Sidebar)
   if (dom.selectorSingle) dom.selectorSingle.addEventListener('click', () => switchInputType('single'));
   if (dom.selectorBatch) dom.selectorBatch.addEventListener('click', () => switchInputType('batch'));
   if (dom.selectorUpload) dom.selectorUpload.addEventListener('click', () => switchInputType('upload'));
   if (dom.selectorLattes) dom.selectorLattes.addEventListener('click', () => switchInputType('lattes'));
+  if (dom.selectorComparison) dom.selectorComparison.addEventListener('click', () => showComparisonModal());
 
   // Ajuda do Lattes
   if (dom.btnLattesHelp && dom.lattesHelpContent) {
@@ -235,6 +314,85 @@ function setupEventListeners() {
         console.error("[Lattes Submit Error]", err);
         try { hideLoadingState(); } catch (e) { /* silencioso */ }
         showToast('Erro crítico ao processar o Currículo Lattes.', 'error');
+      }
+    });
+  }
+
+  // Form de Comparação de Currículos
+  if (dom.comparisonForm) {
+    dom.comparisonForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nameA = dom.comparisonNameA.value.trim();
+      const textA = dom.comparisonTextA.value.trim();
+      const nameB = dom.comparisonNameB.value.trim();
+      const textB = dom.comparisonTextB.value.trim();
+      if (!nameA || !textA || !nameB || !textB) return;
+
+      showLoadingState('Comparando Currículos', 'Processando artigos e calculando indicadores...', 'git-compare');
+
+      try {
+        const dbItems = appState.dbSummary.items;
+        const articlesA = parseLattesText(textA, dbItems);
+        const articlesB = parseLattesText(textB, dbItems);
+
+        if (articlesA.length === 0 && articlesB.length === 0) {
+          hideLoadingState();
+          showToast('Nenhum artigo identificado nos textos fornecidos.', 'warning');
+          return;
+        }
+
+        // Processar perfil A
+        const itemsA = [];
+        for (const article of articlesA) {
+          const classified = await enrichAndClassify(article.matchedIssn || article.journal);
+          if (article.title && classified.title === 'Periódico Não Identificado na Base') {
+            classified.title = `[Não Identificado] ${article.journal}`;
+          } else if (article.title && classified.title) {
+            classified.title = `${article.title} (${classified.title})`;
+          }
+          classified.year = article.year;
+          itemsA.push(classified);
+        }
+
+        // Processar perfil B
+        const itemsB = [];
+        for (const article of articlesB) {
+          const classified = await enrichAndClassify(article.matchedIssn || article.journal);
+          if (article.title && classified.title === 'Periódico Não Identificado na Base') {
+            classified.title = `[Não Identificado] ${article.journal}`;
+          } else if (article.title && classified.title) {
+            classified.title = `${article.title} (${classified.title})`;
+          }
+          classified.year = article.year;
+          itemsB.push(classified);
+        }
+
+        const profiles = [
+          { name: nameA, items: itemsA },
+          { name: nameB, items: itemsB }
+        ];
+
+        setComparisonProfiles(profiles);
+
+        // Mostrar aba de comparação
+        if (dom.tabComparison) dom.tabComparison.style.display = 'flex';
+
+        // Garantir que o container de analytics esteja visível
+        if (dom.analyticsResults) dom.analyticsResults.style.display = 'block';
+        if (dom.emptyState) dom.emptyState.style.display = 'none';
+
+        // Renderizar dashboard comparativo
+        updateComparisonDashboard(profiles);
+
+        closeComparisonModal();
+        hideLoadingState();
+        renderResultsTable();
+        switchTab('comparison');
+        showToast(`${itemsA.length + itemsB.length} artigos comparados com sucesso!`, 'success');
+      } catch (err) {
+        console.error('[Comparação Submit Error]', err);
+        try { hideLoadingState(); } catch (e) { /* silencioso */ }
+        showToast('Erro crítico ao processar a comparação de currículos.', 'error');
       }
     });
   }
@@ -352,38 +510,53 @@ async function processLattesArticles(parsedArticles, researcherName) {
 }
 
 /**
- * Lê e processa o arquivo CSV inserido pelo usuário.
+ * Lê e processa o arquivo CSV/Excel inserido pelo usuário.
  */
-function handleUploadedFile(file) {
-  const reader = new FileReader();
+async function handleUploadedFile(file) {
+  const fileName = file.name.toLowerCase();
+  
+  showLoadingState('Processando Planilha', 'Importando dados do arquivo e enriquecendo periódicos...', 'file-spreadsheet');
 
-  reader.onload = async (e) => {
-    showLoadingState('Processando Planilha', 'Importando dados do arquivo CSV e enriquecendo periódicos...', 'file-spreadsheet');
-    const text = e.target.result;
-    const parsed = parseCSV(text);
-    const records = processCSVData(parsed);
+  let parsed;
+  try {
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      parsed = await parseXLSX(file);
+    } else {
+      const text = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (err) => reject(err);
+        reader.readAsText(file);
+      });
+      parsed = parseCSV(text);
+    }
+  } catch (err) {
+    hideLoadingState();
+    showToast('Erro ao processar o arquivo. Verifique o formato.', 'error');
+    console.error('[Upload] Erro ao ler arquivo:', err);
+    return;
+  }
 
-    let countNew = 0;
-    for (const record of records) {
-      const classified = await enrichAndClassify(record.issn);
+  const records = processCSVData(parsed);
 
-      if (record.title && record.title !== 'Artigo Importado' && classified.title === 'Periódico Não Identificado na Base') {
-        classified.title = record.title;
-      } else if (record.title && record.title !== 'Artigo Importado' && classified.title) {
-        classified.title = `${record.title} (${classified.title})`;
-      }
+  let countNew = 0;
+  for (const record of records) {
+    const classified = await enrichAndClassify(record.issn);
 
-      addClassifiedItem(classified);
-      countNew++;
+    if (record.title && record.title !== 'Artigo Importado' && classified.title === 'Periódico Não Identificado na Base') {
+      classified.title = record.title;
+    } else if (record.title && record.title !== 'Artigo Importado' && classified.title) {
+      classified.title = `${record.title} (${classified.title})`;
     }
 
-    hideLoadingState();
-    renderResultsTable();
-    switchTab('analytics');
-    showToast(`${countNew} artigos importados e classificados com sucesso!`, 'success');
-  };
+    addClassifiedItem(classified);
+    countNew++;
+  }
 
-  reader.readAsText(file);
+  hideLoadingState();
+  renderResultsTable();
+  switchTab('analytics');
+  showToast(`${countNew} artigos importados e classificados com sucesso!`, 'success');
 }
 
 /**

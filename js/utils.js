@@ -62,6 +62,35 @@ export function parseCSV(text) {
 }
 
 /**
+ * Faz o parse de um arquivo Excel (.xlsx, .xls) para uma matriz de linhas e colunas.
+ * Usa a biblioteca SheetJS (XLSX) carregada via CDN.
+ * @param {File} file Arquivo Excel
+ * @returns {Promise<string[][]>} Promessa que resolve para a matriz bidimensional
+ */
+export function parseXLSX(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        if (typeof XLSX === 'undefined') {
+          throw new Error('Biblioteca SheetJS (XLSX) não carregada.');
+        }
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheet];
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        resolve(matrix.map(row => row.map(cell => String(cell))));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
  * Converte a matriz CSV em um array de objetos estruturados baseados no ISSN.
  * Identifica dinamicamente a coluna de ISSN e outras colunas auxiliares (Título, Artigo, etc.).
  * @param {string[][]} parsedCSV Matriz retornada por parseCSV

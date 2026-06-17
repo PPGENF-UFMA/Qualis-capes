@@ -13,28 +13,37 @@ import { renderResultsTable } from './table.js';
 // ─── SISTEMA DE ABAS ──────────────────────────────────────────────
 
 /**
- * Alterna entre as abas de resultados (Tabela / Estatísticas).
- * @param {'table'|'analytics'} tabId Identificador da aba
+ * Alterna entre as abas de resultados (Tabela / Estatísticas / Comparação).
+ * @param {'table'|'analytics'|'comparison'} tabId Identificador da aba
  */
 export function switchTab(tabId) {
   if (!dom.tabTable || !dom.tabAnalytics || !dom.paneTable || !dom.paneAnalytics) return;
 
+  // Reset all tabs
+  [dom.tabTable, dom.tabAnalytics, dom.tabComparison].forEach(t => {
+    if (t) t.classList.remove('active');
+  });
+  [dom.paneTable, dom.paneAnalytics, dom.paneComparison].forEach(p => {
+    if (p) p.classList.remove('active');
+  });
+
   if (tabId === 'table') {
     dom.tabTable.classList.add('active');
-    dom.tabAnalytics.classList.remove('active');
     dom.paneTable.classList.add('active');
-    dom.paneAnalytics.classList.remove('active');
   } else if (tabId === 'analytics') {
-    dom.tabTable.classList.remove('active');
     dom.tabAnalytics.classList.add('active');
-    dom.paneTable.classList.remove('active');
     dom.paneAnalytics.classList.add('active');
 
-    // Forçar redimensionamento dos gráficos criados em display: none
     if (appState.charts.qualis) appState.charts.qualis.resize();
     if (appState.charts.indexers) appState.charts.indexers.resize();
     if (appState.charts.publicationsYear) appState.charts.publicationsYear.resize();
     if (appState.charts.qualisEvolution) appState.charts.qualisEvolution.resize();
+  } else if (tabId === 'comparison') {
+    if (dom.tabComparison) dom.tabComparison.classList.add('active');
+    if (dom.paneComparison) dom.paneComparison.classList.add('active');
+
+    if (appState.charts.radar) appState.charts.radar.resize();
+    if (appState.charts.comparisonEstrato) appState.charts.comparisonEstrato.resize();
   }
 }
 
@@ -47,14 +56,12 @@ export function switchInputType(type) {
     !dom.paneInputSingle || !dom.paneInputBatch || !dom.paneInputUpload || !dom.paneInputLattes) return;
 
   // Resetar classes active
-  dom.selectorSingle.classList.remove('active');
-  dom.selectorBatch.classList.remove('active');
-  dom.selectorUpload.classList.remove('active');
-  dom.selectorLattes.classList.remove('active');
-  dom.paneInputSingle.classList.remove('active');
-  dom.paneInputBatch.classList.remove('active');
-  dom.paneInputUpload.classList.remove('active');
-  dom.paneInputLattes.classList.remove('active');
+  [dom.selectorSingle, dom.selectorBatch, dom.selectorUpload, dom.selectorLattes].forEach(s => {
+    if (s) s.classList.remove('active');
+  });
+  [dom.paneInputSingle, dom.paneInputBatch, dom.paneInputUpload, dom.paneInputLattes].forEach(p => {
+    if (p) p.classList.remove('active');
+  });
 
   // Ativar o correspondente
   const selectorMap = {
@@ -65,8 +72,8 @@ export function switchInputType(type) {
   };
 
   const [selector, pane] = selectorMap[type] || selectorMap.single;
-  selector.classList.add('active');
-  pane.classList.add('active');
+  if (selector) selector.classList.add('active');
+  if (pane) pane.classList.add('active');
 }
 
 // ─── LOADING OVERLAY ──────────────────────────────────────────────────────
@@ -76,7 +83,7 @@ export function switchInputType(type) {
  * @param {boolean} disabled
  */
 function setSubmitButtonsDisabled(disabled) {
-  [dom.btnSubmitSingle, dom.btnSubmitBatch, dom.btnSubmitLattes].forEach(btn => {
+  [dom.btnSubmitSingle, dom.btnSubmitBatch, dom.btnSubmitLattes, dom.btnSubmitComparison].forEach(btn => {
     if (btn) btn.disabled = disabled;
   });
 }
@@ -275,6 +282,40 @@ export function closeSearchModal() {
   if (dom.searchModal) {
     dom.searchModal.classList.remove('active');
   }
+}
+
+// ─── MODAL DE COMPARAÇÃO ──────────────────────────────────────────
+
+/**
+ * Abre o modal de comparação de currículos.
+ */
+export function showComparisonModal() {
+  if (dom.comparisonModal) {
+    dom.comparisonModal.classList.add('active');
+    dom.comparisonModal.style.display = 'flex';
+
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons({
+        attrs: { class: 'lucide' },
+        nameAttr: 'data-lucide',
+        node: dom.comparisonModal
+      });
+    }
+  }
+}
+
+/**
+ * Fecha o modal de comparação de currículos e limpa o formulário.
+ */
+export function closeComparisonModal() {
+  if (dom.comparisonModal) {
+    dom.comparisonModal.classList.remove('active');
+    dom.comparisonModal.style.display = 'none';
+  }
+  if (dom.comparisonNameA) dom.comparisonNameA.value = '';
+  if (dom.comparisonTextA) dom.comparisonTextA.value = '';
+  if (dom.comparisonNameB) dom.comparisonNameB.value = '';
+  if (dom.comparisonTextB) dom.comparisonTextB.value = '';
 }
 
 // ─── TEMA CLARO/ESCURO ────────────────────────────────────────────

@@ -144,7 +144,7 @@ body {
 .container {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 20px 20px;
 }
 
 /* --- HEADER --- */
@@ -152,18 +152,18 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 16px;
   animation: fadeInDown 0.6s ease;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .logo-image {
-  height: 80px;
+  height: 40px;
   width: auto;
   object-fit: contain;
   filter: invert(0.9) hue-rotate(180deg) drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
@@ -180,14 +180,14 @@ body.light-theme .logo-image {
 
 .header-divider {
   width: 1px;
-  height: 30px;
+  height: 24px;
   background: var(--panel-border);
   margin: 0 5px;
 }
 
 .header-subtitle {
   font-family: var(--font-title);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.5px;
@@ -1810,4 +1810,503 @@ body.light-theme .insight-item {
   gap: 12px;
   flex: 1;
   justify-content: center;
+}
+
+/* ─── RELATÓRIO DE IMPRESSÃO (PDF) ──────────────────────────────── */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-only {
+    display: block !important;
+  }
+
+  #print-report-header {
+    margin-bottom: 6mm !important;
+  }
+
+  .print-logo-line {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: 2mm !important;
+  }
+
+  .print-logo {
+    height: 32px !important;
+    width: auto !important;
+    filter: none !important;
+  }
+
+  #print-report-header h1 {
+    font-family: var(--font-title) !important;
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+  }
+
+  .print-date {
+    font-size: 10pt !important;
+    color: #64748b !important;
+    margin: 0 !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+    overflow: visible !important;
+  }
+
+  /* Ocultar elementos não-imprimíveis */
+  .ambient-bg,
+  .sidebar,
+  .theme-toggle-btn,
+  footer,
+  .search-filter-bar,
+  .results-actions,
+  .tab-navigation,
+  #empty-state,
+  #loading-overlay,
+  .search-modal,
+  #lattes-preview-modal,
+  #comparison-modal,
+  .toast-container,
+  .db-status-footer,
+  .tab-pane,
+  #results-tabs {
+    display: none !important;
+  }
+
+  /* Reexibir tabela de resultados, KPIs, gráficos e insights */
+  #analytics-results {
+    display: block !important;
+  }
+
+  #tab-content-table,
+  #tab-content-analytics {
+    display: block !important;
+  }
+
+  .analytics-grid {
+    display: block !important;
+    gap: 0 !important;
+    margin-bottom: 6mm !important;
+  }
+
+  .analytics-header {
+    display: block !important;
+    margin-bottom: 4mm !important;
+  }
+
+  .analytics-header h2 {
+    font-size: 12pt !important;
+    color: #0f172a !important;
+  }
+
+  .analytics-header p {
+    font-size: 9pt !important;
+    color: #475569 !important;
+  }
+
+  /* KPIs no relatório */
+  .container {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .main-grid {
+    display: block !important;
+  }
+
+  .main-content {
+    width: 100% !important;
+  }
+
+  /* Header de relatório compacto */
+  header {
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    margin-bottom: 10mm !important;
+    border-bottom: 2px solid #0f172a !important;
+    padding-bottom: 6mm !important;
+  }
+
+  .logo-image {
+    height: 40px !important;
+    filter: none !important;
+  }
+
+  .header-divider {
+    background: #0f172a !important;
+  }
+
+  .header-subtitle {
+    color: #475569 !important;
+    font-size: 12pt !important;
+  }
+
+  /* Exibir título do pesquisador se visível */
+  #session-researcher-title {
+    display: block !important;
+    margin-bottom: 6mm !important;
+    background: none !important;
+    border-left: 3px solid #0f172a !important;
+    padding: 6px 12px !important;
+  }
+
+  #session-researcher-title span {
+    color: #475569 !important;
+  }
+
+  #session-researcher-title h2 {
+    color: #0f172a !important;
+    font-size: 14pt !important;
+  }
+
+  /* Cartão KPI simplificado para impressão */
+  .kpi-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-bottom: 8mm !important;
+  }
+
+  .kpi-card {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    flex: 1 1 auto !important;
+    min-width: 120px !important;
+  }
+
+  .kpi-title {
+    color: #64748b !important;
+    font-size: 9pt !important;
+  }
+
+  .kpi-value {
+    color: #0f172a !important;
+    font-size: 16pt !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #0f172a !important;
+  }
+
+  .kpi-sub {
+    color: #475569 !important;
+    font-size: 9pt !important;
+  }
+
+  /* Gráficos e charts no relatório */
+  .chart-card {
+    height: auto !important;
+    min-height: 180px !important;
+    max-height: 220px !important;
+    margin-bottom: 6mm !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    break-inside: avoid !important;
+  }
+
+  .chart-card .card-title {
+    font-size: 10pt !important;
+    color: #0f172a !important;
+    margin-bottom: 6px !important;
+  }
+
+  .chart-wrapper {
+    height: 140px !important;
+    max-height: 140px !important;
+    flex: none !important;
+  }
+
+  .chart-wrapper canvas {
+    max-height: 140px !important;
+  }
+
+  /* Insights no relatório */
+  .card--insights {
+    display: block !important;
+    margin-bottom: 0 !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    break-inside: avoid !important;
+  }
+
+  .card--insights .card-title {
+    font-size: 10pt !important;
+    color: #0f172a !important;
+  }
+
+  .insight-item {
+    background: #f8fafc !important;
+    border-left-color: #0f172a !important;
+    padding: 6px 10px !important;
+  }
+
+  .insight-text {
+    font-size: 9pt !important;
+    color: #1e293b !important;
+  }
+
+  .insight-icon {
+    color: #0f172a !important;
+  }
+
+  /* Top Periódicos no relatório */
+  .card--top-journals {
+    display: block !important;
+    margin-bottom: 0 !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    padding: 12px !important;
+    break-inside: avoid !important;
+  }
+
+  .card--top-journals .card-title {
+    font-size: 10pt !important;
+    color: #0f172a !important;
+  }
+
+  .top-journal-name {
+    color: #1e293b !important;
+    font-size: 9pt !important;
+  }
+
+  .top-journal-count {
+    color: #0f172a !important;
+    font-size: 9pt !important;
+  }
+
+  /* Tabela de resultados */
+  .card {
+    background: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+
+  .results-header {
+    display: none !important;
+  }
+
+  #results-container {
+    display: block !important;
+  }
+
+  .results-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+  }
+
+  .results-table th {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    padding: 6px 8px !important;
+    font-weight: 600 !important;
+    text-align: left !important;
+  }
+
+  .results-table td {
+    padding: 5px 8px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    color: #1e293b !important;
+  }
+
+  .results-table tr:nth-child(even) td {
+    background: #f8fafc !important;
+  }
+
+  /* Badges de estrato em escala de cinza (impressoras P&B) */
+  .estrato-badge {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    font-size: 9pt !important;
+  }
+
+  .estrato-badge.A1 { background: #000 !important; }
+  .estrato-badge.A2 { background: #374151 !important; }
+  .estrato-badge.A3, .estrato-badge.A4, .estrato-badge.A5,
+  .estrato-badge.A6, .estrato-badge.A7, .estrato-badge.A8 {
+    background: #6b7280 !important;
+  }
+  .estrato-badge.NC {
+    background: none !important;
+    color: #6b7280 !important;
+    border: 1px solid #6b7280 !important;
+  }
+
+  .estrato-badge-container .info-icon {
+    display: none !important;
+  }
+
+  /* Tags de indexadores */
+  .indexer-tag {
+    background: #e2e8f0 !important;
+    color: #1e293b !important;
+    padding: 1px 6px !important;
+    border-radius: 3px !important;
+    font-size: 8pt !important;
+  }
+
+  /* Badge de área */
+  .area-badge {
+    background: #e2e8f0 !important;
+    color: #475569 !important;
+    font-size: 8pt !important;
+    padding: 1px 5px !important;
+    border-radius: 3px !important;
+  }
+
+  /* Rodapé do relatório */
+  footer {
+    display: block !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    text-align: center !important;
+    font-size: 8pt !important;
+    color: #94a3b8 !important;
+    padding: 5mm 0 !important;
+    border-top: 1px solid #e2e8f0 !important;
+  }
+
+  /* Garantir que quebras de página não cortem KPIs ou linhas */
+  .kpi-container,
+  .results-table thead,
+  .results-table tr {
+    break-inside: avoid !important;
+  }
+
+  #session-researcher-title {
+    break-inside: avoid !important;
+  }
+
+  .results-table {
+    break-after: auto !important;
+  }
+}
+
+/* ─── COMPARAÇÃO DE CURRÍCULOS ─────────────────────────────────── */
+.compare-profiles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .compare-profiles-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compare-profile-col {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.compare-profile-label {
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.compare-profile-col:first-child .compare-profile-label {
+  color: #6366f1;
+}
+
+.compare-profile-col:last-child .compare-profile-label {
+  color: #f59e0b;
+}
+
+/* Tabela de KPIs Comparativos */
+.comparison-kpis-table .profile-a-header,
+.comparison-kpis-table .profile-b-header {
+  text-align: center;
+  font-weight: 700;
+}
+
+.comparison-kpis-table .profile-a-header {
+  background: rgba(99, 102, 241, 0.2) !important;
+}
+
+.comparison-kpis-table .profile-b-header {
+  background: rgba(245, 158, 11, 0.2) !important;
+}
+
+.comparison-kpis-table td:first-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comparison-kpis-table td.kpi-col-a,
+.comparison-kpis-table td.kpi-col-b {
+  text-align: center;
+  font-weight: 600;
+}
+
+.comparison-kpis-table td.kpi-col-a {
+  color: #6366f1;
+}
+
+.comparison-kpis-table td.kpi-col-b {
+  color: #f59e0b;
+}
+
+.comparison-kpis-table td.kpi-best {
+  font-weight: 700;
+}
+
+.comparison-kpis-table td.kpi-best.kpi-col-a {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.comparison-kpis-table td.kpi-best.kpi-col-b {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+/* Modal de Comparação — scroll quando conteúdo excede 80vh */
+#comparison-modal .search-modal-card {
+  overflow-y: auto;
+}
+
+#comparison-modal .compare-profile-col {
+  padding: 16px;
 }

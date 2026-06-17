@@ -5,12 +5,15 @@
 
 const appState = {
   classifiedItems: [],
+  comparisonProfiles: [],
   dbSummary: { total: 0, items: [] },
   charts: {
     qualis: null,
     indexers: null,
     publicationsYear: null,
-    qualisEvolution: null
+    qualisEvolution: null,
+    radar: null,
+    comparisonEstrato: null
   }
 };
 
@@ -94,6 +97,45 @@ export function restoreResults() {
     }
   } catch (e) {
     console.warn('[Persistência] Falha ao restaurar resultados:', e.message);
+  }
+}
+
+/**
+ * Define os perfis de comparação no estado.
+ * @param {Object[]} profiles Array de { name: string, items: Object[] }
+ */
+export function setComparisonProfiles(profiles) {
+  appState.comparisonProfiles = profiles;
+  persistComparison();
+}
+
+/**
+ * Limpa os perfis de comparação.
+ */
+export function clearComparisonProfiles() {
+  appState.comparisonProfiles = [];
+  sessionStorage.removeItem('qualis_comparison');
+}
+
+/**
+ * Restaura os perfis de comparação do sessionStorage.
+ */
+export function restoreComparisonProfiles() {
+  try {
+    const saved = sessionStorage.getItem('qualis_comparison');
+    if (saved) {
+      appState.comparisonProfiles = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('[Persistência] Falha ao restaurar comparação:', e.message);
+  }
+}
+
+function persistComparison() {
+  try {
+    sessionStorage.setItem('qualis_comparison', JSON.stringify(appState.comparisonProfiles));
+  } catch (e) {
+    console.warn('[Persistência] Falha ao salvar comparação:', e.message);
   }
 }
 

@@ -23,6 +23,7 @@ const dom = {
   filterEstrato: document.getElementById('filter-estrato'),
   filterYear: document.getElementById('filter-year'),
   btnExport: document.getElementById('btn-export'),
+  btnReport: document.getElementById('btn-report'),
   btnClear: document.getElementById('btn-clear'),
 
   themeToggle: document.getElementById('theme-toggle'),
@@ -107,7 +108,24 @@ const dom = {
   loadingProgressContainer: document.getElementById('loading-progress-container'),
   loadingProgressText: document.getElementById('loading-progress-text'),
   loadingProgressPercent: document.getElementById('loading-progress-percent'),
-  loadingProgressBar: document.getElementById('loading-progress-bar')
+  loadingProgressBar: document.getElementById('loading-progress-bar'),
+
+  // Comparação de Currículos
+  selectorComparison: document.getElementById('selector-comparison'),
+  comparisonModal: document.getElementById('comparison-modal'),
+  btnCloseComparisonModal: document.getElementById('btn-close-comparison-modal'),
+  btnCancelComparison: document.getElementById('btn-cancel-comparison'),
+  comparisonForm: document.getElementById('comparison-form'),
+  comparisonNameA: document.getElementById('comparison-name-a'),
+  comparisonTextA: document.getElementById('comparison-text-a'),
+  comparisonNameB: document.getElementById('comparison-name-b'),
+  comparisonTextB: document.getElementById('comparison-text-b'),
+  btnSubmitComparison: document.getElementById('btn-submit-comparison'),
+  tabComparison: document.getElementById('tab-comparison'),
+  paneComparison: document.getElementById('tab-content-comparison'),
+  comparisonKpisBody: document.getElementById('comparison-kpis-body'),
+  comparisonRadarChart: document.getElementById('comparison-radar-chart'),
+  comparisonEstratoChart: document.getElementById('comparison-estrato-chart')
 };
 
 export default dom;

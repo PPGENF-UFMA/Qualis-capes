@@ -39,6 +39,19 @@ function getEstratoFromScore(score) {
 }
 
 /**
+ * Mapeia o score 0-100 para a escala de notas CAPES (3-7).
+ * @param {number} score Score numérico (0-100)
+ * @returns {{ note: number, label: string }}
+ */
+function mapScoreToCAPESNote(score) {
+  if (score >= 85) return { note: 7, label: 'Excelência Internacional' };
+  if (score >= 70) return { note: 6, label: 'Excelência Nacional' };
+  if (score >= 55) return { note: 5, label: 'Muito Bom' };
+  if (score >= 40) return { note: 4, label: 'Bom' };
+  return { note: 3, label: 'Regular' };
+}
+
+/**
  * Retorna as configurações de tema reutilizáveis para todos os gráficos.
  * Elimina a duplicação de configs de tooltip, legend e scales.
  * @returns {{ isDark: boolean, tooltip: Object, legendLabels: Object, gridColor: string, tickColor: string, tickFont: Object }}
@@ -88,8 +101,8 @@ export function updateAnalytics(items = appState.classifiedItems) {
     dom.kpiTotal.textContent = 0;
     dom.kpiQualifiedValue.textContent = 0;
     dom.kpiQualifiedSub.textContent = '0% do total (A1 + A2)';
-    dom.kpiAvgScoreValue.textContent = '0 / 100';
-    dom.kpiAvgScoreSub.textContent = 'Estrato Médio: NC';
+    dom.kpiAvgScoreValue.textContent = 'Nota -';
+    dom.kpiAvgScoreSub.textContent = 'Score: 0/100 · Estrato Médio: NC';
     dom.kpiNcCount.textContent = 0;
     dom.kpiInternationalCoverage.textContent = '0%';
     if (dom.kpiAreaDistribution) {
@@ -132,8 +145,9 @@ export function updateAnalytics(items = appState.classifiedItems) {
   const totalScore = items.reduce((sum, item) => sum + (SCORE_WEIGHTS[item.classification.estrato] || 0), 0);
   const avgScore = total > 0 ? Math.round(totalScore / total) : 0;
   const avgEstrato = getEstratoFromScore(avgScore);
-  dom.kpiAvgScoreValue.textContent = `${avgScore} / 100`;
-  dom.kpiAvgScoreSub.textContent = `Estrato Médio: ${avgEstrato}`;
+  const capesNote = mapScoreToCAPESNote(avgScore);
+  dom.kpiAvgScoreValue.textContent = `Nota ${capesNote.note}`;
+  dom.kpiAvgScoreSub.textContent = `${capesNote.label} — Score: ${avgScore}/100 · Estrato Médio: ${avgEstrato}`;
 
   // Não Classificados (NC)
   const ncCount = items.filter(item => item.classification.estrato === 'NC').length;
@@ -477,44 +491,44 @@ function renderQualisEvolutionChart(scores) {
       
       const y100 = y.getPixelForValue(100);
       const y85 = y.getPixelForValue(85);
-      const y40 = y.getPixelForValue(40);
+      const y55 = y.getPixelForValue(55);
       const y0 = y.getPixelForValue(0);
 
       const isDark = !document.body.classList.contains('light-theme');
       
-      // Cores semitransparentes harmonizadas
+      // Cores semitransparentes por nota CAPES
       const colorExcellent = isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.05)';
       const colorRegular = isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.03)';
       const colorAttention = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)';
       
       // Preenche os retângulos de fundo
-      // Excelente (85 a 100)
+      // Nota 7 (85 a 100)
       ctx.fillStyle = colorExcellent;
       ctx.fillRect(left, y100, right - left, y85 - y100);
       
-      // Regular (40 a 85)
+      // Nota 4-6 (55 a 85)
       ctx.fillStyle = colorRegular;
-      ctx.fillRect(left, y85, right - left, y40 - y85);
+      ctx.fillRect(left, y85, right - left, y55 - y85);
       
-      // Atenção (0 a 40)
+      // Nota 3 (0 a 55)
       ctx.fillStyle = colorAttention;
-      ctx.fillRect(left, y40, right - left, y0 - y40);
+      ctx.fillRect(left, y55, right - left, y0 - y55);
 
       // Limites pontilhados das faixas
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 5]);
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)';
       
-      // Limite Excelente (85)
+      // Limite Nota 7 (85)
       ctx.beginPath();
       ctx.moveTo(left, y85);
       ctx.lineTo(right, y85);
       ctx.stroke();
       
-      // Limite Atenção (40)
+      // Limite Nota 5 (55)
       ctx.beginPath();
-      ctx.moveTo(left, y40);
-      ctx.lineTo(right, y40);
+      ctx.moveTo(left, y55);
+      ctx.lineTo(right, y55);
       ctx.stroke();
 
       // Rótulos de texto
@@ -525,8 +539,8 @@ function renderQualisEvolutionChart(scores) {
       
       const textX = right - 10;
       
-      ctx.fillText('Excelente (≥85)', textX, y85 - 6);
-      ctx.fillText('Atenção (<40)', textX, y40 + 14);
+      ctx.fillText('Nota 7 (≥85)', textX, y85 - 6);
+      ctx.fillText('Nota 5 (≥55)', textX, y55 - 6);
       
       ctx.restore();
     }
@@ -537,7 +551,7 @@ function renderQualisEvolutionChart(scores) {
     data: {
       labels: sortedYears,
       datasets: [{
-        label: 'Score de Produção Médio',
+        label: 'Nota CAPES',
         data,
         borderColor: '#a855f7',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
@@ -562,7 +576,8 @@ function renderQualisEvolutionChart(scores) {
           callbacks: {
             label: function(context) {
               const val = context.raw;
-              return ` Score de Produção: ${val}/100 (Médio: Qualis ${getEstratoFromScore(val)})`;
+              const capes = mapScoreToCAPESNote(val);
+              return ` Nota CAPES ${capes.note} · Score ${val}/100 (Médio: Qualis ${getEstratoFromScore(val)})`;
             }
           }
         }
@@ -645,15 +660,18 @@ function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent,
     insights.push({ icon: 'check-circle-2', text: `<strong>Dados Coerentes:</strong> 100% dos periódicos analisados estão classificados no Qualis CAPES.` });
   }
 
-  // Insight 4: Avaliação do Score de Produção
+  // Insight 4: Avaliação do Score de Produção (escala CAPES 3-7)
+  const capesInsight = mapScoreToCAPESNote(avgScore);
   let scoreText = '';
-  if (avgScore >= 85) scoreText = 'Perfil com altíssimo impacto científico (Excelente).';
-  else if (avgScore >= 40) scoreText = 'Produção qualificada e consistente (Regular).';
-  else scoreText = 'Baixo impacto relativo nas bases CAPES (Atenção).';
+  if (capesInsight.note >= 7) scoreText = 'Perfil de altíssimo impacto (Excelência Internacional).';
+  else if (capesInsight.note >= 6) scoreText = 'Perfil de excelência com destaque nacional.';
+  else if (capesInsight.note >= 5) scoreText = 'Produção muito boa e consistente (Muito Bom).';
+  else if (capesInsight.note >= 4) scoreText = 'Produção adequada e qualificada (Bom).';
+  else scoreText = 'Produção em nível regular, com espaço para qualificação.';
 
   insights.push({
     icon: 'activity',
-    text: `<strong>Score de Produção:</strong> Nota <strong>${avgScore}/100</strong> (Estrato Médio equivalente a <strong>${avgEstrato}</strong>). ${scoreText}`
+    text: `<strong>Score de Produção:</strong> Nota CAPES <strong>${capesInsight.note}</strong> (${capesInsight.label}) · ${avgScore}/100 · Estrato Médio: <strong>${avgEstrato}</strong>. ${scoreText}`
   });
 
   // Insight 5: Concentração excessiva em um único periódico (mais de 30% das publicações)
