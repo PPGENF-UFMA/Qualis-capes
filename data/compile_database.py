@@ -1,14 +1,103 @@
 import os
 import re
 import json
+import glob
 import pandas as pd
+
+def process_jcr_csv(filepath):
+    """
+    Processa um arquivo CSV do JCR (Web of Science) usando csv.reader nativo.
+    pd.read_csv tem bug de quoting com a primeira linha de metadados destes CSVs.
+    Retorna:
+      - issns: set de ISSNs encontrados
+      - values: dict {issn: jcr_value}
+      - is_nursing: bool indicando se a categoria é NURSING
+    """
+    import csv
+    
+    with open(filepath, 'r', encoding='utf-8-sig') as f:
+        reader = csv.reader(f)
+        
+        # Pular linha 0 (metadata) e linha 1 (blank)
+        next(reader)
+        next(reader)
+        
+        # Linha 2 = cabeçalho
+        raw_headers = next(reader)
+        headers = []
+        for h in raw_headers:
+            h_clean = h.strip().upper()
+            # Evitar colunas duplicadas (trailing comma pode criar coluna extra vazia)
+            if h_clean and h_clean not in headers:
+                headers.append(h_clean)
+            elif h_clean:
+                headers.append(h_clean + '_2')
+        
+        # Detectar índices das colunas por nome
+        issn_idx = None
+        eissn_idx = None
+        jif_idx = None
+        category_idx = None
+        
+        for idx, h in enumerate(headers):
+            if h == 'ISSN':
+                issn_idx = idx
+            elif h == 'EISSN':
+                eissn_idx = idx
+            elif 'JIF' in h and 'RANK' not in h:
+                jif_idx = idx
+            elif h == 'CATEGORY':
+                category_idx = idx
+        
+        if issn_idx is None or jif_idx is None:
+            print(f"  [AVISO] {os.path.basename(filepath)}: colunas ISSN ou JIF nao encontradas.")
+            print(f"         Headers: {headers}")
+            return {'issns': set(), 'values': {}, 'is_nursing': False}
+        
+        issns = set()
+        values = {}
+        is_nursing = False
+        
+        for row in reader:
+            if len(row) < max(issn_idx, jif_idx) + 1:
+                continue
+            
+            raw_issn = row[issn_idx] if len(row) > issn_idx else None
+            raw_eissn = row[eissn_idx] if eissn_idx is not None and len(row) > eissn_idx else None
+            raw_jif = row[jif_idx] if len(row) > jif_idx else None
+            
+            # Detectar nursing pelo conteúdo da coluna Category
+            if category_idx is not None and len(row) > category_idx:
+                cat = row[category_idx].strip().upper()
+                if 'NURSING' in cat:
+                    is_nursing = True
+            
+            jcr_val = parse_float(raw_jif)
+            
+            issn_norm = normalize_issn(raw_issn)
+            eissn_norm = normalize_issn(raw_eissn)
+            
+            for target in [issn_norm, eissn_norm]:
+                if target:
+                    issns.add(target)
+                    if jcr_val is not None:
+                        if target not in values or jcr_val > values[target]:
+                            values[target] = jcr_val
+        
+        return {'issns': issns, 'values': values, 'is_nursing': is_nursing}
 
 # Caminhos dos arquivos
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 CLASSIFICACAO_PATH = os.path.join(DATA_DIR, "classificacao.xlsx")
-JCR_PATH = os.path.join(DATA_DIR, "JCR_nursing.csv")
 SCOPUS_PATH = os.path.join(DATA_DIR, "journals_scopus.xlsx")
 OUTPUT_PATH = os.path.join(DATA_DIR, "journals.json")
+
+# Auto-detectar todos os CSVs JCR (nursing + outras categorias de saúde)
+# set() remove duplicatas (glob case-insensitive no Windows)
+JCR_FILES = sorted(set(
+    glob.glob(os.path.join(DATA_DIR, "jcr_*.csv")) + 
+    glob.glob(os.path.join(DATA_DIR, "JCR_*.csv"))
+))
 
 def normalize_issn(issn):
     """
@@ -47,29 +136,40 @@ def compile_database():
     medline_issns = set()
     
     jcr_values = {}
+    jcr_all_issns = set()  # Todos os ISSNs JCR (nursing + outras categorias)
     
-    # --- 1. PROCESSAR JCR_NURSING.CSV PRIMEIRO ---
-    if os.path.exists(JCR_PATH):
-        print(f"Lendo {JCR_PATH}...")
+    # --- 1. PROCESSAR TODOS OS CSVs JCR (AUTO-DETECÇÃO) ---
+    if JCR_FILES:
+        print(f"\n>>> Processando {len(JCR_FILES)} arquivo(s) JCR encontrado(s)...")
+    else:
+        print("[AVISO] Nenhum arquivo JCR encontrado em data/ (padrao: jcr_*.csv, JCR_*.csv)")
+    
+    for jcr_file in JCR_FILES:
+        basename = os.path.basename(jcr_file)
+        print(f"  Lendo {basename}...")
         try:
-            df_jcr = pd.read_csv(JCR_PATH, skiprows=2)
-            cols = df_jcr.columns.tolist()
-            for idx, row in df_jcr.iterrows():
-                raw_issn = row.iloc[2] if len(cols) > 2 else None
-                raw_eissn = row.iloc[3] if len(cols) > 3 else None
-                jcr_val = parse_float(row.iloc[6]) if len(cols) > 6 else None
-                
-                issn = normalize_issn(raw_issn)
-                eissn = normalize_issn(raw_eissn)
-                
-                for target_issn in [issn, eissn]:
-                    if target_issn:
-                        jcr_nursing_issns.add(target_issn)
-                        if jcr_val is not None:
-                            jcr_values[target_issn] = jcr_val
-            print(f"JCR Enfermagem em memória: {len(jcr_nursing_issns)} ISSNs.")
+            result = process_jcr_csv(jcr_file)
+            issn_count = len(result['issns'])
+            val_count = sum(1 for v in result['values'].values() if v is not None)
+            
+            # Atualizar valores JCR globais (manter maior valor por ISSN)
+            for issn, val in result['values'].items():
+                if val is not None:
+                    if issn not in jcr_values or val > jcr_values[issn]:
+                        jcr_values[issn] = val
+            
+            # Nursing → conjunto especial para classificação de área
+            if result['is_nursing']:
+                jcr_nursing_issns.update(result['issns'])
+                print(f"    → {issn_count} ISSNs (NURSING) | {val_count} com JIF")
+            else:
+                jcr_all_issns.update(result['issns'])
+                print(f"    → {issn_count} ISSNs | {val_count} com JIF")
         except Exception as e:
-            print(f"Erro ao processar JCR: {e}")
+            print(f"    [ERRO] ao processar {basename}: {e}")
+    
+    print(f"\nJCR consolidado: {len(jcr_nursing_issns)} ISSNs Nursing | {len(jcr_all_issns)} ISSNs outras categorias")
+    print(f"  Valores JCR: {len(jcr_values)} ISSNs com JIF")
 
     # --- 2. PROCESSAR JOURNALS_SCOPUS.XLSX SEGUNDO ---
     if os.path.exists(SCOPUS_PATH):
@@ -169,11 +269,26 @@ def compile_database():
         print(f"AVISO: {CLASSIFICACAO_PATH} não encontrado. Ignorando mapeamento de áreas.")
 
     # --- 4. COMPLEMENTAR COM JCR E SCOPUS QUE PODEM NÃO ESTAR NO SUCUPIRA ---
+    # Nursing → Enfermagem
     for issn in jcr_nursing_issns:
         if issn not in journals:
             journals[issn] = {
                 "title": "Periódico do JCR (Enfermagem)",
                 "area": "Enfermagem",
+                "jcr": jcr_values.get(issn),
+                "citeScore": None,
+                "indexers": ["MEDLINE"] if issn in medline_issns else [],
+                "metrics": {
+                    "cuiden": None
+                }
+            }
+
+    # Outras categorias JCR → Outras Áreas
+    for issn in jcr_all_issns:
+        if issn not in journals:
+            journals[issn] = {
+                "title": "Periódico do JCR",
+                "area": "Outras Áreas",
                 "jcr": jcr_values.get(issn),
                 "citeScore": None,
                 "indexers": ["MEDLINE"] if issn in medline_issns else [],

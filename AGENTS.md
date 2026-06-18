@@ -30,7 +30,9 @@ python server.py
 pip install -r requirements.txt
 
 # Rebuild journals.json from source data (Excel/CSV files in data/)
-python data/compile_database.py
+# Auto-detects all jcr_*.csv / JCR_*.csv files (Nursing + health categories)
+# Windows tip: set PYTHONIOENCODING=utf-8 if you see encoding errors
+$env:PYTHONIOENCODING = 'utf-8'; python data/compile_database.py
 
 # Fetch CiteScore from Elsevier API (needs ELSEVIER_API_KEY in .env)
 python data/fetch_citescore.py
@@ -67,7 +69,9 @@ Unit tests for `engine.js` run automatically on page load (in `app.js:initUnitTe
 - **SciELO / LILACS / Latindex**: Disk caches in `data/*_cache.json` with 30-day TTL. These files are gitignored.
 
 ### Database compilation (compile_database.py)
-A journal is classified as `Enfermagem` area only if ALL of:
+- Auto-detects all `jcr_*.csv` and `JCR_*.csv` files in `data/` (not hardcoded to nursing only)
+- Uses Python's `csv.reader` (NOT `pd.read_csv`) due to a pandas quoting bug with JCR CSV metadata
+- A journal is classified as `Enfermagem` area only if ALL of:
 1. It's listed under Enfermagem in `classificacao.xlsx`
 2. AND it appears in JCR Nursing CSV OR Scopus Nursing sheet OR has nursing keywords in title
 
