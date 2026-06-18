@@ -86,10 +86,68 @@ def process_jcr_csv(filepath):
         
         return {'issns': issns, 'values': values, 'is_nursing': is_nursing}
 
+def process_cuiden_csv(filepath):
+    """
+    Processa o arquivo CSV do CUIDEN.
+    Retorna:
+      - cuiden_data: dict {issn: {"ric": float, "title": str}}
+    """
+    import csv
+    cuiden_data = {}
+    if not os.path.exists(filepath):
+        print(f"  [AVISO] {os.path.basename(filepath)} nao encontrado.")
+        return cuiden_data
+        
+    with open(filepath, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        try:
+            # Cabecalho
+            headers = next(reader)
+        except StopIteration:
+            return cuiden_data
+            
+        # Detectar indices
+        issn_idx = None
+        ric_idx = None
+        revista_idx = None
+        
+        for idx, h in enumerate(headers):
+            h_clean = h.strip().upper()
+            if h_clean == 'ISSN':
+                issn_idx = idx
+            elif h_clean == 'RIC' or h_clean == 'RIC ESTIMADO' or h_clean == 'RIC_ESTIMADO':
+                ric_idx = idx
+            elif h_clean == 'REVISTA' or h_clean == 'TITLE':
+                revista_idx = idx
+                
+        if issn_idx is None or ric_idx is None:
+            # fallback
+            issn_idx = 5
+            ric_idx = 8
+            revista_idx = 7
+            
+        for row in reader:
+            if not row or len(row) <= max(issn_idx, ric_idx):
+                continue
+            raw_issn = row[issn_idx]
+            raw_ric = row[ric_idx]
+            raw_title = row[revista_idx] if len(row) > revista_idx else "Periódico CUIDEN"
+            
+            issn_norm = normalize_issn(raw_issn)
+            if issn_norm:
+                ric_val = parse_float(raw_ric)
+                if ric_val is not None:
+                    cuiden_data[issn_norm] = {
+                        "ric": ric_val,
+                        "title": raw_title.strip()
+                    }
+    return cuiden_data
+
 # Caminhos dos arquivos
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
 CLASSIFICACAO_PATH = os.path.join(DATA_DIR, "classificacao.xlsx")
 SCOPUS_PATH = os.path.join(DATA_DIR, "journals_scopus.xlsx")
+CUIDEN_PATH = os.path.join(DATA_DIR, "cuiden_citacion_2022.csv")
 OUTPUT_PATH = os.path.join(DATA_DIR, "journals.json")
 
 # Auto-detectar todos os CSVs JCR (nursing + outras categorias de saúde)
@@ -137,6 +195,10 @@ def compile_database():
     
     jcr_values = {}
     jcr_all_issns = set()  # Todos os ISSNs JCR (nursing + outras categorias)
+    
+    # Carregar dados do CUIDEN
+    cuiden_data = process_cuiden_csv(CUIDEN_PATH)
+    print(f"CUIDEN carregado em memória: {len(cuiden_data)} periódicos.")
     
     # --- 1. PROCESSAR TODOS OS CSVs JCR (AUTO-DETECÇÃO) ---
     if JCR_FILES:
@@ -234,6 +296,7 @@ def compile_database():
                     is_real_nursing = (
                         issn in jcr_nursing_issns or
                         issn in scopus_nursing_issns or
+                        issn in cuiden_data or
                         any(k in title.upper() for k in ["ENFERM", "NURSIN", "CUIDADO", "ENFERMER"])
                     )
                 
@@ -245,9 +308,11 @@ def compile_database():
                         "citeScore": None,
                         "indexers": ["MEDLINE"] if issn in medline_issns else [],
                         "metrics": {
-                            "cuiden": None
+                            "cuiden": cuiden_data[issn]["ric"] if issn in cuiden_data else None
                         }
                     }
+                    if issn in cuiden_data:
+                        journals[issn]["indexers"].append("RIC/CUIDEN")
                 else:
                     # Se já existe, promove para Enfermagem se qualificando pelas regras
                     if is_real_nursing:
@@ -258,6 +323,11 @@ def compile_database():
                     # Atualiza indexador Medline
                     if issn in medline_issns and "MEDLINE" not in journals[issn]["indexers"]:
                         journals[issn]["indexers"].append("MEDLINE")
+                    # Atualiza CUIDEN se disponível
+                    if issn in cuiden_data:
+                        if "RIC/CUIDEN" not in journals[issn]["indexers"]:
+                            journals[issn]["indexers"].append("RIC/CUIDEN")
+                        journals[issn]["metrics"]["cuiden"] = cuiden_data[issn]["ric"]
                     # Atualiza JCR se disponível
                     if jcr_values.get(issn) is not None:
                         journals[issn]["jcr"] = jcr_values.get(issn)
@@ -309,6 +379,22 @@ def compile_database():
                     "cuiden": None
                 }
             }
+
+    # CUIDEN → Enfermagem
+    for issn, info in cuiden_data.items():
+        if issn not in journals:
+            journals[issn] = {
+                "title": info["title"] or "Periódico CUIDEN",
+                "area": "Enfermagem",
+                "jcr": jcr_values.get(issn),
+                "citeScore": None,
+                "indexers": ["RIC/CUIDEN"],
+                "metrics": {
+                    "cuiden": info["ric"]
+                }
+            }
+            if issn in medline_issns and "MEDLINE" not in journals[issn]["indexers"]:
+                journals[issn]["indexers"].append("MEDLINE")
 
     # --- 5. PROCESSAR CITESCORE (PLANILHA SEPARADA, SE DISPONÍVEL) ---
     CITESCORE_PATH = os.path.join(DATA_DIR, "citescore.xlsx")

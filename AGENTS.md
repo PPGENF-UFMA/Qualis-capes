@@ -73,7 +73,7 @@ Unit tests for `engine.js` run automatically on page load (in `app.js:initUnitTe
 - Uses Python's `csv.reader` (NOT `pd.read_csv`) due to a pandas quoting bug with JCR CSV metadata
 - A journal is classified as `Enfermagem` area only if ALL of:
 1. It's listed under Enfermagem in `classificacao.xlsx`
-2. AND it appears in JCR Nursing CSV OR Scopus Nursing sheet OR has nursing keywords in title
+2. AND it appears in JCR Nursing CSV OR Scopus Nursing sheet OR CUIDEN CSV OR has nursing keywords in title
 
 Otherwise it's `Outras Áreas`.
 
