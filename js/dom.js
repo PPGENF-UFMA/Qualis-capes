@@ -6,6 +6,7 @@
 
 const dom = {
   dbStatus: document.getElementById('db-status'),
+  citeScoreStatus: document.getElementById('citescore-status'),
 
   singleIssnForm: document.getElementById('single-issn-form'),
   singleIssnInput: document.getElementById('single-issn-input'),

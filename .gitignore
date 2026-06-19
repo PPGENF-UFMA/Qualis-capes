@@ -4,6 +4,9 @@
 # Caches gerados
 data/*_cache.json
 
+# Descobertas de runtime (gerado pelo servidor)
+data/runtime_discoveries.json
+
 # Node
 node_modules/
 

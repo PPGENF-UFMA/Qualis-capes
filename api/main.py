@@ -68,11 +68,13 @@ async def root():
 @app.get("/api/status")
 async def api_status():
     db = enricher.load_database()
+    has_key = bool(os.environ.get("ELSEVIER_API_KEY"))
     return {
         "status": "ok",
         "version": "2.0.0",
         "database_size": len(db),
-        "elsevier_api_key": bool(os.environ.get("ELSEVIER_API_KEY")),
+        "elsevier_api_key": has_key,
+        "citeScoreAvailable": has_key,
     }
 
 

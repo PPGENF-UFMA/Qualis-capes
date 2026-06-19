@@ -313,6 +313,8 @@ def compile_database():
                     }
                     if issn in cuiden_data:
                         journals[issn]["indexers"].append("RIC/CUIDEN")
+                    if issn in scopus_nursing_issns:
+                        journals[issn]["indexers"].append("SCOPUS")
                 else:
                     # Se já existe, promove para Enfermagem se qualificando pelas regras
                     if is_real_nursing:
@@ -323,6 +325,9 @@ def compile_database():
                     # Atualiza indexador Medline
                     if issn in medline_issns and "MEDLINE" not in journals[issn]["indexers"]:
                         journals[issn]["indexers"].append("MEDLINE")
+                    # Atualiza indexador Scopus
+                    if issn in scopus_nursing_issns and "SCOPUS" not in journals[issn]["indexers"]:
+                        journals[issn]["indexers"].append("SCOPUS")
                     # Atualiza CUIDEN se disponível
                     if issn in cuiden_data:
                         if "RIC/CUIDEN" not in journals[issn]["indexers"]:
@@ -374,7 +379,7 @@ def compile_database():
                 "area": "Enfermagem",
                 "jcr": jcr_values.get(issn),
                 "citeScore": None,
-                "indexers": ["MEDLINE"] if issn in medline_issns else [],
+                "indexers": ["SCOPUS", "MEDLINE"] if issn in medline_issns else ["SCOPUS"],
                 "metrics": {
                     "cuiden": None
                 }

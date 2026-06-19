@@ -57,30 +57,28 @@ function Start-Server {
         return
     }
 
-    Start-Sleep -Seconds 3
+    # Aguarda ate o servidor abrir a porta e responder (maximo 15 segundos)
+    $svcPid = $null
+    for ($i = 0; $i -lt 15; $i++) {
+        Start-Sleep -Seconds 1
+        $svcPid = Find-ServerPid
+        if ($svcPid) {
+            break
+        }
+        if ($proc -and $proc.HasExited) {
+            break
+        }
+    }
 
-    $svcPid = Find-ServerPid
     if ($svcPid) {
         $svcPid | Out-File $PID_FILE -Encoding ascii
         Write-Host "Servidor iniciado com sucesso (PID $svcPid)."
         Write-Host "Acesse: http://127.0.0.1:$PORT"
     } else {
-        # Se iniciou mas nao achou o PID de imediato, pode ser um atraso na inicializacao
+        Write-Host "[ERRO] O servidor foi iniciado, mas nao esta respondendo na porta $PORT."
+        Write-Host "Verifique se ha erros executando diretamente: python -m uvicorn api.main:app --port $PORT"
         if ($proc -and -not $proc.HasExited) {
-            Start-Sleep -Seconds 3
-            $svcPid = Find-ServerPid
-        }
-        
-        if ($svcPid) {
-            $svcPid | Out-File $PID_FILE -Encoding ascii
-            Write-Host "Servidor iniciado com sucesso (PID $svcPid)."
-            Write-Host "Acesse: http://127.0.0.1:$PORT"
-        } else {
-            Write-Host "[ERRO] O servidor foi iniciado, mas nao esta respondendo na porta $PORT."
-            Write-Host "Verifique se ha erros executando diretamente: python -m uvicorn api.main:app --port $PORT"
-            if ($proc -and -not $proc.HasExited) {
-                $proc.Kill()
-            }
+            $proc.Kill()
         }
     }
 }

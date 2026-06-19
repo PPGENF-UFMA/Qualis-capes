@@ -398,8 +398,16 @@ textarea.text-input {
 
 .db-status-footer {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 10px 0;
+  gap: 6px;
+}
+
+.citescore-badge {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
 }
 
 .db-badge {

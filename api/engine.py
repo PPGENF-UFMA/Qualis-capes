@@ -18,22 +18,22 @@ def classify_journal(journal: dict) -> dict:
         if citeScore is not None and citeScore >= 2.9:
             return {"estrato": "A1", "justification": f"CiteScore = {citeScore:.2f} (>= 2.9)"}
 
-        if jcr is not None and 1.1 <= jcr <= 1.7:
-            return {"estrato": "A2", "justification": f"JCR = {jcr:.2f} (entre 1.1 e 1.7)"}
-        if citeScore is not None and 1.8 <= citeScore <= 2.8:
-            return {"estrato": "A2", "justification": f"CiteScore = {citeScore:.2f} (entre 1.8 e 2.8)"}
+        if jcr is not None and 1.1 <= jcr < 1.8:
+            return {"estrato": "A2", "justification": f"JCR = {jcr:.2f} (entre 1.1 e 1.8)"}
+        if citeScore is not None and 1.8 <= citeScore < 2.9:
+            return {"estrato": "A2", "justification": f"CiteScore = {citeScore:.2f} (entre 1.8 e 2.9)"}
 
-        if jcr is not None and 0.6 <= jcr <= 1.0:
-            return {"estrato": "A3", "justification": f"JCR = {jcr:.2f} (entre 0.6 e 1.0)"}
-        if citeScore is not None and 0.7 <= citeScore <= 1.7:
-            return {"estrato": "A3", "justification": f"CiteScore = {citeScore:.2f} (entre 0.7 e 1.7)"}
+        if jcr is not None and 0.6 <= jcr < 1.1:
+            return {"estrato": "A3", "justification": f"JCR = {jcr:.2f} (entre 0.6 e 1.1)"}
+        if citeScore is not None and 0.7 <= citeScore < 1.8:
+            return {"estrato": "A3", "justification": f"CiteScore = {citeScore:.2f} (entre 0.7 e 1.8)"}
         if has_indexer("MEDLINE"):
             return {"estrato": "A3", "justification": "Indexado no MEDLINE"}
 
-        if jcr is not None and 0.1 <= jcr <= 0.5:
-            return {"estrato": "A4", "justification": f"JCR = {jcr:.2f} (entre 0.1 e 0.5)"}
-        if citeScore is not None and 0.1 <= citeScore <= 0.6:
-            return {"estrato": "A4", "justification": f"CiteScore = {citeScore:.2f} (entre 0.1 e 0.6)"}
+        if jcr is not None and 0.1 <= jcr < 0.6:
+            return {"estrato": "A4", "justification": f"JCR = {jcr:.2f} (entre 0.1 e 0.6)"}
+        if citeScore is not None and 0.1 <= citeScore < 0.7:
+            return {"estrato": "A4", "justification": f"CiteScore = {citeScore:.2f} (entre 0.1 e 0.7)"}
         if has_indexer("SCIELO"):
             return {"estrato": "A4", "justification": "Indexado no SCIELO"}
         if has_indexer("REVENF"):
@@ -63,30 +63,30 @@ def classify_journal(journal: dict) -> dict:
         if citeScore is not None and citeScore >= 5.0:
             return {"estrato": "A1", "justification": f"CiteScore = {citeScore:.2f} (>= 5.0)"}
 
-        if jcr is not None and 4.0 <= jcr <= 4.9:
-            return {"estrato": "A2", "justification": f"JCR = {jcr:.2f} (entre 4.0 e 4.9)"}
-        if citeScore is not None and 4.0 <= citeScore <= 4.9:
-            return {"estrato": "A2", "justification": f"CiteScore = {citeScore:.2f} (entre 4.0 e 4.9)"}
+        if jcr is not None and 4.0 <= jcr < 5.0:
+            return {"estrato": "A2", "justification": f"JCR = {jcr:.2f} (entre 4.0 e 5.0)"}
+        if citeScore is not None and 4.0 <= citeScore < 5.0:
+            return {"estrato": "A2", "justification": f"CiteScore = {citeScore:.2f} (entre 4.0 e 5.0)"}
 
-        if jcr is not None and 3.0 <= jcr <= 3.9:
-            return {"estrato": "A3", "justification": f"JCR = {jcr:.2f} (entre 3.0 e 3.9)"}
-        if citeScore is not None and 3.0 <= citeScore <= 3.9:
-            return {"estrato": "A3", "justification": f"CiteScore = {citeScore:.2f} (entre 3.0 e 3.9)"}
+        if jcr is not None and 3.0 <= jcr < 4.0:
+            return {"estrato": "A3", "justification": f"JCR = {jcr:.2f} (entre 3.0 e 4.0)"}
+        if citeScore is not None and 3.0 <= citeScore < 4.0:
+            return {"estrato": "A3", "justification": f"CiteScore = {citeScore:.2f} (entre 3.0 e 4.0)"}
 
-        if jcr is not None and 2.0 <= jcr <= 2.9:
-            return {"estrato": "A4", "justification": f"JCR = {jcr:.2f} (entre 2.0 e 2.9)"}
-        if citeScore is not None and 2.0 <= citeScore <= 2.9:
-            return {"estrato": "A4", "justification": f"CiteScore = {citeScore:.2f} (entre 2.0 e 2.9)"}
+        if jcr is not None and 2.0 <= jcr < 3.0:
+            return {"estrato": "A4", "justification": f"JCR = {jcr:.2f} (entre 2.0 e 3.0)"}
+        if citeScore is not None and 2.0 <= citeScore < 3.0:
+            return {"estrato": "A4", "justification": f"CiteScore = {citeScore:.2f} (entre 2.0 e 3.0)"}
 
-        if jcr is not None and 1.0 <= jcr <= 1.9:
-            return {"estrato": "A5", "justification": f"JCR = {jcr:.2f} (entre 1.0 e 1.9)"}
-        if citeScore is not None and 0.1 <= citeScore <= 1.9:
-            return {"estrato": "A5", "justification": f"CiteScore = {citeScore:.2f} (entre 0.1 e 1.9)"}
+        if jcr is not None and 1.0 <= jcr < 2.0:
+            return {"estrato": "A5", "justification": f"JCR = {jcr:.2f} (entre 1.0 e 2.0)"}
+        if citeScore is not None and 0.1 <= citeScore < 2.0:
+            return {"estrato": "A5", "justification": f"CiteScore = {citeScore:.2f} (entre 0.1 e 2.0)"}
         if has_indexer("MEDLINE"):
             return {"estrato": "A5", "justification": "Indexado no MEDLINE"}
 
-        if jcr is not None and 0.1 <= jcr <= 0.9:
-            return {"estrato": "A6", "justification": f"JCR = {jcr:.2f} (entre 0.1 e 0.9)"}
+        if jcr is not None and 0.1 <= jcr < 1.0:
+            return {"estrato": "A6", "justification": f"JCR = {jcr:.2f} (entre 0.1 e 1.0)"}
         if has_indexer("SCIELO"):
             return {"estrato": "A6", "justification": "Indexado no SCIELO"}
 

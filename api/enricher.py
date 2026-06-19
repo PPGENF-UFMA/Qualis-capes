@@ -13,7 +13,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JOURNALS_PATH = os.path.join(PROJECT_ROOT, "data", "journals.json")
 ELSEVIER_BASE = "https://api.elsevier.com/content/serial/title/issn"
 
-API_KEY = os.environ.get("ELSEVIER_API_KEY", "")
+def get_api_key() -> str:
+    return os.environ.get("ELSEVIER_API_KEY", "")
 
 _journals_db: dict[str, dict] | None = None
 
@@ -46,6 +47,12 @@ def load_database() -> dict[str, dict]:
             norm = normalize_issn(raw_issn)
             if norm:
                 _journals_db[norm] = record
+
+        discoveries = cache.get_discoveries()
+        for issn, record in discoveries.items():
+            if issn not in _journals_db:
+                _journals_db[issn] = record
+
         return _journals_db
     except Exception as e:
         print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
@@ -199,12 +206,13 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
     if issn in session_cache:
         return session_cache[issn].get("citeScore")
 
-    if not API_KEY:
+    api_key = get_api_key()
+    if not api_key:
         return None
 
     url = f"{ELSEVIER_BASE}/{issn}?view=CITESCORE"
     headers = {
-        "X-ELS-APIKey": API_KEY,
+        "X-ELS-APIKey": api_key,
         "Accept": "application/json",
     }
 
@@ -287,6 +295,7 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
                 db_record["latindexUpdatedAt"] = latindex_data.get("updated_at")
 
             db[normalized] = db_record
+            cache.save_discovery(normalized, db_record)
 
     if not db_record:
         return {
@@ -331,6 +340,12 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
         if api_cs is not None:
             db_record["citeScore"] = api_cs
 
+    # Garante que 'SCOPUS' conste na lista de indexadores caso possua CiteScore
+    indexers = list(db_record.get("indexers") or [])
+    if db_record.get("citeScore") is not None:
+        if "SCOPUS" not in [idx.upper() for idx in indexers]:
+            indexers.append("SCOPUS")
+
     classification = engine.classify_journal(db_record)
 
     return {
@@ -339,7 +354,7 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
         "area": db_record.get("area", "Outras Áreas"),
         "jcr": db_record.get("jcr"),
         "citeScore": db_record.get("citeScore"),
-        "indexers": db_record.get("indexers") or [],
+        "indexers": indexers,
         "metrics": db_record.get("metrics") or {"cuiden": None},
         "classification": classification,
         "scieloUpdatedAt": db_record.get("scieloUpdatedAt"),

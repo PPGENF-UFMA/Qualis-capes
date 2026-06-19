@@ -33,6 +33,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   restoreComparisonProfiles();
   renderRecentSearches();
   await initDatabase();
+  await checkCiteScoreStatus();
 
   // Se havia resultados restaurados da sessão anterior, renderiza-os
   if (appState.classifiedItems.length > 0) {
@@ -424,6 +425,32 @@ function setupEventListeners() {
 }
 
 // ─── Handlers ────────────────────────────────────────────────────
+
+/**
+ * Verifica se o CiteScore está disponível (API key configurada)
+ * e exibe um badge na sidebar avisando se não estiver.
+ */
+async function checkCiteScoreStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!dom.citeScoreStatus) return;
+    if (!data.citeScoreAvailable) {
+      dom.citeScoreStatus.textContent = 'CiteScore indisponível (sem API key)';
+      dom.citeScoreStatus.style.display = 'block';
+      dom.citeScoreStatus.style.background = 'var(--warning-bg, rgba(245, 158, 11, 0.15))';
+      dom.citeScoreStatus.style.color = 'var(--warning, #f59e0b)';
+    } else {
+      dom.citeScoreStatus.textContent = 'CiteScore disponível';
+      dom.citeScoreStatus.style.display = 'block';
+      dom.citeScoreStatus.style.background = 'rgba(16, 185, 129, 0.15)';
+      dom.citeScoreStatus.style.color = 'var(--success, #10b981)';
+    }
+  } catch (e) {
+    // silencioso
+  }
+}
 
 /**
  * Inicializa a Base de Dados e exibe status na interface.

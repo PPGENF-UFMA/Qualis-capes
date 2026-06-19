@@ -10,6 +10,7 @@ ISSN_PATTERN = re.compile(r"^\d{4}-\d{3}[\dXx]$")
 SCI_ELO_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "scielo_cache.json")
 LILACS_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "lilacs_cache.json")
 LATINDEX_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "latindex_cache.json")
+DISCOVERIES_PATH = os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json")
 
 
 def validate_issn(issn: str) -> bool:
@@ -58,6 +59,8 @@ _scielo_cache: dict = load_json_cache(SCI_ELO_CACHE_PATH)
 _lilacs_cache: dict = load_json_cache(LILACS_CACHE_PATH)
 _latindex_cache: dict = load_json_cache(LATINDEX_CACHE_PATH)
 
+_discoveries_cache: dict = load_json_cache(DISCOVERIES_PATH)
+
 
 def get_session_cache() -> dict:
     return _session_cache
@@ -88,3 +91,14 @@ def save_lilacs_cache(cache: dict):
 def save_latindex_cache(cache: dict):
     _latindex_cache.update(cache)
     save_json_cache(LATINDEX_CACHE_PATH, _latindex_cache)
+
+
+# ─── Descobertas de Runtime ────────────────────────────────────────
+
+def get_discoveries() -> dict:
+    return _discoveries_cache
+
+
+def save_discovery(issn: str, record: dict):
+    _discoveries_cache[issn] = record
+    save_json_cache(DISCOVERIES_PATH, _discoveries_cache)
