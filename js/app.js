@@ -5,9 +5,8 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { loadDatabase, enrichAndClassify, normalizeISSN } from './enricher.js';
+import { loadDatabase, enrichAndClassify, normalizeISSN, searchByName } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
-import { runTests } from './tests.js';
 
 import dom from './dom.js';
 import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
@@ -47,8 +46,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (dom.tabComparison) dom.tabComparison.style.display = 'flex';
     updateComparisonDashboard(appState.comparisonProfiles);
   }
-
-  initUnitTests();
 
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
@@ -454,30 +451,6 @@ async function initDatabase() {
 }
 
 /**
- * Executa silenciosamente os Testes Unitários de Diagnóstico.
- */
-function initUnitTests() {
-  try {
-    const results = runTests();
-    const passed = results.filter(r => r.passed);
-    const failed = results.filter(r => !r.passed);
-
-    console.group('🩺 Diagnóstico do Motor de Regras Qualis CAPES');
-    console.info(`🟢 Testes que passaram: ${passed.length}/${results.length}`);
-
-    if (failed.length > 0) {
-      console.error(`🔴 Testes que falharam: ${failed.length}/${results.length}`);
-      console.table(failed);
-    } else {
-      console.info('Sucesso Absoluto: Todos os cenários de classificação da CAPES passaram com 100% de exatidão!');
-    }
-    console.groupEnd();
-  } catch (err) {
-    console.error('Falha crítica ao executar a suíte de testes unitários:', err);
-  }
-}
-
-/**
  * Processa a lista de artigos do Lattes: enriquece, classifica e atualiza a UI.
  * @param {Object[]} parsedArticles Artigos parseados pelo lattesParser
  * @param {string} researcherName Nome do pesquisador
@@ -572,53 +545,17 @@ async function handleUploadedFile(file) {
  * @param {string} nameQuery Nome buscado
  */
 async function handleSearchByName(nameQuery) {
-  const queryLower = nameQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-  // Filtrar no banco local
-  const matches = appState.dbSummary.items.filter(item => {
-    if (!item.title) return false;
-    const titleClean = item.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return titleClean.includes(queryLower);
-  });
-
-  // Busca remota na API LILACS (BVS)
-  let bvsMatches = [];
-  try {
-    const response = await fetch(`/api/lilacs/${encodeURIComponent(nameQuery)}`);
-    if (response.ok) {
-      const data = await response.json();
-      if ((data.lilacs || data.bdenf) && data.title && data.issn) {
-        bvsMatches.push({
-          issn: data.issn,
-          title: data.title,
-          area: data.bdenf ? 'Enfermagem' : 'Outras Áreas',
-          isRemote: true
-        });
-      }
-    }
-  } catch (err) {
-    console.warn("[Busca Remota por Nome] Falha na API LILACS:", err);
-    showToast('Busca remota LILACS indisponível. Resultados baseados apenas na base local.', 'warning');
-  }
-
-  // Consolidar resultados locais e remotos
-  let allMatches = [...matches];
-  bvsMatches.forEach(bvsItem => {
-    if (!allMatches.some(m => m.issn === bvsItem.issn)) {
-      allMatches.push(bvsItem);
-    }
-  });
-
   hideLoadingState();
+  const results = await searchByName(nameQuery);
 
-  if (allMatches.length === 0) {
+  if (results.length === 0) {
     showToast('Nenhum periódico encontrado com este nome.', 'warning');
     return;
   }
 
-  if (allMatches.length === 1) {
+  if (results.length === 1) {
     showLoadingState('Analisando ISSN', 'Consultando APIs e aplicando regras de extratos CAPES...', 'search');
-    const classified = await enrichAndClassify(allMatches[0].issn);
+    const classified = await enrichAndClassify(results[0].issn);
     addClassifiedItem(classified);
     addRecentSearch(classified.issn, classified.title);
     renderResultsTable();
@@ -628,6 +565,5 @@ async function handleSearchByName(nameQuery) {
     return;
   }
 
-  // Múltiplos resultados: abrir modal de seleção
-  showSearchModal(allMatches);
+  showSearchModal(results);
 }

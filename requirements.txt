@@ -1,7 +1,11 @@
 # Dependências Python do Qualis-CAPES
 # Instale com: pip install -r requirements.txt
 
-# Server (server.py)
+# API Server (api/main.py)
+fastapi>=0.137.0
+uvicorn[standard]>=0.49.0
+httpx>=0.28.0
+pydantic>=2.13.0
 python-dotenv>=1.0.0
 
 # Compilação do banco de dados (data/compile_database.py)

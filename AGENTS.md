@@ -4,30 +4,56 @@
 
 Single-page web app (no build step). ES modules loaded directly in the browser via `<script type="module">`.
 
-- **`server.py`** — Python HTTP server. Serves static files + proxies external APIs (Elsevier, SciELO, LILACS, Latindex). Must be running for the app to work (including local dev).
+- **`api/`** — FastAPI backend (Python):
+  - `main.py` — FastAPI app, routes (classify, batch, search, status) + static file serving
+  - `enricher.py` — Database loading, external API enrichment (SciELO, LILACS, Latindex, Elsevier)
+  - `engine.py` — Classification engine: pure function `classifyJournal()` → `{ estrato, justification }`
+  - `cache.py` — Session cache (CiteScore) + disk cache with 30-day TTL (SciELO, LILACS, Latindex)
+  - `models.py` — Pydantic schemas (request/response validation)
 - **`index.html`** — Entry point. Loads `js/app.js` as a module.
 - **`js/app.js`** — Orchestrator. Sets up event listeners and delegates to modules.
-- **`js/enricher.js`** — Loads `data/journals.json`, fetches live API data, calls the engine.
-- **`js/engine.js`** — Pure classification function. Input: journal object → Output: `{ estrato, justification }`. No side effects.
+- **`js/enricher.js`** — Thin client: calls backend API (`/api/classify/{issn}`, `/api/search`, `/api/db-summary`). No more direct API proxy calls or engine logic.
 - **`js/state.js`** — Central `appState` object. Persisted to `sessionStorage` under key `qualis_results`.
 - **`js/dom.js`** — All DOM element references in one export. Always access DOM through this module.
 - **`js/table.js`** — Results table rendering.
 - **`js/charts.js`** — Chart.js dashboard, KPIs, insights.
 - **`js/ui.js`** — Tabs, modals, toasts, theme toggle, recent searches.
 - **`js/utils.js`** — CSV parser/generator, `escapeHTML()` (XSS), `downloadFile()`.
-- **`js/lattesParser.js`** — Parses copy-pasted Lattes CV text into structured articles. Uses Jaro-Winkler + hardcoded journal aliases.
-- **`js/tests.js`** — Engine unit tests. Auto-run on page load, results logged to browser console.
+- **`js/lattesParser.js`** — Parses copy-pasted Lattes CV text into structured articles. Uses Jaro-Winkler + hardcoded journal aliases. Runs entirely client-side.
 - **`css/styles.css`** — All styles.
 - **`data/`** — Database files and Python compilation scripts.
 
 ## Commands
 
-```bash
-# Start dev server (required for everything)
-python server.py
+### Server (background — não bloqueia o terminal)
 
-# Install Python dependencies
+Use `server.ps1` para startar/parar o servidor sem travar o terminal:
+
+```powershell
+# Start dev server (required for everything) — roda em background
+.\server.ps1 start
+
+# Stop server
+.\server.ps1 stop
+
+# Restart server
+.\server.ps1 restart
+
+# Check status
+.\server.ps1 status
+```
+
+O servidor roda em background (PowerShell Job). O comando retorna imediatamente.
+Alternativa direta (bloqueante, NÃO usar no terminal da IA):
+```bash
+python -m uvicorn api.main:app --port 8080 --reload
+```
+
+### Install Python dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
 # Rebuild journals.json from source data (Excel/CSV files in data/)
 # Auto-detects all jcr_*.csv / JCR_*.csv files (Nursing + health categories)
@@ -62,9 +88,10 @@ All dynamic HTML rendering MUST use `escapeHTML()` from `utils.js` before insert
 During async operations, call `showLoadingState()` / `hideLoadingState()` from `ui.js`. Submit buttons are automatically disabled while loading.
 
 ### Tests
-Unit tests for `engine.js` run automatically on page load (in `app.js:initUnitTests()`). Verify in browser console. The engine is pure — testable without any DOM or network.
+Unit tests for `engine.py` should be run with pytest (TODO: create test_engine.py).
+The engine is pure — testable without any I/O.
 
-### API proxy caching (server.py)
+### API proxy caching (api/cache.py)
 - **CiteScore**: In-memory session cache only (cleared on server restart)
 - **SciELO / LILACS / Latindex**: Disk caches in `data/*_cache.json` with 30-day TTL. These files are gitignored.
 
@@ -91,3 +118,4 @@ Otherwise it's `Outras Áreas`.
 - `data/*_cache.json` (runtime caches)
 - `.agents/` and `agents/` (OpenCode skills)
 - `__pycache__/`, `node_modules/`
+- `.server_pid` (runtime PID file from server.ps1)
