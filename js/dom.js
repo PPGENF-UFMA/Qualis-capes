@@ -22,6 +22,7 @@ const dom = {
   searchBox: document.getElementById('search-box'),
   filterEstrato: document.getElementById('filter-estrato'),
   filterYear: document.getElementById('filter-year'),
+  sortBy: document.getElementById('sort-by'),
   btnExport: document.getElementById('btn-export'),
   btnReport: document.getElementById('btn-report'),
   btnClear: document.getElementById('btn-clear'),

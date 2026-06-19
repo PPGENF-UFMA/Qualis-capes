@@ -138,6 +138,9 @@ function setupEventListeners() {
   if (dom.filterYear) {
     dom.filterYear.addEventListener('change', () => renderResultsTable());
   }
+  if (dom.sortBy) {
+    dom.sortBy.addEventListener('change', () => renderResultsTable());
+  }
 
   // Limpar e Exportar
   dom.btnClear.addEventListener('click', () => {
@@ -149,6 +152,9 @@ function setupEventListeners() {
     if (dom.filterYear) {
       dom.filterYear.value = 'ALL';
     }
+    if (dom.sortBy) {
+      dom.sortBy.value = 'relevance';
+    }
     renderResultsTable();
     switchTab('table');
     switchInputType('single');
@@ -158,7 +164,9 @@ function setupEventListeners() {
     if (appState.classifiedItems.length === 0) return;
     const searchVal = dom.searchBox.value;
     const filterVal = dom.filterEstrato.value;
-    const filtered = getFilteredItems(searchVal, filterVal);
+    const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
+    const sortVal = dom.sortBy ? dom.sortBy.value : 'relevance';
+    const filtered = getFilteredItems(searchVal, filterVal, filterYearVal, sortVal);
     const csvContent = generateCSV(filtered);
     const dateStr = new Date().toISOString().slice(0, 10);
     downloadFile(csvContent, `qualis_classificado_${dateStr}.csv`, 'text/csv');

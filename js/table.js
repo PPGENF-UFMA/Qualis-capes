@@ -23,6 +23,17 @@ function formatDate(dateStr) {
   return dateStr;
 }
 
+function formatRelevanceTooltip(item) {
+  const estrato = item.classification?.estrato || 'NC';
+  const parts = [`Estrato ${estrato}`];
+  if (typeof item.jcr === 'number') parts.push(`JCR ${item.jcr.toFixed(2)}`);
+  if (typeof item.citeScore === 'number') parts.push(`CiteScore ${item.citeScore.toFixed(2)}`);
+  const idxCount = Array.isArray(item.indexers) ? item.indexers.length : 0;
+  if (idxCount > 0) parts.push(`${idxCount} indexador${idxCount > 1 ? 'es' : ''}`);
+  if (item.metrics?.cuiden != null) parts.push(`CUIDEN ${item.metrics.cuiden.toFixed(2)}`);
+  return `Relevância: ${parts.join(' · ')}`;
+}
+
 /**
  * Renderiza a Tabela de Resultados com sanitização XSS.
  */
@@ -30,7 +41,9 @@ export function renderResultsTable() {
   const searchVal = dom.searchBox.value;
   const filterVal = dom.filterEstrato.value;
   const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
-  const filtered = getFilteredItems(searchVal, filterVal, filterYearVal);
+  const sortVal = dom.sortBy ? dom.sortBy.value : 'relevance';
+  const filtered = getFilteredItems(searchVal, filterVal, filterYearVal, sortVal);
+  const showRank = sortVal === 'relevance' || sortVal === 'estrato';
 
   // Atualiza os KPIs e gráficos com base nos itens filtrados pelo ano selecionado
   const dashboardItems = getFilteredItems('', 'ALL', filterYearVal);
@@ -56,7 +69,7 @@ export function renderResultsTable() {
     return;
   }
 
-  filtered.forEach(item => {
+  filtered.forEach((item, index) => {
     const row = document.createElement('tr');
 
     // Sanitizar dados externos para prevenir XSS
@@ -65,6 +78,10 @@ export function renderResultsTable() {
     const safeArea = escapeHTML(item.area);
     const safeEstrato = escapeHTML(item.classification.estrato);
     const safeJustification = escapeHTML(item.classification.justification);
+    const relevanceTooltip = escapeHTML(formatRelevanceTooltip(item));
+    const rankBadge = showRank
+      ? `<span class="relevance-rank" data-tooltip="${relevanceTooltip}">#${index + 1}</span>`
+      : '';
 
     const indexersTags = item.indexers.map(idx => {
       const safeIdx = escapeHTML(idx);
@@ -92,7 +109,7 @@ export function renderResultsTable() {
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
-          ${safeTitle}
+          ${rankBadge}${safeTitle}
         </div>
         ${areaBadge}
       </td>
