@@ -34,6 +34,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   renderRecentSearches();
   await initDatabase();
   await checkCiteScoreStatus();
+  await checkCircuitsStatus();
 
   // Se havia resultados restaurados da sessão anterior, renderiza-os
   if (appState.classifiedItems.length > 0) {
@@ -446,6 +447,33 @@ async function checkCiteScoreStatus() {
       dom.citeScoreStatus.style.display = 'block';
       dom.citeScoreStatus.style.background = 'rgba(16, 185, 129, 0.15)';
       dom.citeScoreStatus.style.color = 'var(--success, #10b981)';
+    }
+  } catch (e) {
+    // silencioso
+  }
+}
+
+async function checkCircuitsStatus() {
+  try {
+    const resp = await fetch('/api/status');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!dom.circuitsStatus) return;
+    const circuits = data.circuits || {};
+    const openCircuits = Object.entries(circuits)
+      .filter(([_, s]) => s.state === 'OPEN')
+      .map(([name, s]) => {
+        const label = { scielo: 'SciELO', lilacs: 'LILACS', latindex: 'Latindex', elsevier: 'Elsevier' }[name] || name;
+        return `${label} (${s.cooldown_remaining}s)`;
+      });
+
+    if (openCircuits.length > 0) {
+      dom.circuitsStatus.textContent = `⚠ API indisponível: ${openCircuits.join(', ')}`;
+      dom.circuitsStatus.style.display = 'block';
+      dom.circuitsStatus.style.background = 'rgba(239, 68, 68, 0.15)';
+      dom.circuitsStatus.style.color = 'var(--error, #ef4444)';
+    } else {
+      dom.circuitsStatus.style.display = 'none';
     }
   } catch (e) {
     // silencioso

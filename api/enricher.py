@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 
 import httpx
+from bs4 import BeautifulSoup
 
 from . import cache
 from . import engine
@@ -77,6 +78,10 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
     if cached:
         return cached
 
+    cb = cache.circuit_scielo
+    if not cb.allow_request():
+        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
+
     url = f"https://articlemeta.scielo.org/api/v1/journal/?issn={issn}"
     headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
 
@@ -104,64 +109,92 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
             "status": "ok",
         }
         cache.save_scielo_cache({issn: result})
+        cb.record_success()
         return result
     except httpx.HTTPStatusError as e:
+        cb.record_failure()
         return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": f"SciELO API error: {e.response.status_code}"}
     except (httpx.RequestError, httpx.TimeoutException):
+        cb.record_failure()
         return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": "Timeout"}
+
+
+LILACS_PRIMARY_URL = "https://fi-admin-api.bvsalud.org/api/title/search/"
+LILACS_FALLBACK_URL = "https://lilacs.bvsalud.org/wp-json/test/v1/bvs/journals/search"
+
+
+def _parse_lilacs_response(raw_data: dict) -> dict | None:
+    response_data = raw_data.get("diaServerResponse", [{}])[0].get("response", {})
+    if not response_data:
+        response_data = raw_data.get("data", {}).get("diaServerResponse", [{}])[0].get("response", {})
+    if response_data:
+        return response_data
+    return None
+
+
+async def _try_fetch_lilacs(url: str, issn: str, http_client: httpx.AsyncClient) -> dict | None:
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
+    try:
+        response = await http_client.get(url, headers=headers, timeout=10)
+        raw_data = response.json()
+        response_data = _parse_lilacs_response(raw_data)
+        if response_data is None:
+            return None
+
+        num_found = response_data.get("numFound", 0)
+        docs = response_data.get("docs", [])
+
+        if num_found < 1 or not docs:
+            return {"lilacs": False, "bdenf": False, "title": None, "issn": None}
+
+        indexed_dbs = docs[0].get("indexed_database", [])
+        issn_list = docs[0].get("issn", [])
+        return {
+            "lilacs": True,
+            "bdenf": any("BDENF" in db.upper() for db in indexed_dbs),
+            "title": docs[0].get("title"),
+            "issn": issn_list[0] if issn_list else None,
+        }
+    except Exception:
+        return None
 
 
 async def fetch_lilacs(issn: str, http_client: httpx.AsyncClient) -> dict:
     cached = cache.check_cache_validity(cache.get_lilacs_cache(), issn)
-    if cached and "bdenf" in cached:
+    if cached:
         return cached
 
-    url = f"https://lilacs.bvsalud.org/wp-json/test/v1/bvs/journals/search?q={issn}"
-    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
+    cb = cache.circuit_lilacs
+    if not cb.allow_request():
+        return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
 
-    try:
-        response = await http_client.get(url, headers=headers, timeout=10)
-        raw_data = response.json()
+    primary_url = f"{LILACS_PRIMARY_URL}?q={issn}"
+    result = await _try_fetch_lilacs(primary_url, issn, http_client)
 
-        response_data = (
-            raw_data.get("data", {}).get("diaServerResponse", [{}])[0].get("response", {})
-        )
-        num_found = response_data.get("numFound", 0)
-        docs = response_data.get("docs", [])
+    if result is None:
+        fallback_url = f"{LILACS_FALLBACK_URL}?q={issn}"
+        result = await _try_fetch_lilacs(fallback_url, issn, http_client)
 
-        lilacs = num_found >= 1
-        bdenf = False
-        title = None
-        issn_real = None
-        if lilacs and len(docs) > 0:
-            title = docs[0].get("title")
-            indexed_dbs = docs[0].get("indexed_database", [])
-            bdenf = any("BDENF" in db.upper() for db in indexed_dbs)
-            issn_list = docs[0].get("issn", [])
-            if len(issn_list) > 0:
-                issn_real = issn_list[0]
-
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        result = {
-            "lilacs": lilacs,
-            "bdenf": bdenf,
-            "title": title,
-            "issn": issn_real,
-            "updated_at": today_str,
-            "status": "ok",
-        }
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if result:
+        result["updated_at"] = today_str
+        result["status"] = "ok"
         cache.save_lilacs_cache({issn: result})
+        cb.record_success()
         return result
-    except httpx.HTTPStatusError as e:
-        return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": f"LILACS API error: {e.response.status_code}"}
-    except (httpx.RequestError, httpx.TimeoutException):
-        return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "Timeout"}
+
+    cb.record_failure()
+    return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "LILACS API error (primary + fallback)"}
 
 
 async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
     cached = cache.check_cache_validity(cache.get_latindex_cache(), issn)
     if cached:
         return cached
+
+    cb = cache.circuit_latindex
+    if not cb.allow_request():
+        return {"latindex": False, "title": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
 
     url = f"https://www.latindex.org/latindex/bAvanzada/resultado?idMod=0&send=Buscar&issn={issn}"
     headers = {
@@ -171,20 +204,18 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
 
     try:
         response = await http_client.get(url, headers=headers, timeout=10)
-        html = response.text
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        has_zero_results = "Resultado:&nbsp;0&nbsp;Revistas" in html
-        has_results = "Resultado:&nbsp;" in html and not has_zero_results
+        result_text = soup.find(string=re.compile(r"Resultado:\s*.*\s*Revistas?"))
+        has_results = result_text is not None and "0" not in result_text
 
-        latindex = has_results
+        latindex = False
         title = None
-        if latindex:
-            match = re.search(
-                r'href="https://www\.latindex\.org/latindex/ficha/\d+"[^>]*>\s*([^<]+?)\s*</a>',
-                html,
-            )
-            if match:
-                title = match.group(1).strip()
+        if has_results:
+            ficha_link = soup.find("a", href=re.compile(r"/latindex/ficha/\d+"))
+            if ficha_link:
+                title = ficha_link.get_text(strip=True)
+                latindex = True
 
         today_str = datetime.now().strftime("%Y-%m-%d")
         result = {
@@ -194,10 +225,13 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
             "status": "ok",
         }
         cache.save_latindex_cache({issn: result})
+        cb.record_success()
         return result
     except httpx.HTTPStatusError as e:
+        cb.record_failure()
         return {"latindex": False, "title": None, "updated_at": None, "error": f"Latindex error: {e.response.status_code}"}
     except (httpx.RequestError, httpx.TimeoutException):
+        cb.record_failure()
         return {"latindex": False, "title": None, "updated_at": None, "error": "Timeout"}
 
 
@@ -208,6 +242,12 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
 
     api_key = get_api_key()
     if not api_key:
+        return None
+
+    cb = cache.circuit_elsevier
+    if not cb.allow_request():
+        result = {"citeScore": None, "source": "api", "status": "circuit_open"}
+        cache.get_session_cache()[issn] = result
         return None
 
     url = f"{ELSEVIER_BASE}/{issn}?view=CITESCORE"
@@ -233,14 +273,18 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
 
         result = {"citeScore": cite_score, "source": "api", "status": "ok" if cite_score is not None else "not_found"}
         cache.get_session_cache()[issn] = result
+        cb.record_success()
         return cite_score
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             result = {"citeScore": None, "source": "api", "status": "not_found"}
             cache.get_session_cache()[issn] = result
+            cb.record_success()
             return None
+        cb.record_failure()
         return None
     except (httpx.RequestError, httpx.TimeoutException):
+        cb.record_failure()
         return None
 
 

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 from datetime import datetime
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -102,3 +103,75 @@ def get_discoveries() -> dict:
 def save_discovery(issn: str, record: dict):
     _discoveries_cache[issn] = record
     save_json_cache(DISCOVERIES_PATH, _discoveries_cache)
+
+
+# ─── Circuit Breaker ──────────────────────────────────────────────
+
+class CircuitBreaker:
+    def __init__(self, name: str, failure_threshold: int = 5,
+                 window_seconds: int = 60, cooldown_seconds: int = 120):
+        self.name = name
+        self.state = "CLOSED"
+        self.failures: list[float] = []
+        self.opened_at: float | None = None
+        self.threshold = failure_threshold
+        self.window = window_seconds
+        self.cooldown = cooldown_seconds
+
+    def _clean_old_failures(self):
+        now = time.time()
+        self.failures = [t for t in self.failures if now - t < self.window]
+
+    def allow_request(self) -> bool:
+        self._clean_old_failures()
+        if self.state == "CLOSED":
+            return True
+        if self.state == "OPEN":
+            if self.opened_at is not None and (time.time() - self.opened_at) >= self.cooldown:
+                self.state = "HALF_OPEN"
+                return True
+            return False
+        if self.state == "HALF_OPEN":
+            return True
+        return False
+
+    def record_success(self):
+        if self.state == "HALF_OPEN":
+            self.state = "CLOSED"
+        self.failures = []
+
+    def record_failure(self):
+        now = time.time()
+        self.failures.append(now)
+        self._clean_old_failures()
+        if self.state == "HALF_OPEN":
+            self.state = "OPEN"
+            self.opened_at = now
+        elif self.state == "CLOSED" and len(self.failures) >= self.threshold:
+            self.state = "OPEN"
+            self.opened_at = now
+
+    def get_status(self) -> dict:
+        remaining = 0
+        if self.state == "OPEN" and self.opened_at is not None:
+            remaining = max(0, int(self.cooldown - (time.time() - self.opened_at)))
+        return {
+            "state": self.state,
+            "failure_count": len([t for t in self.failures if time.time() - t < self.window]),
+            "cooldown_remaining": remaining,
+        }
+
+
+circuit_scielo = CircuitBreaker("scielo")
+circuit_lilacs = CircuitBreaker("lilacs")
+circuit_latindex = CircuitBreaker("latindex")
+circuit_elsevier = CircuitBreaker("elsevier")
+
+
+def get_all_circuit_statuses() -> dict:
+    return {
+        "scielo": circuit_scielo.get_status(),
+        "lilacs": circuit_lilacs.get_status(),
+        "latindex": circuit_latindex.get_status(),
+        "elsevier": circuit_elsevier.get_status(),
+    }

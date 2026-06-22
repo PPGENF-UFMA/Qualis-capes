@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 
+from . import cache
 from . import enricher
 from .models import BatchClassifyRequest, ClassifyResponse
 
@@ -75,6 +76,7 @@ async def api_status():
         "database_size": len(db),
         "elsevier_api_key": has_key,
         "citeScoreAvailable": has_key,
+        "circuits": cache.get_all_circuit_statuses(),
     }
 
 
@@ -105,23 +107,43 @@ async def api_classify_batch(request: BatchClassifyRequest):
     return {"results": results, "count": len(results)}
 
 
+LILACS_API_PRIMARY = "https://fi-admin-api.bvsalud.org/api/title/search/"
+LILACS_API_FALLBACK = "https://lilacs.bvsalud.org/wp-json/test/v1/bvs/journals/search"
+
+
+def _parse_lilacs_docs(raw_data: dict) -> list:
+    dia = raw_data.get("diaServerResponse") or raw_data.get("data", {}).get("diaServerResponse", [{}])
+    return (dia[0] if isinstance(dia, list) else {}).get("response", {}).get("docs", [])
+
+
+async def _fetch_lilacs_search(q: str, client: httpx.AsyncClient) -> tuple[list, bool]:
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
+    for url_template in [LILACS_API_PRIMARY, LILACS_API_FALLBACK]:
+        try:
+            resp = await client.get(
+                f"{url_template}?q={q}",
+                headers=headers, timeout=10,
+            )
+            if resp.status_code == 200:
+                docs = _parse_lilacs_docs(resp.json())
+                return docs, True
+        except Exception:
+            continue
+    return [], False
+
+
 @app.get("/api/search")
 async def api_search(q: str = ""):
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Termo de busca deve ter pelo menos 2 caracteres")
     results = enricher.search_by_name(q)
-    bvs_results = []
-    try:
-        client = get_http_client()
-        lilacs_resp = await client.get(
-            f"https://lilacs.bvsalud.org/wp-json/test/v1/bvs/journals/search?q={q}",
-            headers={"Accept": "application/json", "User-Agent": "Mozilla/5.5"},
-            timeout=10,
-        )
-        if lilacs_resp.status_code == 200:
-            raw = lilacs_resp.json()
-            response_data = raw.get("data", {}).get("diaServerResponse", [{}])[0].get("response", {})
-            docs = response_data.get("docs", [])
+
+    cb = cache.circuit_lilacs
+    if cb.allow_request():
+        docs, success = await _fetch_lilacs_search(q, get_http_client())
+        if success:
+            cb.record_success()
+            bvs_results = []
             for doc in docs:
                 issn_list = doc.get("issn", [])
                 if issn_list:
@@ -131,14 +153,14 @@ async def api_search(q: str = ""):
                         "area": "Enfermagem" if any("BDENF" in db.upper() for db in doc.get("indexed_database", [])) else "Outras Áreas",
                         "source": "lilacs",
                     })
-    except Exception:
-        pass
 
-    seen = set(r["issn"] for r in results)
-    for br in bvs_results:
-        if br["issn"] not in seen:
-            results.append(br)
-            seen.add(br["issn"])
+            seen = set(r["issn"] for r in results)
+            for br in bvs_results:
+                if br["issn"] not in seen:
+                    results.append(br)
+                    seen.add(br["issn"])
+        else:
+            cb.record_failure()
 
     return {"results": results, "count": len(results)}
 
