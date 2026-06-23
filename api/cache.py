@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+import threading
 from datetime import datetime
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,6 +13,9 @@ SCI_ELO_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "scielo_cache.json")
 LILACS_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "lilacs_cache.json")
 LATINDEX_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "latindex_cache.json")
 DISCOVERIES_PATH = os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json")
+CITESCORE_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "citescore_cache.json")
+
+_cache_lock = threading.Lock()
 
 
 def validate_issn(issn: str) -> bool:
@@ -31,8 +35,11 @@ def load_json_cache(path: str) -> dict:
 def save_json_cache(path: str, data: dict):
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        tmp_path = f"{path}.tmp"
+        with _cache_lock:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path)
     except Exception as e:
         print(f"[ERRO] Falha ao salvar cache no arquivo {path}: {e}")
 
@@ -59,6 +66,7 @@ _session_cache: dict[str, dict] = {}
 _scielo_cache: dict = load_json_cache(SCI_ELO_CACHE_PATH)
 _lilacs_cache: dict = load_json_cache(LILACS_CACHE_PATH)
 _latindex_cache: dict = load_json_cache(LATINDEX_CACHE_PATH)
+_citescore_cache: dict = load_json_cache(CITESCORE_CACHE_PATH)
 
 _discoveries_cache: dict = load_json_cache(DISCOVERIES_PATH)
 
@@ -79,6 +87,10 @@ def get_latindex_cache() -> dict:
     return _latindex_cache
 
 
+def get_citescore_cache() -> dict:
+    return _citescore_cache
+
+
 def save_scielo_cache(cache: dict):
     _scielo_cache.update(cache)
     save_json_cache(SCI_ELO_CACHE_PATH, _scielo_cache)
@@ -94,6 +106,11 @@ def save_latindex_cache(cache: dict):
     save_json_cache(LATINDEX_CACHE_PATH, _latindex_cache)
 
 
+def save_citescore_cache(cache: dict):
+    _citescore_cache.update(cache)
+    save_json_cache(CITESCORE_CACHE_PATH, _citescore_cache)
+
+
 # ─── Descobertas de Runtime ────────────────────────────────────────
 
 def get_discoveries() -> dict:
@@ -101,6 +118,7 @@ def get_discoveries() -> dict:
 
 
 def save_discovery(issn: str, record: dict):
+    record["discovered_at"] = datetime.now().strftime("%Y-%m-%d")
     _discoveries_cache[issn] = record
     save_json_cache(DISCOVERIES_PATH, _discoveries_cache)
 

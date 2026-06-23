@@ -109,9 +109,12 @@ export function renderResultsTable() {
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
-          ${rankBadge}${safeTitle}
+          ${rankBadge}
+          <div style="display: flex; flex-direction: column; align-items: flex-start;">
+            <span>${safeTitle}</span>
+            ${areaBadge}
+          </div>
         </div>
-        ${areaBadge}
       </td>
       <td style="font-family: monospace; font-size: 13px;">${safeIssn}</td>
       <td>${item.jcr !== null ? item.jcr.toFixed(2) : `

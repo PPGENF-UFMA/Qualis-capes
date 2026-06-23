@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import threading
 from datetime import datetime
 
 import httpx
@@ -29,39 +30,124 @@ def normalize_issn(issn: str) -> str:
     return ""
 
 
+_db_lock = threading.Lock()
+
+def _merge_records(r1: dict, r2: dict) -> dict:
+    if not r1: return r2
+    if not r2: return r1
+    
+    jcr = r1.get("jcr")
+    jcr2 = r2.get("jcr")
+    if jcr2 is not None and (jcr is None or jcr2 > jcr):
+        jcr = jcr2
+
+    cs = r1.get("citeScore")
+    cs2 = r2.get("citeScore")
+    if cs2 is not None and (cs is None or cs2 > cs):
+        cs = cs2
+
+    idx = set(r1.get("indexers", []))
+    idx.update(r2.get("indexers", []))
+
+    t1 = r1.get("title") or ""
+    t2 = r2.get("title") or ""
+    title = t1 if len(t1) >= len(t2) else t2
+
+    area = r1.get("area", "Outras Áreas")
+    if r2.get("area") == "Enfermagem":
+        area = "Enfermagem"
+
+    merged = {
+        "title": title,
+        "area": area,
+        "jcr": jcr,
+        "citeScore": cs,
+        "indexers": list(idx),
+        "metrics": {
+            "cuiden": r1.get("metrics", {}).get("cuiden") or r2.get("metrics", {}).get("cuiden")
+        }
+    }
+    
+    for k in ["scieloUpdatedAt", "lilacsUpdatedAt", "latindexUpdatedAt"]:
+        if k in r1 or k in r2:
+            merged[k] = r1.get(k) or r2.get(k)
+            
+    return merged
+
 def load_database() -> dict[str, dict]:
     global _journals_db, _database_meta
+    
+    # Fast path if already loaded
     if _journals_db is not None:
         return _journals_db
 
-    if not os.path.exists(JOURNALS_PATH):
-        print(f"[AVISO] Arquivo {JOURNALS_PATH} nao encontrado.")
-        _journals_db = {}
-        return _journals_db
+    with _db_lock:
+        # Double-check locking pattern
+        if _journals_db is not None:
+            return _journals_db
 
-    try:
-        with open(JOURNALS_PATH, "r", encoding="utf-8") as f:
-            raw = json.load(f)
+        if not os.path.exists(JOURNALS_PATH):
+            print(f"[AVISO] Arquivo {JOURNALS_PATH} nao encontrado.")
+            _journals_db = {}
+            return _journals_db
 
-        # Extrair metadados de compilação (se existirem)
-        _database_meta = raw.pop("_meta", None)
+        try:
+            with open(JOURNALS_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
 
-        _journals_db = {}
-        for raw_issn, record in raw.items():
-            norm = normalize_issn(raw_issn)
-            if norm:
-                _journals_db[norm] = record
+            _database_meta = raw.pop("_meta", {})
+            eissn_idx = _database_meta.get("eissn_index", {})
 
-        discoveries = cache.get_discoveries()
-        for issn, record in discoveries.items():
-            if issn not in _journals_db:
-                _journals_db[issn] = record
+            temp_db = {}
+            for raw_issn, record in raw.items():
+                norm = normalize_issn(raw_issn)
+                if norm:
+                    if norm in temp_db:
+                        temp_db[norm] = _merge_records(temp_db[norm], record)
+                    else:
+                        temp_db[norm] = record
 
-        return _journals_db
-    except Exception as e:
-        print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
-        _journals_db = {}
-        return _journals_db
+            # Aliases Consolidation to prevent split records
+            for issn, alt_issn in eissn_idx.items():
+                if issn in temp_db and alt_issn in temp_db and temp_db[issn] is not temp_db[alt_issn]:
+                    merged = _merge_records(temp_db[issn], temp_db[alt_issn])
+                    temp_db[issn] = merged
+                    temp_db[alt_issn] = merged
+                elif issn in temp_db and alt_issn not in temp_db:
+                    temp_db[alt_issn] = temp_db[issn]
+                elif alt_issn in temp_db and issn not in temp_db:
+                    temp_db[issn] = temp_db[alt_issn]
+
+            # Discoveries processing with TTL and Safe Merge
+            discoveries = cache.get_discoveries()
+            now = datetime.now()
+            for issn, record in discoveries.items():
+                disc_date = record.get("discovered_at")
+                if disc_date:
+                    try:
+                        dt = datetime.strptime(disc_date, "%Y-%m-%d")
+                        if (now - dt).days > 90:
+                            continue # discard old discovery
+                    except ValueError:
+                        pass
+                
+                if issn not in temp_db:
+                    temp_db[issn] = record
+                else:
+                    db_rec = temp_db[issn]
+                    new_idx = set(db_rec.get("indexers", []))
+                    new_idx.update(record.get("indexers", []))
+                    db_rec["indexers"] = list(new_idx)
+                    for k in ["scieloUpdatedAt", "lilacsUpdatedAt", "latindexUpdatedAt"]:
+                        if k in record:
+                            db_rec[k] = record[k]
+
+            _journals_db = temp_db
+            return _journals_db
+        except Exception as e:
+            print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
+            _journals_db = {}
+            return _journals_db
 
 
 def get_database_meta() -> dict | None:
@@ -245,9 +331,10 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
 
 
 async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | None:
-    session_cache = cache.get_session_cache()
-    if issn in session_cache:
-        return session_cache[issn].get("citeScore")
+    citescore_cache = cache.get_citescore_cache()
+    cached = cache.check_cache_validity(citescore_cache, issn)
+    if cached:
+        return cached.get("citeScore")
 
     api_key = get_api_key()
     if not api_key:
@@ -255,8 +342,6 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
 
     cb = cache.circuit_elsevier
     if not cb.allow_request():
-        result = {"citeScore": None, "source": "api", "status": "circuit_open"}
-        cache.get_session_cache()[issn] = result
         return None
 
     url = f"{ELSEVIER_BASE}/{issn}?view=CITESCORE"
@@ -280,14 +365,18 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
                 except (ValueError, TypeError):
                     pass
 
-        result = {"citeScore": cite_score, "source": "api", "status": "ok" if cite_score is not None else "not_found"}
-        cache.get_session_cache()[issn] = result
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        status = "ok" if cite_score is not None else "not_found"
+        result = {"citeScore": cite_score, "source": "api", "status": status, "updated_at": today_str}
+        
+        cache.save_citescore_cache({issn: result})
         cb.record_success()
         return cite_score
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
-            result = {"citeScore": None, "source": "api", "status": "not_found"}
-            cache.get_session_cache()[issn] = result
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            result = {"citeScore": None, "source": "api", "status": "not_found", "updated_at": today_str}
+            cache.save_citescore_cache({issn: result})
             cb.record_success()
             return None
         cb.record_failure()
@@ -347,7 +436,8 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
                 db_record["indexers"].append("LATINDEX")
                 db_record["latindexUpdatedAt"] = latindex_data.get("updated_at")
 
-            db[normalized] = db_record
+            with _db_lock:
+                db[normalized] = db_record
             cache.save_discovery(normalized, db_record)
 
     if not db_record:

@@ -56,6 +56,7 @@ def process_jcr_csv(filepath):
         
         issns = set()
         values = {}
+        eissn_map = {}
         is_nursing = False
         
         for row in reader:
@@ -83,8 +84,12 @@ def process_jcr_csv(filepath):
                     if jcr_val is not None:
                         if target not in values or jcr_val > values[target]:
                             values[target] = jcr_val
+            
+            if issn_norm and eissn_norm and issn_norm != eissn_norm:
+                eissn_map[issn_norm] = eissn_norm
+                eissn_map[eissn_norm] = issn_norm
         
-        return {'issns': issns, 'values': values, 'is_nursing': is_nursing}
+        return {'issns': issns, 'values': values, 'is_nursing': is_nursing, 'eissn_map': eissn_map}
 
 def process_cuiden_csv(filepath):
     """
@@ -195,6 +200,7 @@ def compile_database():
     
     jcr_values = {}
     jcr_all_issns = set()  # Todos os ISSNs JCR (nursing + outras categorias)
+    global_eissn_map = {}
     
     # Carregar dados do CUIDEN
     cuiden_data = process_cuiden_csv(CUIDEN_PATH)
@@ -219,6 +225,9 @@ def compile_database():
                 if val is not None:
                     if issn not in jcr_values or val > jcr_values[issn]:
                         jcr_values[issn] = val
+            
+            # Adicionar e-issn mapping
+            global_eissn_map.update(result.get('eissn_map', {}))
             
             # Nursing → conjunto especial para classificação de área
             if result['is_nursing']:
@@ -246,6 +255,10 @@ def compile_database():
                 raw_eissn = row.get('EISSN')
                 issn = normalize_issn(raw_issn)
                 eissn = normalize_issn(raw_eissn)
+                
+                if issn and eissn and issn != eissn:
+                    global_eissn_map[issn] = eissn
+                    global_eissn_map[eissn] = issn
                 
                 medline_sourced = str(row.get('Medline-sourced Title? (See additional details under separate tab.)', '')).strip().upper()
                 is_medline = medline_sourced in ['YES', 'Y', 'MEDLINE']
@@ -416,6 +429,10 @@ def compile_database():
                 issn = normalize_issn(raw_issn)
                 eissn = normalize_issn(raw_eissn)
                 
+                if issn and eissn and issn != eissn:
+                    global_eissn_map[issn] = eissn
+                    global_eissn_map[eissn] = issn
+                
                 cs_val = None
                 for cs_col_name in ['CiteScore', 'CiteScore 2024', 'CiteScore 2023', 'Highest CiteScore']:
                     if cs_col_name in df_cs.columns:
@@ -479,7 +496,19 @@ def compile_database():
             "classificacao": "classificacao.xlsx" if os.path.exists(os.path.join(DATA_DIR, "classificacao.xlsx")) else None,
             "cuiden": "cuiden_citacion_2022.csv" if os.path.exists(os.path.join(DATA_DIR, "cuiden_citacion_2022.csv")) else None,
         },
+        "eissn_index": global_eissn_map
     }
+
+    # Apagar caches
+    caches_to_delete = ["scielo_cache.json", "lilacs_cache.json", "latindex_cache.json", "runtime_discoveries.json"]
+    for c in caches_to_delete:
+        p = os.path.join(DATA_DIR, c)
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+                print(f"Cache removido: {c}")
+            except Exception as e:
+                pass
 
     print(f"Gravando base consolidada contendo {len(journals) - 1} periódicos...")
     try:
