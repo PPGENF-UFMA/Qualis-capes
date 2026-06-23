@@ -30,7 +30,8 @@
         <div class="header-divider"></div>
         <p class="header-subtitle">Classificador de Artigos (Enfermagem)</p>
       </div>
-      <button id="theme-toggle" class="theme-toggle-btn" aria-label="Alternar entre modo claro e escuro"><i data-lucide="moon"></i> <span>Modo Escuro</span></button>
+      <button id="theme-toggle" class="theme-toggle-btn" aria-label="Alternar entre modo claro e escuro"><i
+          data-lucide="moon"></i> <span>Modo Escuro</span></button>
     </header>
 
     <!-- Layout Principal de Duas Colunas -->
@@ -73,7 +74,8 @@
                 <input type="text" id="single-issn-input" class="text-input"
                   placeholder="Ex: 0104-1169 ou Revista Latino-Americana de Enfermagem" required>
               </div>
-              <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar Periódico</button>
+              <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar
+                Periódico</button>
             </form>
           </div>
 
@@ -85,7 +87,8 @@
                 <textarea id="batch-issn-input" class="text-input"
                   placeholder="Ex:&#10;0104-1169&#10;0034-7167&#10;0021-9746" required></textarea>
               </div>
-              <button type="submit" id="btn-submit-batch" class="btn btn-secondary" style="width: 100%;">Classificar Lote</button>
+              <button type="submit" id="btn-submit-batch" class="btn btn-secondary" style="width: 100%;">Classificar
+                Lote</button>
             </form>
           </div>
 
@@ -115,19 +118,23 @@
               <div class="form-group">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <label for="lattes-text-input" style="margin-bottom: 0;">Cole a lista de artigos do Lattes:</label>
-                  <button type="button" id="btn-lattes-help" class="btn-text-small" style="background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                  <button type="button" id="btn-lattes-help" class="btn-text-small"
+                    style="background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                     <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Como copiar?
                   </button>
                 </div>
-                <div id="lattes-help-content" class="lattes-help-content" style="display: none; background: rgba(99, 102, 241, 0.05); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">
+                <div id="lattes-help-content" class="lattes-help-content"
+                  style="display: none; background: rgba(99, 102, 241, 0.05); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">
                   <ol style="margin-left: 20px; margin-top: 5px;">
                     <li style="margin-bottom: 4px;">Abra o Currículo Lattes.</li>
-                    <li style="margin-bottom: 4px;">Vá até <strong>"Produções" &gt; "Artigos completos publicados em periódicos"</strong>.</li>
+                    <li style="margin-bottom: 4px;">Vá até <strong>"Produções" &gt; "Artigos completos publicados em
+                        periódicos"</strong>.</li>
                     <li>Selecione <strong>todo o texto</strong> dos artigos e cole abaixo.</li>
                   </ol>
                 </div>
                 <textarea id="lattes-text-input" class="text-input"
-                  placeholder="Cole aqui a seção de artigos do Lattes..." required style="min-height: 120px;"></textarea>
+                  placeholder="Cole aqui a seção de artigos do Lattes..." required
+                  style="min-height: 120px;"></textarea>
               </div>
               <button type="submit" id="btn-submit-lattes" class="btn" style="width: 100%;">Analisar Currículo</button>
             </form>
@@ -139,14 +146,19 @@
           <div class="history-section">
             <h3 class="history-title"><i data-lucide="award"></i> Periódicos Frequentes (PPGENF)</h3>
             <div class="quick-links-grid">
-              <button class="quick-link-btn" data-issn="0104-1169" title="Revista Latino-Americana de Enfermagem">RLAE (A2)</button>
-              <button class="quick-link-btn" data-issn="0034-7167" title="Revista Brasileira de Enfermagem">REBEn (A4)</button>
-              <button class="quick-link-btn" data-issn="1982-0194" title="Acta Paulista de Enfermagem">Acta Paulista (A3)</button>
-              <button class="quick-link-btn" data-issn="0104-0707" title="Texto & Contexto Enfermagem">Texto & Contexto (A3)</button>
+              <button class="quick-link-btn" data-issn="0104-1169" title="Revista Latino-Americana de Enfermagem">RLAE
+                (A2)</button>
+              <button class="quick-link-btn" data-issn="0034-7167" title="Revista Brasileira de Enfermagem">REBEn
+                (A4)</button>
+              <button class="quick-link-btn" data-issn="1982-0194" title="Acta Paulista de Enfermagem">Acta Paulista
+                (A3)</button>
+              <button class="quick-link-btn" data-issn="0104-0707" title="Texto & Contexto Enfermagem">Texto & Contexto
+                (A3)</button>
             </div>
           </div>
-          
-          <div class="history-section" style="margin-top: 15px; border-top: 1px solid var(--panel-border); padding-top: 15px;">
+
+          <div class="history-section"
+            style="margin-top: 15px; border-top: 1px solid var(--panel-border); padding-top: 15px;">
             <h3 class="history-title"><i data-lucide="history"></i> Buscas Recentes</h3>
             <div id="recent-searches-list" class="recent-searches-list">
               <span class="no-history-msg">Nenhuma busca recente realizada.</span>
@@ -157,6 +169,7 @@
         <!-- Status da Conexão da Base de Referência -->
         <div class="db-status-footer">
           <div id="db-status" class="db-badge">Carregando base local...</div>
+          <div id="db-compiled-at" class="db-badge" style="display: none; font-size: 11px; opacity: 0.8;"></div>
           <div id="citescore-status" class="db-badge citescore-badge" style="display: none;"></div>
           <div id="circuits-status" class="db-badge circuit-badge" style="display: none;"></div>
         </div>
@@ -170,23 +183,29 @@
         <div id="empty-state" class="card empty-state">
           <div class="empty-state-icon"><i data-lucide="bar-chart-3"></i></div>
           <h3 style="margin-bottom: 16px;">Bem-vindo ao Classificador Qualis</h3>
-          <p style="margin-bottom: 24px; max-width: 600px; margin-inline: auto;">Esta ferramenta automatiza a classificação de periódicos seguindo as regras da CAPES (Área: Enfermagem).</p>
-          
-          <div class="onboarding-steps" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left; max-width: 800px; margin: 0 auto;">
+          <p style="margin-bottom: 24px; max-width: 600px; margin-inline: auto;">Esta ferramenta automatiza a
+            classificação de periódicos seguindo as regras da CAPES (Área: Enfermagem).</p>
+
+          <div class="onboarding-steps"
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left; max-width: 800px; margin: 0 auto;">
             <div class="onboarding-step-card">
-              <div style="color: var(--primary-color); margin-bottom: 8px;"><i data-lucide="mouse-pointer-click"></i></div>
+              <div style="color: var(--primary-color); margin-bottom: 8px;"><i data-lucide="mouse-pointer-click"></i>
+              </div>
               <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">1. Escolha o Método</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">Use o menu lateral para selecionar entre busca individual, lote, arquivo CSV ou Currículo Lattes.</p>
+              <p style="font-size: 13px; color: var(--text-secondary);">Use o menu lateral para selecionar entre busca
+                individual, lote, arquivo CSV ou Currículo Lattes.</p>
             </div>
             <div class="onboarding-step-card">
               <div style="color: var(--warning); margin-bottom: 8px;"><i data-lucide="cpu"></i></div>
               <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">2. Processamento</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">O sistema buscará os dados em múltiplas bases (Qualis, SciELO, Scopus, JCR) e calculará o melhor estrato.</p>
+              <p style="font-size: 13px; color: var(--text-secondary);">O sistema buscará os dados em múltiplas bases
+                (Qualis, SciELO, Scopus, JCR) e calculará o melhor estrato.</p>
             </div>
             <div class="onboarding-step-card">
               <div style="color: var(--success); margin-bottom: 8px;"><i data-lucide="pie-chart"></i></div>
               <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">3. Análise</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">Examine a tabela detalhada, exporte para CSV ou analise os gráficos de distribuição no dashboard.</p>
+              <p style="font-size: 13px; color: var(--text-secondary);">Examine a tabela detalhada, exporte para CSV ou
+                analise os gráficos de distribuição no dashboard.</p>
             </div>
           </div>
         </div>
@@ -204,23 +223,31 @@
           </div>
 
           <!-- Título Dinâmico do Pesquisador em Análise -->
-          <div id="session-researcher-title" style="display: none; margin-bottom: 15px; padding: 12px 20px; background: rgba(99, 102, 241, 0.08); border-left: 4px solid var(--primary-color); border-radius: 8px;">
-            <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Currículo Analisado</span>
-            <h2 style="font-family: var(--font-title); font-size: 18px; font-weight: 700; color: var(--text-primary); margin-top: 4px;" id="researcher-name-display">-</h2>
+          <div id="session-researcher-title"
+            style="display: none; margin-bottom: 15px; padding: 12px 20px; background: rgba(99, 102, 241, 0.08); border-left: 4px solid var(--primary-color); border-radius: 8px;">
+            <span
+              style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Currículo
+              Analisado</span>
+            <h2
+              style="font-family: var(--font-title); font-size: 18px; font-weight: 700; color: var(--text-primary); margin-top: 4px;"
+              id="researcher-name-display">-</h2>
           </div>
 
           <!-- Navegação por Abas Premium -->
           <div id="results-tabs" class="tab-navigation" style="margin-bottom: 20px;">
             <button id="tab-table" class="tab-btn active"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
             <button id="tab-analytics" class="tab-btn"><i data-lucide="pie-chart"></i> Estatísticas & Dashboard</button>
-            <button id="tab-comparison" class="tab-btn" style="display: none;"><i data-lucide="git-compare"></i> Comparação</button>
+            <button id="tab-comparison" class="tab-btn" style="display: none;"><i data-lucide="git-compare"></i>
+              Comparação</button>
           </div>
 
           <!-- Aba do Painel Estatístico & Dashboard -->
           <div id="tab-content-analytics" class="tab-pane">
             <div class="analytics-header" style="margin-bottom: 25px;">
-              <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i data-lucide="pie-chart"></i> Visão Geral & Estatísticas Consolidadas</h2>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Distribuição de periódicos por extratos CAPES, bases de indexação ativas e indicadores gerais de fator de impacto.</p>
+              <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i
+                  data-lucide="pie-chart"></i> Visão Geral & Estatísticas Consolidadas</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Distribuição de periódicos por
+                extratos CAPES, bases de indexação ativas e indicadores gerais de fator de impacto.</p>
             </div>
             <!-- Cards de Métricas de Resumo (KPIs) -->
             <div class="kpi-container">
@@ -301,7 +328,7 @@
                   </table>
                 </div>
               </div>
-              
+
               <div class="card card--insights">
                 <h2 class="card-title"><i data-lucide="lightbulb"></i> Insights & Destaques do Currículo</h2>
                 <div id="curriculum-insights-list" class="insights-list">
@@ -314,13 +341,16 @@
           <!-- Aba de Comparação de Currículos -->
           <div id="tab-content-comparison" class="tab-pane">
             <div class="analytics-header" style="margin-bottom: 25px;">
-              <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i data-lucide="git-compare"></i> Comparação de Currículos</h2>
-              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Análise comparativa lado a lado dos indicadores de produção intelectual dos pesquisadores.</p>
+              <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i
+                  data-lucide="git-compare"></i> Comparação de Currículos</h2>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Análise comparativa lado a lado
+                dos indicadores de produção intelectual dos pesquisadores.</p>
             </div>
 
             <!-- Tabela de KPIs Comparativos -->
             <div class="card" style="margin-bottom: 20px; padding: 24px;">
-              <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="table"></i> Indicadores Comparativos</h3>
+              <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="table"></i> Indicadores Comparativos
+              </h3>
               <div class="table-responsive" style="margin-top: 10px;">
                 <table class="results-table comparison-kpis-table">
                   <thead>
@@ -361,7 +391,8 @@
               <div class="results-header">
                 <h2 class="results-title"><i data-lucide="clipboard-list"></i> Tabela de Classificação Detalhada</h2>
                 <div class="results-actions">
-                  <button id="btn-report" class="btn btn-secondary"><i data-lucide="printer"></i> Gerar Relatório</button>
+                  <button id="btn-report" class="btn btn-secondary"><i data-lucide="printer"></i> Gerar
+                    Relatório</button>
                   <button id="btn-export" class="btn"><i data-lucide="download"></i> Exportar CSV</button>
                   <button id="btn-clear" class="btn btn-secondary"><i data-lucide="trash-2"></i> Limpar Tudo</button>
                 </div>
@@ -439,7 +470,8 @@
   <div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="search-modal-title">
     <div class="search-modal-card">
       <div class="search-modal-header">
-        <h3 id="search-modal-title" class="search-modal-title"><i data-lucide="list-filter"></i> Selecione o Periódico</h3>
+        <h3 id="search-modal-title" class="search-modal-title"><i data-lucide="list-filter"></i> Selecione o Periódico
+        </h3>
         <button id="btn-close-modal" class="btn-close-modal" aria-label="Fechar modal"><i data-lucide="x"></i></button>
       </div>
       <p class="search-modal-subtitle">Encontramos múltiplos periódicos para a sua busca. Escolha um abaixo para
@@ -451,14 +483,19 @@
   </div>
 
   <!-- Modal de Preview do Lattes -->
-  <div id="lattes-preview-modal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="lattes-preview-title" style="display: none;">
+  <div id="lattes-preview-modal" class="search-modal" role="dialog" aria-modal="true"
+    aria-labelledby="lattes-preview-title" style="display: none;">
     <div class="search-modal-card" style="max-width: 600px;">
       <div class="search-modal-header">
-        <h3 id="lattes-preview-title" class="search-modal-title"><i data-lucide="file-check"></i> Revisar Artigos Detectados</h3>
-        <button id="btn-close-lattes-preview" class="btn-close-modal" aria-label="Fechar modal"><i data-lucide="x"></i></button>
+        <h3 id="lattes-preview-title" class="search-modal-title"><i data-lucide="file-check"></i> Revisar Artigos
+          Detectados</h3>
+        <button id="btn-close-lattes-preview" class="btn-close-modal" aria-label="Fechar modal"><i
+            data-lucide="x"></i></button>
       </div>
-      <p class="search-modal-subtitle" id="lattes-preview-count-text">Foram detectados X artigos no texto fornecido. Confirme a lista abaixo para iniciar a classificação.</p>
-      <div id="lattes-preview-list" class="search-results-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px;">
+      <p class="search-modal-subtitle" id="lattes-preview-count-text">Foram detectados X artigos no texto fornecido.
+        Confirme a lista abaixo para iniciar a classificação.</p>
+      <div id="lattes-preview-list" class="search-results-list"
+        style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px;">
         <!-- Itens injetados via JS -->
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -469,13 +506,17 @@
   </div>
 
   <!-- Modal de Comparação de Currículos -->
-  <div id="comparison-modal" class="search-modal" role="dialog" aria-modal="true" aria-labelledby="comparison-modal-title" style="display: none;">
+  <div id="comparison-modal" class="search-modal" role="dialog" aria-modal="true"
+    aria-labelledby="comparison-modal-title" style="display: none;">
     <div class="search-modal-card" style="max-width: 900px;">
       <div class="search-modal-header">
-        <h3 id="comparison-modal-title" class="search-modal-title"><i data-lucide="git-compare"></i> Comparar Currículos</h3>
-        <button id="btn-close-comparison-modal" class="btn-close-modal" aria-label="Fechar modal"><i data-lucide="x"></i></button>
+        <h3 id="comparison-modal-title" class="search-modal-title"><i data-lucide="git-compare"></i> Comparar Currículos
+        </h3>
+        <button id="btn-close-comparison-modal" class="btn-close-modal" aria-label="Fechar modal"><i
+            data-lucide="x"></i></button>
       </div>
-      <p class="search-modal-subtitle">Insira os dados dos dois pesquisadores para comparar os indicadores de produção intelectual.</p>
+      <p class="search-modal-subtitle">Insira os dados dos dois pesquisadores para comparar os indicadores de produção
+        intelectual.</p>
       <form id="comparison-form">
         <div class="compare-profiles-grid">
           <div class="compare-profile-col">
@@ -486,7 +527,8 @@
             </div>
             <div class="form-group">
               <label for="comparison-text-a">Cole a lista de artigos do Lattes:</label>
-              <textarea id="comparison-text-a" class="text-input" placeholder="Cole aqui os artigos do Perfil A..." required style="min-height: 180px;"></textarea>
+              <textarea id="comparison-text-a" class="text-input" placeholder="Cole aqui os artigos do Perfil A..."
+                required style="min-height: 180px;"></textarea>
             </div>
           </div>
           <div class="compare-profile-col">
@@ -497,7 +539,8 @@
             </div>
             <div class="form-group">
               <label for="comparison-text-b">Cole a lista de artigos do Lattes:</label>
-              <textarea id="comparison-text-b" class="text-input" placeholder="Cole aqui os artigos do Perfil B..." required style="min-height: 180px;"></textarea>
+              <textarea id="comparison-text-b" class="text-input" placeholder="Cole aqui os artigos do Perfil B..."
+                required style="min-height: 180px;"></textarea>
             </div>
           </div>
         </div>
@@ -520,10 +563,11 @@
       </div>
       <h3 id="loading-title" class="loading-title">Processando Periódico</h3>
       <p id="loading-subtitle" class="loading-subtitle">Consultando bases oficiais e aplicando critérios CAPES...</p>
-      
+
       <!-- Barra de Progresso (M2) -->
       <div id="loading-progress-container" style="display: none; margin-top: 20px; width: 100%;">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
+        <div
+          style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">
           <span id="loading-progress-text">Processando 0 de 0...</span>
           <span id="loading-progress-percent">0%</span>
         </div>

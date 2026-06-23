@@ -448,6 +448,30 @@ async function checkCiteScoreStatus() {
       dom.citeScoreStatus.style.background = 'rgba(16, 185, 129, 0.15)';
       dom.citeScoreStatus.style.color = 'var(--success, #10b981)';
     }
+
+    // Exibir data de compilação da base (DB-3/UX-1)
+    if (dom.dbCompiledAt && data.database_meta && data.database_meta.compiled_at) {
+      try {
+        const compiledDate = new Date(data.database_meta.compiled_at);
+        const formatted = compiledDate.toLocaleDateString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit'
+        });
+        const daysSince = Math.floor((Date.now() - compiledDate.getTime()) / 86400000);
+        let color = 'var(--text-secondary)';
+        let warning = '';
+        if (daysSince > 180) {
+          color = 'var(--error, #ef4444)';
+          warning = ' ⚠ Desatualizado!';
+        } else if (daysSince > 90) {
+          color = 'var(--warning, #f59e0b)';
+          warning = ' ⚠ Verificar atualização';
+        }
+        dom.dbCompiledAt.textContent = `📅 Base compilada: ${formatted}${warning}`;
+        dom.dbCompiledAt.style.display = 'block';
+        dom.dbCompiledAt.style.color = color;
+      } catch (_) { /* ignore date parse errors */ }
+    }
   } catch (e) {
     // silencioso
   }

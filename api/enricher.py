@@ -30,7 +30,7 @@ def normalize_issn(issn: str) -> str:
 
 
 def load_database() -> dict[str, dict]:
-    global _journals_db
+    global _journals_db, _database_meta
     if _journals_db is not None:
         return _journals_db
 
@@ -42,6 +42,9 @@ def load_database() -> dict[str, dict]:
     try:
         with open(JOURNALS_PATH, "r", encoding="utf-8") as f:
             raw = json.load(f)
+
+        # Extrair metadados de compilação (se existirem)
+        _database_meta = raw.pop("_meta", None)
 
         _journals_db = {}
         for raw_issn, record in raw.items():
@@ -59,6 +62,12 @@ def load_database() -> dict[str, dict]:
         print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
         _journals_db = {}
         return _journals_db
+
+
+def get_database_meta() -> dict | None:
+    """Retorna metadados de compilação do journals.json (compiled_at, sources, etc.)."""
+    load_database()  # Garante que a base está carregada
+    return _database_meta
 
 
 def get_db_summary() -> list[dict]:

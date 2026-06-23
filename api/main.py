@@ -1,11 +1,14 @@
 import os
 import sys
+import time
+from collections import defaultdict
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 
@@ -24,14 +27,41 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# CORS restrito a origens locais (produção: adicionar domínio real)
+_allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# ─── Rate Limiter simples (in-memory token bucket) ─────────────────
+
+_rate_limits: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
+    """Retorna True se a request é permitida, False se excedeu o limite."""
+    now = time.time()
+    timestamps = _rate_limits[key]
+    # Limpar timestamps antigos
+    _rate_limits[key] = [t for t in timestamps if now - t < window_seconds]
+    if len(_rate_limits[key]) >= max_requests:
+        return False
+    _rate_limits[key].append(now)
+    return True
+
+
+def _get_client_ip(request: Request) -> str:
+    """Obtém IP do cliente para rate limiting."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -70,6 +100,7 @@ async def root():
 async def api_status():
     db = enricher.load_database()
     has_key = bool(os.environ.get("ELSEVIER_API_KEY"))
+    meta = enricher.get_database_meta()
     return {
         "status": "ok",
         "version": "2.0.0",
@@ -77,6 +108,7 @@ async def api_status():
         "elsevier_api_key": has_key,
         "citeScoreAvailable": has_key,
         "circuits": cache.get_all_circuit_statuses(),
+        "database_meta": meta,
     }
 
 
@@ -87,21 +119,29 @@ async def api_db_summary():
 
 
 @app.get("/api/classify/{issn}", response_model=ClassifyResponse)
-async def api_classify(issn: str):
+async def api_classify(issn: str, request: Request):
     if not issn:
         raise HTTPException(status_code=400, detail="ISSN nao informado")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"classify:{ip}", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de requisições excedido. Tente novamente em 1 minuto.")
     client = get_http_client()
     result = await enricher.enrich_and_classify(issn, client)
     return result
 
 
 @app.post("/api/classify/batch")
-async def api_classify_batch(request: BatchClassifyRequest):
-    if not request.issns:
+async def api_classify_batch(body: BatchClassifyRequest, request: Request):
+    if not body.issns:
         raise HTTPException(status_code=400, detail="Lista de ISSNs vazia")
+    if len(body.issns) > 500:
+        raise HTTPException(status_code=400, detail="Máximo de 500 ISSNs por lote.")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"batch:{ip}", max_requests=10, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de requisições de lote excedido. Tente novamente em 1 minuto.")
     client = get_http_client()
     results = []
-    for issn in request.issns:
+    for issn in body.issns:
         result = await enricher.enrich_and_classify(issn, client)
         results.append(result)
     return {"results": results, "count": len(results)}
@@ -133,9 +173,13 @@ async def _fetch_lilacs_search(q: str, client: httpx.AsyncClient) -> tuple[list,
 
 
 @app.get("/api/search")
-async def api_search(q: str = ""):
+async def api_search(q: str = "", request: Request = None):
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Termo de busca deve ter pelo menos 2 caracteres")
+    if request:
+        ip = _get_client_ip(request)
+        if not _check_rate_limit(f"search:{ip}", max_requests=30, window_seconds=60):
+            raise HTTPException(status_code=429, detail="Limite de buscas excedido. Tente novamente em 1 minuto.")
     results = enricher.search_by_name(q)
 
     cb = cache.circuit_lilacs
@@ -165,5 +209,26 @@ async def api_search(q: str = ""):
     return {"results": results, "count": len(results)}
 
 
-static_files = StaticFiles(directory=PROJECT_ROOT, html=True, check_dir=True)
-app.mount("/", static_files, name="static")
+# ─── Static Files (SEGURANÇA: servir apenas diretórios seguros) ────
+# NÃO servir PROJECT_ROOT inteiro — exporia .env, data/, api/, __pycache__/
+
+# Servir CSS e JS como subdiretórios
+_css_dir = os.path.join(PROJECT_ROOT, "css")
+_js_dir = os.path.join(PROJECT_ROOT, "js")
+if os.path.isdir(_css_dir):
+    app.mount("/css", StaticFiles(directory=_css_dir), name="css")
+if os.path.isdir(_js_dir):
+    app.mount("/js", StaticFiles(directory=_js_dir), name="js")
+
+# Servir logo.svg e index.html como arquivos individuais
+from starlette.responses import FileResponse
+
+
+@app.get("/index.html", include_in_schema=False)
+async def serve_index():
+    return FileResponse(os.path.join(PROJECT_ROOT, "index.html"), media_type="text/html")
+
+
+@app.get("/logo.svg", include_in_schema=False)
+async def serve_logo():
+    return FileResponse(os.path.join(PROJECT_ROOT, "logo.svg"), media_type="image/svg+xml")

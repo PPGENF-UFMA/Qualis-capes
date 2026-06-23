@@ -77,7 +77,10 @@ body.light-theme {
 
 /* Acessibilidade: Respeitar preferência de movimento reduzido */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -1502,17 +1505,37 @@ body.light-theme .toast-close:hover {
 }
 
 /* Variantes de cor por tipo */
-.toast-success { border-left: 3px solid #10b981; }
-.toast-success .toast-icon { color: #10b981; }
+.toast-success {
+  border-left: 3px solid #10b981;
+}
 
-.toast-error { border-left: 3px solid #ef4444; }
-.toast-error .toast-icon { color: #ef4444; }
+.toast-success .toast-icon {
+  color: #10b981;
+}
 
-.toast-warning { border-left: 3px solid #f59e0b; }
-.toast-warning .toast-icon { color: #f59e0b; }
+.toast-error {
+  border-left: 3px solid #ef4444;
+}
 
-.toast-info { border-left: 3px solid #6366f1; }
-.toast-info .toast-icon { color: #6366f1; }
+.toast-error .toast-icon {
+  color: #ef4444;
+}
+
+.toast-warning {
+  border-left: 3px solid #f59e0b;
+}
+
+.toast-warning .toast-icon {
+  color: #f59e0b;
+}
+
+.toast-info {
+  border-left: 3px solid #6366f1;
+}
+
+.toast-info .toast-icon {
+  color: #6366f1;
+}
 
 /* --- FOCUS VISIBLE (ACESSIBILIDADE) --- */
 :focus-visible {
@@ -1727,25 +1750,31 @@ body.light-theme .indexer-tag.latindex {
   border-color: rgba(5, 150, 105, 0.18);
 }
 
-.indexer-tag.lilacs, .indexer-tag.bdenf {
+.indexer-tag.lilacs,
+.indexer-tag.bdenf {
   background: rgba(6, 182, 212, 0.1);
   color: #22d3ee;
   border-color: rgba(6, 182, 212, 0.2);
 }
 
-body.light-theme .indexer-tag.lilacs, body.light-theme .indexer-tag.bdenf {
+body.light-theme .indexer-tag.lilacs,
+body.light-theme .indexer-tag.bdenf {
   background: rgba(13, 148, 136, 0.08);
   color: #0f766e;
   border-color: rgba(13, 148, 136, 0.18);
 }
 
-.indexer-tag.cinahl, .indexer-tag.cuiden, .indexer-tag.revenf {
+.indexer-tag.cinahl,
+.indexer-tag.cuiden,
+.indexer-tag.revenf {
   background: rgba(99, 102, 241, 0.1);
   color: #818cf8;
   border-color: rgba(99, 102, 241, 0.2);
 }
 
-body.light-theme .indexer-tag.cinahl, body.light-theme .indexer-tag.cuiden, body.light-theme .indexer-tag.revenf {
+body.light-theme .indexer-tag.cinahl,
+body.light-theme .indexer-tag.cuiden,
+body.light-theme .indexer-tag.revenf {
   background: rgba(79, 70, 229, 0.08);
   color: #4f46ed;
   border-color: rgba(79, 70, 229, 0.18);
@@ -2188,12 +2217,23 @@ body.light-theme .insight-item {
     font-size: 9pt !important;
   }
 
-  .estrato-badge.A1 { background: #000 !important; }
-  .estrato-badge.A2 { background: #374151 !important; }
-  .estrato-badge.A3, .estrato-badge.A4, .estrato-badge.A5,
-  .estrato-badge.A6, .estrato-badge.A7, .estrato-badge.A8 {
+  .estrato-badge.A1 {
+    background: #000 !important;
+  }
+
+  .estrato-badge.A2 {
+    background: #374151 !important;
+  }
+
+  .estrato-badge.A3,
+  .estrato-badge.A4,
+  .estrato-badge.A5,
+  .estrato-badge.A6,
+  .estrato-badge.A7,
+  .estrato-badge.A8 {
     background: #6b7280 !important;
   }
+
   .estrato-badge.NC {
     background: none !important;
     color: #6b7280 !important;

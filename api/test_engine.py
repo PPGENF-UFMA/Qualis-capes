@@ -158,6 +158,56 @@ class TestQualisEngine(unittest.TestCase):
         result = classify_journal(journal)
         self.assertEqual(result["estrato"], "NC")
 
+    # === CENÁRIOS RC-8: REGRA DO MELHOR CASO (JCR vs CiteScore) ===
+
+    def test_rc8_enfermagem_citescore_melhor_que_jcr(self):
+        """Bug RC-8: JCR=0.7 (A3) mas CiteScore=2.5 (A2) → deve retornar A2."""
+        journal = {"area": "Enfermagem", "jcr": 0.7, "citeScore": 2.5, "indexers": []}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A2")
+        self.assertIn("CiteScore", result["justification"])
+
+    def test_rc8_enfermagem_jcr_melhor_que_citescore(self):
+        """JCR=1.9 (A1) e CiteScore=2.0 (A2) → deve retornar A1."""
+        journal = {"area": "Enfermagem", "jcr": 1.9, "citeScore": 2.0, "indexers": []}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A1")
+        self.assertIn("JCR", result["justification"])
+
+    def test_rc8_outras_citescore_melhor_que_jcr(self):
+        """Outras: JCR=2.5 (A4) mas CiteScore=5.0 (A1) → deve retornar A1."""
+        journal = {"area": "Outras Áreas", "jcr": 2.5, "citeScore": 5.0, "indexers": []}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A1")
+        self.assertIn("CiteScore", result["justification"])
+
+    def test_rc8_enfermagem_indexer_melhor_que_metricas(self):
+        """Enfermagem: JCR=0.3 (A4), CiteScore=0.4 (A4), MEDLINE (A3) → A3."""
+        journal = {"area": "Enfermagem", "jcr": 0.3, "citeScore": 0.4, "indexers": ["MEDLINE"]}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A3")
+
+    def test_rc8_enfermagem_multiple_indexers_melhor(self):
+        """Enfermagem: LILACS (A5), SCIELO (A4) → deve retornar A4."""
+        journal = {"area": "Enfermagem", "jcr": None, "citeScore": None, "indexers": ["LILACS", "SCIELO"]}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A4")
+
+    def test_rc8_enfermagem_cuiden_high_plus_latindex(self):
+        """Enfermagem: CUIDEN=2.0 (A6), LATINDEX (A8) → deve retornar A6."""
+        journal = {"area": "Enfermagem", "jcr": None, "citeScore": None,
+                   "indexers": ["RIC/CUIDEN", "LATINDEX"], "metrics": {"cuiden": 2.0}}
+        result = classify_journal(journal)
+        self.assertEqual(result["estrato"], "A6")
+
+    def test_none_journal(self):
+        result = classify_journal(None)
+        self.assertEqual(result["estrato"], "NC")
+
+    def test_empty_journal(self):
+        result = classify_journal({})
+        self.assertEqual(result["estrato"], "NC")
+
 
 if __name__ == "__main__":
     unittest.main()

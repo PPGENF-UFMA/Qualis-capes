@@ -6,6 +6,7 @@
 
 const dom = {
   dbStatus: document.getElementById('db-status'),
+  dbCompiledAt: document.getElementById('db-compiled-at'),
   citeScoreStatus: document.getElementById('citescore-status'),
   circuitsStatus: document.getElementById('circuits-status'),
 

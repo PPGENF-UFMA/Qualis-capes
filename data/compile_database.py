@@ -468,7 +468,20 @@ def compile_database():
             print(f"Erro ao processar citescore_cache.json: {e}")
 
     # --- 7. GRAVAR RESULTADO EM JOURNALS.JSON ---
-    print(f"Gravando base consolidada contendo {len(journals)} periódicos...")
+    # Adicionar metadados de compilação para rastreabilidade
+    from datetime import datetime
+    journals["_meta"] = {
+        "compiled_at": datetime.now().isoformat(),
+        "total_journals": len([k for k in journals if k != "_meta"]),
+        "sources": {
+            "jcr_files": [os.path.basename(f) for f in sorted(glob.glob(os.path.join(DATA_DIR, "[Jj][Cc][Rr]_*.csv")))],
+            "scopus": "journals_scopus.xlsx" if os.path.exists(os.path.join(DATA_DIR, "journals_scopus.xlsx")) else None,
+            "classificacao": "classificacao.xlsx" if os.path.exists(os.path.join(DATA_DIR, "classificacao.xlsx")) else None,
+            "cuiden": "cuiden_citacion_2022.csv" if os.path.exists(os.path.join(DATA_DIR, "cuiden_citacion_2022.csv")) else None,
+        },
+    }
+
+    print(f"Gravando base consolidada contendo {len(journals) - 1} periódicos...")
     try:
         with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
             json.dump(journals, f, indent=2, ensure_ascii=False)
