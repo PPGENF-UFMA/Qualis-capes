@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class ClassificationResult(BaseModel):
     estrato: str
     justification: str
+    all_candidates: list[dict] = []
 
 
 class ClassifyResponse(BaseModel):

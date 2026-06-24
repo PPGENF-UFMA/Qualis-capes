@@ -476,3 +476,25 @@ export function renderRecentSearches() {
     console.warn('[Histórico] Falha ao renderizar buscas recentes:', e.message);
   }
 }
+
+/**
+ * Gera os quadriênios dinamicamente e os adiciona ao <select>
+ */
+export function initQuadrienios() {
+  if (!dom.filterYear) return;
+  const currentYear = new Date().getFullYear();
+  const periods = [];
+  
+  // Quadriênios começam em 2013, 2017, 2021, 2025... até o próximo ciclo
+  for (let start = 2013; start <= currentYear + 4; start += 4) {
+    periods.unshift(`${start}-${start + 3}`); // do mais recente para o mais antigo
+  }
+  
+  // A opção "ALL" já está no HTML
+  periods.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = `Quadriênio ${p}`;
+    dom.filterYear.appendChild(opt);
+  });
+}

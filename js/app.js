@@ -21,13 +21,15 @@ import {
   showComparisonModal, closeComparisonModal,
   initTheme, toggleTheme, showToast,
   addRecentSearch, renderRecentSearches,
-  updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal
+  updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal,
+  initQuadrienios
 } from './ui.js';
 
 // ─── Inicialização ───────────────────────────────────────────────
 
 window.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+  initQuadrienios();
   setupEventListeners();
   restoreResults();
   restoreComparisonProfiles();

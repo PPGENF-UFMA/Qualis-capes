@@ -418,9 +418,7 @@
                 <label for="filter-year" class="sr-only">Filtrar por ano/quadriênio</label>
                 <select id="filter-year" class="select-filter" aria-label="Filtrar por ano/quadriênio">
                   <option value="ALL">Todos os Anos</option>
-                  <option value="2025-2028">Quadriênio 2025-2028</option>
-                  <option value="2021-2024">Quadriênio 2021-2024</option>
-                  <option value="2017-2020">Quadriênio 2017-2020</option>
+                  <!-- Opções geradas dinamicamente via ui.js -->
                 </select>
                 <label for="sort-by" class="sr-only">Ordenar resultados</label>
                 <select id="sort-by" class="select-filter" aria-label="Ordenar resultados">
@@ -549,6 +547,30 @@
           <button type="submit" id="btn-submit-comparison" class="btn">Comparar Currículos</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal de Detalhes da Classificação -->
+  <div id="candidates-modal" class="search-modal" role="dialog" aria-modal="true" style="display: none;">
+    <div class="search-modal-card" style="max-width: 600px;">
+      <div class="search-modal-header">
+        <h3 class="search-modal-title"><i data-lucide="info"></i> Detalhes da Avaliação</h3>
+        <button id="btn-close-candidates-modal" class="btn-close-modal"><i data-lucide="x"></i></button>
+      </div>
+      <p class="search-modal-subtitle" id="candidates-modal-subtitle">Critérios avaliados para esta revista.</p>
+      <div style="max-height: 400px; overflow-y: auto; margin-top: 16px;">
+        <table class="data-table" style="width: 100%;">
+          <thead>
+            <tr>
+              <th>Estrato</th>
+              <th>Justificativa (Fonte)</th>
+            </tr>
+          </thead>
+          <tbody id="candidates-modal-body">
+            <!-- Renderizado via JS -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
