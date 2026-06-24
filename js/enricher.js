@@ -12,7 +12,7 @@ export function normalizeISSN(issn) {
 export async function loadDatabase() {
   if (dbSummary !== null) return dbSummary;
   try {
-    const response = await fetch('/api/db-summary?limit=100');
+    const response = await fetch('/api/v1/db-summary?limit=100000');
     if (!response.ok) throw new Error(`Erro ao carregar banco: ${response.statusText}`);
     const data = await response.json();
     dbSummary = {
@@ -48,7 +48,7 @@ export async function enrichAndClassify(rawIssn) {
   }
 
   try {
-    const response = await fetch(`/api/classify/${normalized}`);
+    const response = await fetch(`/api/v1/classify/${normalized}`);
     if (!response.ok) throw new Error(`API error: ${response.statusText}`);
     return await response.json();
   } catch (error) {
@@ -68,7 +68,7 @@ export async function enrichAndClassify(rawIssn) {
 
 export async function searchByName(query) {
   try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const response = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}`);
     if (!response.ok) return [];
     const data = await response.json();
     return data.results || [];

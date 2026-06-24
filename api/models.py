@@ -19,6 +19,8 @@ class ClassifyResponse(BaseModel):
     scieloUpdatedAt: str | None = None
     lilacsUpdatedAt: str | None = None
     latindexUpdatedAt: str | None = None
+    jcr_source: str | None = None
+    citescore_source: str | None = None
 
 
 class BatchClassifyRequest(BaseModel):

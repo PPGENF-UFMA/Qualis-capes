@@ -3,7 +3,10 @@ import os
 import re
 import time
 import threading
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,7 +31,7 @@ def load_json_cache(path: str) -> dict:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[AVISO] Erro ao carregar cache do arquivo {path}: {e}")
+            logger.warning(f"Erro ao carregar cache do arquivo {path}: {e}")
     return {}
 
 
@@ -41,7 +44,7 @@ def save_json_cache(path: str, data: dict):
                 json.dump(data, f, indent=2, ensure_ascii=False)
             os.replace(tmp_path, path)
     except Exception as e:
-        print(f"[ERRO] Falha ao salvar cache no arquivo {path}: {e}")
+        logger.error(f"Falha ao salvar cache no arquivo {path}: {e}")
 
 
 def check_cache_validity(cache_dict: dict, key: str) -> dict | None:
@@ -163,6 +166,7 @@ class CircuitBreaker:
         if self.state == "HALF_OPEN":
             self.state = "CLOSED"
             self._consecutive_opens = 0
+            logger.info(f"Circuit breaker '{self.name}' fechou (half-open → closed)")
         self.failures = []
 
     def record_failure(self):
@@ -173,10 +177,12 @@ class CircuitBreaker:
             self.state = "OPEN"
             self.opened_at = now
             self._consecutive_opens += 1
+            logger.warning(f"Circuit breaker '{self.name}' reabriu após half-open (cooldown: {self._get_cooldown()}s)")
         elif self.state == "CLOSED" and len(self.failures) >= self.threshold:
             self.state = "OPEN"
             self.opened_at = now
             self._consecutive_opens += 1
+            logger.warning(f"Circuit breaker '{self.name}' abriu (threshold {self.threshold} atingido, cooldown: {self._get_cooldown()}s)")
 
     def get_status(self) -> dict:
         remaining = 0

@@ -2,7 +2,14 @@ import os
 import re
 import json
 import glob
+import logging
 import pandas as pd
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 def process_jcr_csv(filepath):
     """
@@ -38,6 +45,7 @@ def process_jcr_csv(filepath):
         eissn_idx = None
         jif_idx = None
         category_idx = None
+        title_idx = None
         
         for idx, h in enumerate(headers):
             if h == 'ISSN':
@@ -48,15 +56,18 @@ def process_jcr_csv(filepath):
                 jif_idx = idx
             elif h == 'CATEGORY':
                 category_idx = idx
+            elif h == 'TITLE':
+                title_idx = idx
         
         if issn_idx is None or jif_idx is None:
-            print(f"  [AVISO] {os.path.basename(filepath)}: colunas ISSN ou JIF nao encontradas.")
-            print(f"         Headers: {headers}")
+            logger.warning(f"{os.path.basename(filepath)}: colunas ISSN ou JIF nao encontradas.")
+            logger.warning(f"         Headers: {headers}")
             return {'issns': set(), 'values': {}, 'is_nursing': False}
         
         issns = set()
         values = {}
         eissn_map = {}
+        titles = {}
         is_nursing = False
         
         for row in reader:
@@ -66,6 +77,7 @@ def process_jcr_csv(filepath):
             raw_issn = row[issn_idx] if len(row) > issn_idx else None
             raw_eissn = row[eissn_idx] if eissn_idx is not None and len(row) > eissn_idx else None
             raw_jif = row[jif_idx] if len(row) > jif_idx else None
+            raw_title = row[title_idx] if title_idx is not None and len(row) > title_idx else None
             
             # Detectar nursing pelo conteúdo da coluna Category
             if category_idx is not None and len(row) > category_idx:
@@ -74,6 +86,7 @@ def process_jcr_csv(filepath):
                     is_nursing = True
             
             jcr_val = parse_float(raw_jif)
+            title_val = raw_title.strip() if raw_title else None
             
             issn_norm = normalize_issn(raw_issn)
             eissn_norm = normalize_issn(raw_eissn)
@@ -84,12 +97,14 @@ def process_jcr_csv(filepath):
                     if jcr_val is not None:
                         if target not in values or jcr_val > values[target]:
                             values[target] = jcr_val
+                    if title_val and target not in titles:
+                        titles[target] = title_val
             
             if issn_norm and eissn_norm and issn_norm != eissn_norm:
                 eissn_map[issn_norm] = eissn_norm
                 eissn_map[eissn_norm] = issn_norm
         
-        return {'issns': issns, 'values': values, 'is_nursing': is_nursing, 'eissn_map': eissn_map}
+        return {'issns': issns, 'values': values, 'is_nursing': is_nursing, 'eissn_map': eissn_map, 'titles': titles}
 
 def process_cuiden_csv(filepath):
     """
@@ -100,7 +115,7 @@ def process_cuiden_csv(filepath):
     import csv
     cuiden_data = {}
     if not os.path.exists(filepath):
-        print(f"  [AVISO] {os.path.basename(filepath)} nao encontrado.")
+        logger.warning(f"{os.path.basename(filepath)} nao encontrado.")
         return cuiden_data
         
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -169,11 +184,26 @@ def normalize_issn(issn):
     if pd.isna(issn):
         return None
     val = str(issn).strip().upper()
-    # Remove qualquer caractere que não seja número ou X
     val = re.sub(r'[^0-9X]', '', val)
-    if len(val) == 8:
-        return f"{val[:4]}-{val[4:]}"
-    return None
+    if len(val) != 8:
+        return None
+        
+    weights = [8, 7, 6, 5, 4, 3, 2]
+    total = sum(int(val[i]) * weights[i] for i in range(7))
+    rem = total % 11
+    check_digit = 11 - rem
+    
+    if check_digit == 10:
+        expected = "X"
+    elif check_digit == 11:
+        expected = "0"
+    else:
+        expected = str(check_digit)
+        
+    if val[7] != expected:
+        return None
+        
+    return f"{val[:4]}-{val[4:]}"
 
 def parse_float(val):
     """
@@ -191,7 +221,7 @@ def parse_float(val):
         return None
 
 def compile_database():
-    print("Iniciando compilação do banco de dados de periódicos...")
+    logger.info("Iniciando compilação do banco de dados de periódicos...")
     
     # Conjuntos temporários em memória para identificar periódicos de Enfermagem e Medline
     jcr_nursing_issns = set()
@@ -201,20 +231,21 @@ def compile_database():
     jcr_values = {}
     jcr_all_issns = set()  # Todos os ISSNs JCR (nursing + outras categorias)
     global_eissn_map = {}
+    jcr_titles = {}  # Títulos extraídos do JCR
     
     # Carregar dados do CUIDEN
     cuiden_data = process_cuiden_csv(CUIDEN_PATH)
-    print(f"CUIDEN carregado em memória: {len(cuiden_data)} periódicos.")
+    logger.info(f"CUIDEN carregado em memória: {len(cuiden_data)} periódicos.")
     
     # --- 1. PROCESSAR TODOS OS CSVs JCR (AUTO-DETECÇÃO) ---
     if JCR_FILES:
-        print(f"\n>>> Processando {len(JCR_FILES)} arquivo(s) JCR encontrado(s)...")
+        logger.info(f"\n>>> Processando {len(JCR_FILES)} arquivo(s) JCR encontrado(s)...")
     else:
-        print("[AVISO] Nenhum arquivo JCR encontrado em data/ (padrao: jcr_*.csv, JCR_*.csv)")
+        logger.warning("Nenhum arquivo JCR encontrado em data/ (padrao: jcr_*.csv, JCR_*.csv)")
     
     for jcr_file in JCR_FILES:
         basename = os.path.basename(jcr_file)
-        print(f"  Lendo {basename}...")
+        logger.info(f"  Lendo {basename}...")
         try:
             result = process_jcr_csv(jcr_file)
             issn_count = len(result['issns'])
@@ -226,25 +257,31 @@ def compile_database():
                     if issn not in jcr_values or val > jcr_values[issn]:
                         jcr_values[issn] = val
             
+            # Armazenar títulos do JCR
+            for issn, title in result.get('titles', {}).items():
+                if issn not in jcr_titles:
+                    jcr_titles[issn] = title
+            
             # Adicionar e-issn mapping
             global_eissn_map.update(result.get('eissn_map', {}))
             
             # Nursing → conjunto especial para classificação de área
             if result['is_nursing']:
                 jcr_nursing_issns.update(result['issns'])
-                print(f"    → {issn_count} ISSNs (NURSING) | {val_count} com JIF")
+                logger.info(f"    → {issn_count} ISSNs (NURSING) | {val_count} com JIF")
             else:
                 jcr_all_issns.update(result['issns'])
-                print(f"    → {issn_count} ISSNs | {val_count} com JIF")
+                logger.info(f"    → {issn_count} ISSNs | {val_count} com JIF")
         except Exception as e:
-            print(f"    [ERRO] ao processar {basename}: {e}")
+            logger.error(f"    [ERRO] ao processar {basename}: {e}")
     
-    print(f"\nJCR consolidado: {len(jcr_nursing_issns)} ISSNs Nursing | {len(jcr_all_issns)} ISSNs outras categorias")
-    print(f"  Valores JCR: {len(jcr_values)} ISSNs com JIF")
+    logger.info(f"\nJCR consolidado: {len(jcr_nursing_issns)} ISSNs Nursing | {len(jcr_all_issns)} ISSNs outras categorias")
+    logger.info(f"  Valores JCR: {len(jcr_values)} ISSNs com JIF")
 
     # --- 2. PROCESSAR JOURNALS_SCOPUS.XLSX SEGUNDO ---
+    scopus_titles = {}  # Títulos extraídos do Scopus
     if os.path.exists(SCOPUS_PATH):
-        print(f"Lendo {SCOPUS_PATH} (Scopus Sources)...")
+        logger.info(f"Lendo {SCOPUS_PATH} (Scopus Sources)...")
         try:
             df_scopus = pd.read_excel(SCOPUS_PATH, sheet_name='Scopus Sources May 2026')
             scopus_cols = df_scopus.columns.tolist()
@@ -267,26 +304,34 @@ def compile_database():
                 if nursing_col is not None and pd.notna(row.get(nursing_col)):
                     is_nursing_scopus = True
                 
+                # Extrair título do Scopus
+                scopus_title = str(row.get('Source Title', '')).strip()
+                if scopus_title:
+                    for target_issn in [issn, eissn]:
+                        if target_issn and target_issn not in scopus_titles:
+                            scopus_titles[target_issn] = scopus_title
+                
                 for target_issn in [issn, eissn]:
                     if target_issn:
                         if is_nursing_scopus:
                             scopus_nursing_issns.add(target_issn)
                         if is_medline:
                             medline_issns.add(target_issn)
-            print(f"Scopus Nursing em memória: {len(scopus_nursing_issns)} ISSNs.")
-            print(f"Medline indexados em memória: {len(medline_issns)} ISSNs.")
+            logger.info(f"Scopus Nursing em memória: {len(scopus_nursing_issns)} ISSNs.")
+            logger.info(f"Medline indexados em memória: {len(medline_issns)} ISSNs.")
+            logger.info(f"Scopus títulos extraídos: {len(scopus_titles)}")
         except Exception as e:
-            print(f"Erro ao processar Scopus: {e}")
+            logger.error(f"Erro ao processar Scopus: {e}")
 
     # Dicionário final: { normalized_issn: { title, area, jcr, citeScore, indexers, metrics } }
     journals = {}
     
     # --- 3. PROCESSAR CLASSIFICACAO.XLSX (SUCUPIRA) TERCEIRO ---
     if os.path.exists(CLASSIFICACAO_PATH):
-        print(f"Lendo {CLASSIFICACAO_PATH}...")
+        logger.info(f"Lendo {CLASSIFICACAO_PATH}...")
         try:
             df_class = pd.read_excel(CLASSIFICACAO_PATH)
-            print(f"Processando {len(df_class)} registros do Sucupira...")
+            logger.info(f"Processando {len(df_class)} registros do Sucupira...")
             
             for idx, row in df_class.iterrows():
                 raw_issn = row.get('ISSN')
@@ -350,18 +395,20 @@ def compile_database():
                     if jcr_values.get(issn) is not None:
                         journals[issn]["jcr"] = jcr_values.get(issn)
             
-            print(f"Sucupira processado: {len(journals)} periódicos identificados.")
+            logger.info(f"Sucupira processado: {len(journals)} periódicos identificados.")
         except Exception as e:
-            print(f"Erro ao processar classificacao.xlsx: {e}")
+            logger.error(f"Erro ao processar classificacao.xlsx: {e}")
     else:
-        print(f"AVISO: {CLASSIFICACAO_PATH} não encontrado. Ignorando mapeamento de áreas.")
+        logger.warning(f"AVISO: {CLASSIFICACAO_PATH} não encontrado. Ignorando mapeamento de áreas.")
 
     # --- 4. COMPLEMENTAR COM JCR E SCOPUS QUE PODEM NÃO ESTAR NO SUCUPIRA ---
     # Nursing → Enfermagem
     for issn in jcr_nursing_issns:
         if issn not in journals:
+            # Fallback hierárquico: JCR title > Scopus title > Genérico
+            title = jcr_titles.get(issn) or scopus_titles.get(issn) or "Periódico do JCR (Enfermagem)"
             journals[issn] = {
-                "title": "Periódico do JCR (Enfermagem)",
+                "title": title,
                 "area": "Enfermagem",
                 "jcr": jcr_values.get(issn),
                 "citeScore": None,
@@ -374,8 +421,10 @@ def compile_database():
     # Outras categorias JCR → Outras Áreas
     for issn in jcr_all_issns:
         if issn not in journals:
+            # Fallback hierárquico: JCR title > Scopus title > Genérico
+            title = jcr_titles.get(issn) or scopus_titles.get(issn) or "Periódico do JCR"
             journals[issn] = {
-                "title": "Periódico do JCR",
+                "title": title,
                 "area": "Outras Áreas",
                 "jcr": jcr_values.get(issn),
                 "citeScore": None,
@@ -387,8 +436,10 @@ def compile_database():
 
     for issn in scopus_nursing_issns:
         if issn not in journals:
+            # Fallback hierárquico: Scopus title > JCR title > Genérico
+            title = scopus_titles.get(issn) or jcr_titles.get(issn) or "Periódico do Scopus (Enfermagem)"
             journals[issn] = {
-                "title": "Periódico do Scopus (Enfermagem)",
+                "title": title,
                 "area": "Enfermagem",
                 "jcr": jcr_values.get(issn),
                 "citeScore": None,
@@ -417,10 +468,10 @@ def compile_database():
     # --- 5. PROCESSAR CITESCORE (PLANILHA SEPARADA, SE DISPONÍVEL) ---
     CITESCORE_PATH = os.path.join(DATA_DIR, "citescore.xlsx")
     if os.path.exists(CITESCORE_PATH):
-        print(f"Lendo {CITESCORE_PATH} (CiteScore Metrics)...")
+        logger.info(f"Lendo {CITESCORE_PATH} (CiteScore Metrics)...")
         try:
             df_cs = pd.read_excel(CITESCORE_PATH)
-            print(f"Processando {len(df_cs)} registros de CiteScore...")
+            logger.info(f"Processando {len(df_cs)} registros de CiteScore...")
             
             for idx, row in df_cs.iterrows():
                 raw_issn = row.get('ISSN') or row.get('Print ISSN')
@@ -462,14 +513,14 @@ def compile_database():
                             journals[target_issn]["citeScore"] = cs_val
                         if title and not journals[target_issn]["title"]:
                             journals[target_issn]["title"] = title
-            print("CiteScore processado com sucesso.")
+            logger.info("CiteScore processado com sucesso.")
         except Exception as e:
-            print(f"Erro ao processar citescore.xlsx: {e}")
+            logger.error(f"Erro ao processar citescore.xlsx: {e}")
 
     # --- 6. PROCESSAR CITESCORE_CACHE.JSON (GERADO PELA API ELSEVIER) ---
     CITESCORE_CACHE_PATH = os.path.join(DATA_DIR, "citescore_cache.json")
     if os.path.exists(CITESCORE_CACHE_PATH):
-        print(f"Lendo {CITESCORE_CACHE_PATH} (Cache API Elsevier)...")
+        logger.info(f"Lendo {CITESCORE_CACHE_PATH} (Cache API Elsevier)...")
         try:
             with open(CITESCORE_CACHE_PATH, "r", encoding="utf-8") as f:
                 cs_cache = json.load(f)
@@ -480,9 +531,15 @@ def compile_database():
                 if cs_val is not None and issn in journals:
                     journals[issn]["citeScore"] = cs_val
                     applied += 1
-            print(f"CiteScore (API Elsevier): {applied} periódicos atualizados do cache.")
+            logger.info(f"CiteScore (API Elsevier): {applied} periódicos atualizados do cache.")
         except Exception as e:
-            print(f"Erro ao processar citescore_cache.json: {e}")
+            logger.error(f"Erro ao processar citescore_cache.json: {e}")
+
+    # --- Resumo de títulos resolvidos ---
+    jcr_resolved = sum(1 for issn in journals if issn != "_meta" and journals[issn].get("title", "").startswith("Periódico do JCR"))
+    scopus_resolved = sum(1 for issn in journals if issn != "_meta" and journals[issn].get("title", "").startswith("Periódico do Scopus"))
+    total_generic = jcr_resolved + scopus_resolved
+    logger.info(f"Títulos genéricos restantes: {total_generic} (JCR: {jcr_resolved}, Scopus: {scopus_resolved})")
 
     # --- 7. GRAVAR RESULTADO EM JOURNALS.JSON ---
     # Adicionar metadados de compilação para rastreabilidade
@@ -506,17 +563,17 @@ def compile_database():
         if os.path.exists(p):
             try:
                 os.remove(p)
-                print(f"Cache removido: {c}")
+                logger.info(f"Cache removido: {c}")
             except Exception as e:
                 pass
 
-    print(f"Gravando base consolidada contendo {len(journals) - 1} periódicos...")
+    logger.info(f"Gravando base consolidada contendo {len(journals) - 1} periódicos...")
     try:
         with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
             json.dump(journals, f, indent=2, ensure_ascii=False)
-        print(f"Banco de dados compilado com sucesso e salvo em: {OUTPUT_PATH}")
+        logger.info(f"Banco de dados compilado com sucesso e salvo em: {OUTPUT_PATH}")
     except Exception as e:
-        print(f"Erro ao gravar arquivo journals.json: {e}")
+        logger.error(f"Erro ao gravar arquivo journals.json: {e}")
 
 if __name__ == "__main__":
     compile_database()

@@ -32,8 +32,9 @@ export function normalizeString(str) {
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // remove acentos
-    .replace(/[\.\,\-\&\;\:\?\!\"\'\(\)\[\]\/]/g, " ") // substitui pontuações por espaço
-    .replace(/\b(DE|DA|DO|EM|OF|AND|THE|IN|ON|PARA|SOB|A|O|AS|OS|UM|UNS|UMA|UMAS)\b/g, " ") // remove preposições/artigos comuns
+    .replace(/&/g, " E ") // substitui & por E
+    .replace(/[\.\,\-\;\:\?\!\"\'\(\)\[\]\/]/g, " ") // substitui pontuações por espaço
+    .replace(/\b(DE|DA|DO|EM|OF|AND|THE|IN|ON|PARA|SOB|A|O|AS|OS|UM|UNS|UMA|UMAS|E|Y)\b/g, " ") // remove preposições/conjunções
     .replace(/\s+/g, " ") // remove múltiplos espaços
     .trim();
 }
@@ -171,7 +172,7 @@ function isCongressProceedings(text) {
  */
 export function parseSingleArticle(articleText) {
   // Remover indicação de citações do Lattes para não poluir
-  let cleanText = articleText.replace(/\s*Citações:\d+/gi, "").trim();
+  let cleanText = articleText.replace(/\s*Citações.*$/gi, "").trim();
   
   // Remover numerações iniciais (ex: "2. ")
   cleanText = cleanText.replace(/^\s*\d+\.\s*/, "");
@@ -204,7 +205,11 @@ export function parseSingleArticle(articleText) {
       } else if (mainBlock[i] === ')') {
         nesting--;
       } else if (mainBlock[i] === '.' && nesting === 0) {
-        lastDotIndex = i;
+        // Ignora pontos que precedem apenas um qualificador entre parênteses
+        const textAfter = mainBlock.substring(i + 1).trim();
+        if (!textAfter.startsWith('(')) {
+          lastDotIndex = i;
+        }
       }
     }
 

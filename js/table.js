@@ -114,6 +114,11 @@ export function renderResultsTable() {
       </span>`;
     }
 
+    let finalJustification = safeJustification;
+    if (safeEstrato === 'NC') {
+      finalJustification += ' | Verifique o ISSN impresso vs eletrônico ou busque pelo nome completo. Pode não estar indexado.';
+    }
+
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
@@ -147,16 +152,12 @@ export function renderResultsTable() {
         </div>
       </td>
       <td>
-        <div class="estrato-badge-container" data-tooltip="${safeJustification}">
+        <div class="estrato-badge-container" data-tooltip="${finalJustification}">
           <span class="estrato-badge ${safeEstrato}">
             ${safeEstrato}
           </span>
           <i data-lucide="info" class="info-icon"></i>
         </div>
-        ${safeEstrato === 'NC' ? `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
-          <i data-lucide="help-circle" style="width:12px; height:12px; vertical-align:middle;"></i>
-          Verifique o ISSN impresso vs eletrônico ou busque pelo nome completo. Pode não estar indexado.
-        </div>` : ''}
         ${item.classification && item.classification.all_candidates && item.classification.all_candidates.length > 0 ? 
           `<button class="btn-details" style="margin-top: 8px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--border-color); color: var(--primary-color); cursor: pointer;" onclick="window.showCandidatesModal(this)" data-candidates="${escapeHTML(JSON.stringify(item.classification.all_candidates))}" data-title="${safeTitle}">Ver detalhes</button>` : ''}
       </td>

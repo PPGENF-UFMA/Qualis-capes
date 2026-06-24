@@ -3,7 +3,10 @@ import json
 import os
 import re
 import threading
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from bs4 import BeautifulSoup
@@ -45,9 +48,25 @@ def normalize_issn(issn: str) -> str:
     if not isinstance(issn, str):
         return ""
     cleaned = re.sub(r"[^0-9Xx]", "", issn).upper()
-    if len(cleaned) == 8:
-        return f"{cleaned[:4]}-{cleaned[4:]}"
-    return ""
+    if len(cleaned) != 8:
+        return ""
+        
+    weights = [8, 7, 6, 5, 4, 3, 2]
+    total = sum(int(cleaned[i]) * weights[i] for i in range(7))
+    rem = total % 11
+    check_digit = 11 - rem
+    
+    if check_digit == 10:
+        expected = "X"
+    elif check_digit == 11:
+        expected = "0"
+    else:
+        expected = str(check_digit)
+        
+    if cleaned[7] != expected:
+        return ""
+        
+    return f"{cleaned[:4]}-{cleaned[4:]}"
 
 
 _db_lock = threading.Lock()
@@ -107,7 +126,7 @@ def load_database() -> dict[str, dict]:
             return _journals_db
 
         if not os.path.exists(JOURNALS_PATH):
-            print(f"[AVISO] Arquivo {JOURNALS_PATH} nao encontrado.")
+            logger.warning(f"Arquivo {JOURNALS_PATH} nao encontrado.")
             _journals_db = {}
             return _journals_db
 
@@ -166,7 +185,7 @@ def load_database() -> dict[str, dict]:
             _build_title_index()
             return _journals_db
         except Exception as e:
-            print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
+            logger.error(f"Falha ao carregar {JOURNALS_PATH}: {e}")
             _journals_db = {}
             return _journals_db
 
@@ -251,7 +270,7 @@ def _parse_lilacs_response(raw_data: dict) -> dict | None:
 async def _try_fetch_lilacs(url: str, issn: str, http_client: httpx.AsyncClient) -> dict | None:
     headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
     try:
-        response = await http_client.get(url, headers=headers, timeout=10)
+        response = await http_client.get(url, params={"q": issn}, headers=headers, timeout=10)
         raw_data = response.json()
         response_data = _parse_lilacs_response(raw_data)
         if response_data is None:
@@ -284,12 +303,10 @@ async def fetch_lilacs(issn: str, http_client: httpx.AsyncClient) -> dict:
     if not cb.allow_request():
         return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
 
-    primary_url = f"{LILACS_PRIMARY_URL}?q={issn}"
-    result = await _try_fetch_lilacs(primary_url, issn, http_client)
+    result = await _try_fetch_lilacs(LILACS_PRIMARY_URL, issn, http_client)
 
     if result is None:
-        fallback_url = f"{LILACS_FALLBACK_URL}?q={issn}"
-        result = await _try_fetch_lilacs(fallback_url, issn, http_client)
+        result = await _try_fetch_lilacs(LILACS_FALLBACK_URL, issn, http_client)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     if result:
@@ -495,35 +512,47 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
 
         if tasks:
             results = await _gather(*tasks)
-            for res in results:
-                _merge_indexer_result(db_record, normalized, res)
+            with _db_lock:
+                for res in results:
+                    _merge_indexer_result(db_record, normalized, res)
 
-    cite_score = db_record.get("citeScore")
-    if cite_score is None:
+    # Buscar CiteScore fora do lock (I/O), aplicar mutação dentro do lock
+    api_cs = None
+    need_citescore = db_record.get("citeScore") is None
+    if need_citescore:
         api_cs = await fetch_citescore(normalized, http_client)
-        if api_cs is not None:
+
+    with _db_lock:
+        if need_citescore and api_cs is not None:
             db_record["citeScore"] = api_cs
 
-    # Garante que 'SCOPUS' conste na lista de indexadores caso possua CiteScore
-    indexers = list(db_record.get("indexers") or [])
-    if db_record.get("citeScore") is not None:
-        if "SCOPUS" not in [idx.upper() for idx in indexers]:
-            indexers.append("SCOPUS")
+        # Garante que 'SCOPUS' conste na lista de indexadores caso possua CiteScore
+        indexers = list(db_record.get("indexers") or [])
+        if db_record.get("citeScore") is not None:
+            if "SCOPUS" not in [idx.upper() for idx in indexers]:
+                indexers.append("SCOPUS")
+                db_record["indexers"] = indexers
 
     classification = engine.classify_journal(db_record)
+
+    # Determinar fonte dos dados
+    jcr_val = db_record.get("jcr")
+    cs_val = db_record.get("citeScore")
 
     return {
         "issn": normalized,
         "title": db_record.get("title", "Sem Título"),
         "area": db_record.get("area", "Outras Áreas"),
-        "jcr": db_record.get("jcr"),
-        "citeScore": db_record.get("citeScore"),
+        "jcr": jcr_val,
+        "citeScore": cs_val,
         "indexers": indexers,
         "metrics": db_record.get("metrics") or {"cuiden": None},
         "classification": classification,
         "scieloUpdatedAt": db_record.get("scieloUpdatedAt"),
         "lilacsUpdatedAt": db_record.get("lilacsUpdatedAt"),
         "latindexUpdatedAt": db_record.get("latindexUpdatedAt"),
+        "jcr_source": "JCR (base local)" if jcr_val is not None else None,
+        "citescore_source": "Elsevier API" if cs_val is not None else None,
     }
 
 
@@ -611,16 +640,20 @@ def search_by_name(query: str) -> list[dict]:
 
     matched_issns = None
     for token in tokens:
-        token_matches = set()
-        for idx_token, issns in _title_index.items():
-            if token in idx_token:
-                token_matches.update(issns)
-                
+        # Lookup direto O(1) — token como chave exata do índice
+        token_matches = set(_title_index.get(token, []))
+
+        # Fallback: busca por prefixo apenas se lookup direto não encontrou
+        if not token_matches:
+            for idx_token, issns in _title_index.items():
+                if idx_token.startswith(token):
+                    token_matches.update(issns)
+
         if matched_issns is None:
             matched_issns = token_matches
         else:
             matched_issns = matched_issns.intersection(token_matches)
-            
+
         if not matched_issns:
             break
             

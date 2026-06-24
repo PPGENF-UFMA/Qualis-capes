@@ -5,12 +5,20 @@ from collections import defaultdict
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 from . import cache
 from . import enricher
@@ -37,6 +45,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+router_v1 = APIRouter(prefix="/api/v1")
 
 
 # ─── Rate Limiter simples (in-memory token bucket) ─────────────────
@@ -73,9 +83,9 @@ async def startup():
     enricher.load_database()
     api_key_set = "SIM" if os.environ.get("ELSEVIER_API_KEY") else "NAO"
     db_size = len(enricher.load_database())
-    print(f"[API] Base carregada: {db_size} periodicos")
-    print(f"[API] ELSEVIER_API_KEY configurada: {api_key_set}")
-    print(f"[API] Servidor iniciado. Docs em /docs")
+    logger.info(f"Base carregada: {db_size} periodicos")
+    logger.info(f"ELSEVIER_API_KEY configurada: {api_key_set}")
+    logger.info(f"Servidor iniciado. Docs em /docs")
 
 
 @app.on_event("shutdown")
@@ -96,7 +106,19 @@ async def root():
     return RedirectResponse(url="/index.html")
 
 
-@app.get("/api/status")
+@app.get("/api/health")
+async def api_health():
+    db = enricher.load_database()
+    meta = enricher.get_database_meta()
+    return {
+        "status": "healthy" if len(db) > 0 else "degraded",
+        "db_loaded": len(db) > 0,
+        "db_size": len(db),
+        "compiled_at": meta.get("compiled_at", "")
+    }
+
+
+@router_v1.get("/status")
 async def api_status():
     db = enricher.load_database()
     has_key = bool(os.environ.get("ELSEVIER_API_KEY"))
@@ -112,15 +134,18 @@ async def api_status():
     }
 
 
-@app.get("/api/db-summary")
-async def api_db_summary(response: Response, page: int = 1, limit: int = 100):
+@router_v1.get("/db-summary")
+async def api_db_summary(response: Response, page: int = 1, limit: int = 100, q: str = ""):
     items = enricher.get_db_summary()
+    if q:
+        q_lower = q.lower()
+        items = [i for i in items if q_lower in i["title"].lower()]
     response.headers["Cache-Control"] = "max-age=300"
     start = (page - 1) * limit
     return {"total": len(items), "page": page, "items": items[start:start+limit]}
 
 
-@app.get("/api/classify/{issn}", response_model=ClassifyResponse)
+@router_v1.get("/classify/{issn}", response_model=ClassifyResponse)
 async def api_classify(issn: str, request: Request):
     if not issn:
         raise HTTPException(status_code=400, detail="ISSN nao informado")
@@ -132,7 +157,7 @@ async def api_classify(issn: str, request: Request):
     return result
 
 
-@app.post("/api/classify/batch")
+@router_v1.post("/classify/batch")
 async def api_classify_batch(body: BatchClassifyRequest, request: Request):
     if not body.issns:
         raise HTTPException(status_code=400, detail="Lista de ISSNs vazia")
@@ -181,7 +206,7 @@ async def _fetch_lilacs_search(q: str, client: httpx.AsyncClient) -> tuple[list,
     return [], False
 
 
-@app.get("/api/search")
+@router_v1.get("/search")
 async def api_search(q: str = "", request: Request = None):
     if not q or len(q.strip()) < 2:
         raise HTTPException(status_code=400, detail="Termo de busca deve ter pelo menos 2 caracteres")
@@ -216,6 +241,31 @@ async def api_search(q: str = "", request: Request = None):
             cb.record_failure()
 
     return {"results": results, "count": len(results)}
+
+
+# Aliases temporários (deprecated) com redirect
+@app.get("/api/status")
+async def legacy_status(request: Request):
+    return RedirectResponse(url=f"/api/v1/status?{request.query_params}", status_code=308)
+
+@app.get("/api/db-summary")
+async def legacy_db_summary(request: Request):
+    return RedirectResponse(url=f"/api/v1/db-summary?{request.query_params}", status_code=308)
+
+@app.get("/api/classify/{issn}")
+async def legacy_classify(issn: str, request: Request):
+    return RedirectResponse(url=f"/api/v1/classify/{issn}?{request.query_params}", status_code=308)
+
+@app.post("/api/classify/batch")
+async def legacy_classify_batch(request: Request):
+    # Nota: 308 preserva o método POST
+    return RedirectResponse(url=f"/api/v1/classify/batch?{request.query_params}", status_code=308)
+
+@app.get("/api/search")
+async def legacy_search(request: Request):
+    return RedirectResponse(url=f"/api/v1/search?{request.query_params}", status_code=308)
+
+app.include_router(router_v1)
 
 
 # ─── Static Files (SEGURANÇA: servir apenas diretórios seguros) ────

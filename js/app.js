@@ -436,7 +436,7 @@ function setupEventListeners() {
  */
 async function checkCiteScoreStatus() {
   try {
-    const resp = await fetch('/api/status');
+    const resp = await fetch('/api/v1/status');
     if (!resp.ok) return;
     const data = await resp.json();
     if (!dom.citeScoreStatus) return;
@@ -482,7 +482,7 @@ async function checkCiteScoreStatus() {
 
 async function checkCircuitsStatus() {
   try {
-    const resp = await fetch('/api/status');
+    const resp = await fetch('/api/v1/status');
     if (!resp.ok) return;
     const data = await resp.json();
     if (!dom.circuitsStatus) return;
