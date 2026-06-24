@@ -4,33 +4,22 @@
  * extrair metadados e encontrar os ISSNs correspondentes (inclusive abreviados).
  */
 
-// Dicionário estático de abreviações comuns de enfermagem e saúde correlatas
-const LATTES_ALIASES = {
-  "ACTA PAUL ENFERM": "1982-0194",
-  "ACTA PAUL DE ENFERM": "1982-0194",
-  "ACTA PAULISTA ENFERMAGEM": "1982-0194",
-  "ACTA PAUL": "1982-0194",
-  "REV LATINO AM ENFERM": "0104-1169",
-  "REV LATINO AM ENFERMAGEM": "0104-1169",
-  "REVISTA LATINO AMERICANA ENFERMAGEM": "0104-1169",
-  "REV BRAS ENFERM": "0034-7167",
-  "REVISTA BRASILEIRA ENFERMAGEM": "0034-7167",
-  "TEXTO CONTEXTO ENFERM": "0104-0707",
-  "TEXTO CONTEXTO ENFERMAGEM": "0104-0707",
-  "ENFERM FOCO": "2357-707X",
-  "ENFERMAGEM FOCO COFEN": "2357-707X",
-  "ENFERMAGEM FOCO": "2357-707X",
-  "REV ESC ENFERM USP": "0080-6234",
-  "REV GAUCHA ENFERM": "0102-6933",
-  "REV MINEIRA ENFERM": "1415-2762",
-  "REME REVISTA MINEIRA ENFERMAGEM": "1415-2762",
-  "REME": "1415-2762",
-  "REV ELETR ACERVO SAUDE": "2178-2091",
-  "REVISTA ELETRONICA ACERVO EM SAUDE": "2178-2091",
-  "BMC PUBLIC HEALTH": "1471-2458",
-  "REV SOBECC": "1414-4425",
-  "REVISTA SOBECC": "1414-4425"
-};
+// Dicionário de abreviações comuns (carregado dinamicamente)
+let LATTES_ALIASES = {};
+
+/**
+ * Inicializa o parser carregando os aliases externos.
+ */
+export async function initLattesParser() {
+  try {
+    const response = await fetch('/js/aliases.json');
+    if (response.ok) {
+      LATTES_ALIASES = await response.json();
+    }
+  } catch (error) {
+    console.warn('Não foi possível carregar aliases.json, usando padrão vazio.', error);
+  }
+}
 
 /**
  * Normaliza uma string de texto removendo acentos, pontuações e preposições.
@@ -115,6 +104,22 @@ export function jaroWinkler(s1, s2) {
   return jaro + l * p * (1 - jaro);
 }
 
+function fixEncoding(text) {
+  const replacements = {
+    'Ã©': 'é', 'Ã£': 'ã', 'Ã¡': 'á', 'Ã­': 'í',
+    'Ãµ': 'õ', 'Ã³': 'ó', 'Ãº': 'ú', 'Ã§': 'ç',
+    'Ã¢': 'â', 'Ãª': 'ê', 'Ã´': 'ô', 'Ã': 'à',
+    'Ã¼': 'ü', 'Ã±': 'ñ',
+    'Ã‰': 'É', 'Ã‡': 'Ç', 'Ã"': 'Ó', 'Ãš': 'Ú',
+  };
+  let result = text;
+  for (const [bad, good] of Object.entries(replacements)) {
+    result = result.replaceAll(bad, good);
+  }
+  result = result.replace(/[\u0000-\u001F\uFFFD□]/g, '');
+  return result;
+}
+
 /**
  * Segmenta o texto copiado do Lattes em artigos individuais.
  * @param {string} text Texto bruto colado
@@ -123,8 +128,8 @@ export function jaroWinkler(s1, s2) {
 export function segmentLattesText(text) {
   if (!text) return [];
   
-  // Substituir interrogações estranhas (falhas de encoding comuns no Lattes) por aspas ou apóstrofo
-  let cleanText = text.replace(/M\?BATNA/gi, "M'BATNA");
+  let cleanText = fixEncoding(text);
+  cleanText = cleanText.replace(/M\?BATNA/gi, "M'BATNA");
   
   // Remover injeções textuais de extensões de navegador (ex: Qualis Lattes) antes de linearizar
   cleanText = cleanText.replace(/.*Qualis\s*\(ISSN:.*\n?/gi, "");
@@ -147,6 +152,16 @@ export function segmentLattesText(text) {
   }
 
   return matches.map(s => s.trim()).filter(s => s.length > 20);
+}
+
+const CONGRESS_KEYWORDS = [
+  'anais', 'congresso', 'simposio', 'simpósio', 'encontro',
+  'conference', 'proceedings', 'workshop', 'seminário', 'jornada'
+];
+
+function isCongressProceedings(text) {
+  const lower = text.toLowerCase();
+  return CONGRESS_KEYWORDS.some(kw => lower.includes(kw));
 }
 
 /**
@@ -239,13 +254,19 @@ export function parseSingleArticle(articleText) {
   // Limpar possíveis pontos finais residuais
   title = title.replace(/\.$/, "").trim();
 
+  let type = 'article';
+  if (isCongressProceedings(journal) || isCongressProceedings(title)) {
+    type = 'congresso';
+  }
+
   return {
     authors,
     title,
     journal,
     year,
     volume,
-    pages
+    pages,
+    type
   };
 }
 
@@ -278,17 +299,14 @@ export function matchJournalToISSN(journalName, dbItems) {
   }
 
   // 3. Otimização Heurística para Fuzzy Match
-  // Divide a query em termos significativos de pelo menos 3 caracteres
   const queryTerms = normalizedQuery.split(" ").filter(t => t.length >= 3);
   if (queryTerms.length === 0) return null;
 
-  // Filtra candidatos na base local que contenham pelo menos um dos termos principais
   const candidates = [];
   for (const item of dbItems) {
     if (!item.title) continue;
     const normDbTitle = normalizeString(item.title);
     
-    // Verifica se há intersecção de palavras
     const hasIntersection = queryTerms.some(term => normDbTitle.includes(term));
     if (hasIntersection) {
       candidates.push({
@@ -298,24 +316,23 @@ export function matchJournalToISSN(journalName, dbItems) {
     }
   }
 
-  // 4. Executa Jaro-Winkler apenas na lista reduzida de candidatos
+  // Define Adaptive Threshold based on query length
+  let THRESHOLD = 0.85;
+  if (normalizedQuery.length <= 10) THRESHOLD = 0.92;
+  else if (normalizedQuery.length <= 25) THRESHOLD = 0.88;
+
   let bestMatch = null;
-  let highestScore = 0.0;
+  let highestScore = 0;
 
   for (const candidate of candidates) {
     const score = jaroWinkler(normalizedQuery, candidate.normalizedTitle);
     if (score > highestScore) {
       highestScore = score;
-      bestMatch = candidate;
+      bestMatch = candidate.issn;
     }
   }
 
-  // Limiar de corte para associação automática (85%)
-  if (highestScore >= 0.85 && bestMatch) {
-    return bestMatch.issn;
-  }
-
-  return null;
+  return highestScore >= THRESHOLD ? bestMatch : null;
 }
 
 /**

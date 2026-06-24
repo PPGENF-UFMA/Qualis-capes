@@ -106,6 +106,14 @@ export function renderResultsTable() {
     // Área como badge inline no título (antes era coluna separada)
     const areaBadge = `<span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">${safeArea}</span>`;
 
+    let titleWarning = '';
+    if (item.unmatchedLattes) {
+      row.style.background = 'rgba(245, 158, 11, 0.05)';
+      titleWarning = `<span style="color: var(--warning); display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-top: 4px;">
+        <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> Não encontrado na base
+      </span>`;
+    }
+
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
@@ -113,6 +121,7 @@ export function renderResultsTable() {
           <div style="display: flex; flex-direction: column; align-items: flex-start;">
             <span>${safeTitle}</span>
             ${areaBadge}
+            ${titleWarning}
           </div>
         </div>
       </td>

@@ -12,7 +12,7 @@ import dom from './dom.js';
 import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js';
-import { parseLattesText } from './lattesParser.js';
+import { parseLattesText, initLattesParser } from './lattesParser.js';
 import { updateComparisonDashboard } from './compare.js';
 import {
   switchTab, switchInputType,
@@ -33,6 +33,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   restoreComparisonProfiles();
   renderRecentSearches();
   await initDatabase();
+  await initLattesParser();
   await checkCiteScoreStatus();
   await checkCircuitsStatus();
 
@@ -537,10 +538,21 @@ async function processLattesArticles(parsedArticles, researcherName) {
   showLoadingState('Analisando Currículo Lattes', 'Classificando os artigos...', 'file-text');
   
   let countNew = 0;
+  let unmatchedCount = 0;
   updateLoadingProgress(0, parsedArticles.length);
   
   for (const article of parsedArticles) {
+    if (article.type === 'congresso') continue;
+
+    if (!article.matchedIssn) {
+      unmatchedCount++;
+    }
+
     const classified = await enrichAndClassify(article.matchedIssn || article.journal);
+
+    if (!article.matchedIssn) {
+      classified.unmatchedLattes = true;
+    }
     
     if (article.title && classified.title === 'Periódico Não Identificado na Base') {
       classified.title = `[Não Identificado] ${article.journal}`;
@@ -565,7 +577,12 @@ async function processLattesArticles(parsedArticles, researcherName) {
   hideLoadingState();
   renderResultsTable();
   switchTab('analytics');
-  showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
+  
+  if (unmatchedCount > 0) {
+    showToast(`⚠ ${unmatchedCount} de ${parsedArticles.length} artigos não foram reconhecidos. Verifique a tabela manualmente.`, 'warning');
+  } else {
+    showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
+  }
 }
 
 /**
