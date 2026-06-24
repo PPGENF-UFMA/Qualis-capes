@@ -5,7 +5,7 @@ from collections import defaultdict
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -113,9 +113,11 @@ async def api_status():
 
 
 @app.get("/api/db-summary")
-async def api_db_summary():
+async def api_db_summary(response: Response, page: int = 1, limit: int = 100):
     items = enricher.get_db_summary()
-    return {"total": len(items), "items": items}
+    response.headers["Cache-Control"] = "max-age=300"
+    start = (page - 1) * limit
+    return {"total": len(items), "page": page, "items": items[start:start+limit]}
 
 
 @app.get("/api/classify/{issn}", response_model=ClassifyResponse)
@@ -140,10 +142,16 @@ async def api_classify_batch(body: BatchClassifyRequest, request: Request):
     if not _check_rate_limit(f"batch:{ip}", max_requests=10, window_seconds=60):
         raise HTTPException(status_code=429, detail="Limite de requisições de lote excedido. Tente novamente em 1 minuto.")
     client = get_http_client()
-    results = []
-    for issn in body.issns:
-        result = await enricher.enrich_and_classify(issn, client)
-        results.append(result)
+    
+    import asyncio
+    semaphore = asyncio.Semaphore(10)
+
+    async def classify_one(issn):
+        async with semaphore:
+            return await enricher.enrich_and_classify(issn, client)
+
+    tasks = [classify_one(issn) for issn in body.issns]
+    results = await asyncio.gather(*tasks)
     return {"results": results, "count": len(results)}
 
 
@@ -161,7 +169,8 @@ async def _fetch_lilacs_search(q: str, client: httpx.AsyncClient) -> tuple[list,
     for url_template in [LILACS_API_PRIMARY, LILACS_API_FALLBACK]:
         try:
             resp = await client.get(
-                f"{url_template}?q={q}",
+                url_template,
+                params={"q": q},
                 headers=headers, timeout=10,
             )
             if resp.status_code == 200:

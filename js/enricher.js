@@ -12,13 +12,13 @@ export function normalizeISSN(issn) {
 export async function loadDatabase() {
   if (dbSummary !== null) return dbSummary;
   try {
-    const response = await fetch('/api/db-summary');
+    const response = await fetch('/api/db-summary?limit=100');
     if (!response.ok) throw new Error(`Erro ao carregar banco: ${response.statusText}`);
     const data = await response.json();
-    dbSummary = {};
-    for (const item of data.items) {
-      dbSummary[item.issn] = { title: item.title, area: item.area };
-    }
+    dbSummary = {
+      total: data.total,
+      items: data.items
+    };
     return dbSummary;
   } catch (error) {
     console.error('Falha ao carregar base de dados:', error);
@@ -28,13 +28,8 @@ export async function loadDatabase() {
 }
 
 export function setDatabase(data) {
-  dbSummary = {};
-  for (const rawIssn in data) {
-    const norm = normalizeISSN(rawIssn);
-    if (norm) {
-      dbSummary[norm] = data[rawIssn];
-    }
-  }
+  dbSummary = { total: 0, items: [] };
+  // Mock function if needed
 }
 
 export async function enrichAndClassify(rawIssn) {

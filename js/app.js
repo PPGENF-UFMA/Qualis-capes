@@ -510,10 +510,9 @@ async function checkCircuitsStatus() {
 async function initDatabase() {
   try {
     const db = await loadDatabase();
-    const entries = Object.entries(db);
-    appState.dbSummary.total = entries.length;
-    appState.dbSummary.items = entries.map(([issn, value]) => ({
-      issn,
+    appState.dbSummary.total = db.total;
+    appState.dbSummary.items = db.items.map(value => ({
+      issn: value.issn,
       title: value.title,
       area: value.area,
       jcr: value.jcr,

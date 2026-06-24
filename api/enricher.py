@@ -19,6 +19,26 @@ def get_api_key() -> str:
     return os.environ.get("ELSEVIER_API_KEY", "")
 
 _journals_db: dict[str, dict] | None = None
+_title_index: dict[str, list[str]] = {}
+
+import unicodedata
+
+def _normalize_text(text: str) -> str:
+    if not text: return ""
+    text = text.lower()
+    text = unicodedata.normalize("NFD", text)
+    text = re.sub(r"[\u0300-\u036f]", "", text)
+    return text
+
+def _build_title_index():
+    global _title_index
+    _title_index.clear()
+    if not _journals_db: return
+    for issn, record in _journals_db.items():
+        title = _normalize_text(record.get("title", ""))
+        for token in title.split():
+            if len(token) >= 3:
+                _title_index.setdefault(token, []).append(issn)
 
 
 def normalize_issn(issn: str) -> str:
@@ -143,6 +163,7 @@ def load_database() -> dict[str, dict]:
                             db_rec[k] = record[k]
 
             _journals_db = temp_db
+            _build_title_index()
             return _journals_db
         except Exception as e:
             print(f"[ERRO] Falha ao carregar {JOURNALS_PATH}: {e}")
@@ -571,25 +592,49 @@ def search_by_name(query: str) -> list[dict]:
     if not query_lower:
         return []
 
-    import unicodedata
+    query_norm = _normalize_text(query_lower)
+    tokens = [t for t in query_norm.split() if len(t) >= 3]
+    
+    if not tokens:
+        results = []
+        for issn, record in db.items():
+            title = record.get("title") or ""
+            title_norm = _normalize_text(title)
+            if query_norm in title_norm:
+                results.append({
+                    "issn": issn,
+                    "title": title,
+                    "area": record.get("area", "Outras Áreas"),
+                    "source": "local",
+                })
+        return results[:50]
 
-    def normalize_text(text: str) -> str:
-        text = text.lower()
-        text = unicodedata.normalize("NFD", text)
-        text = re.sub(r"[\u0300-\u036f]", "", text)
-        return text
-
-    query_norm = normalize_text(query_lower)
+    matched_issns = None
+    for token in tokens:
+        token_matches = set()
+        for idx_token, issns in _title_index.items():
+            if token in idx_token:
+                token_matches.update(issns)
+                
+        if matched_issns is None:
+            matched_issns = token_matches
+        else:
+            matched_issns = matched_issns.intersection(token_matches)
+            
+        if not matched_issns:
+            break
+            
+    if not matched_issns:
+        return []
+        
     results = []
-    for issn, record in db.items():
-        title = record.get("title") or ""
-        title_norm = normalize_text(title)
-        if query_norm in title_norm:
-            results.append({
-                "issn": issn,
-                "title": title,
-                "area": record.get("area", "Outras Áreas"),
-                "source": "local",
-            })
-
+    for issn in matched_issns:
+        record = db.get(issn, {})
+        results.append({
+            "issn": issn,
+            "title": record.get("title", ""),
+            "area": record.get("area", "Outras Áreas"),
+            "source": "local",
+        })
+        
     return results[:50]

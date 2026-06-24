@@ -134,7 +134,13 @@ class CircuitBreaker:
         self.opened_at: float | None = None
         self.threshold = failure_threshold
         self.window = window_seconds
-        self.cooldown = cooldown_seconds
+        self.cooldown_base = cooldown_seconds
+        self._consecutive_opens = 0
+
+    def _get_cooldown(self) -> int:
+        """Cooldown com backoff exponencial: base -> base*2 -> base*4 -> base*8 (máx 600s)."""
+        factor = min(self._consecutive_opens, 3)
+        return min(self.cooldown_base * (2 ** factor), 600)
 
     def _clean_old_failures(self):
         now = time.time()
@@ -145,7 +151,7 @@ class CircuitBreaker:
         if self.state == "CLOSED":
             return True
         if self.state == "OPEN":
-            if self.opened_at is not None and (time.time() - self.opened_at) >= self.cooldown:
+            if self.opened_at is not None and (time.time() - self.opened_at) >= self._get_cooldown():
                 self.state = "HALF_OPEN"
                 return True
             return False
@@ -156,6 +162,7 @@ class CircuitBreaker:
     def record_success(self):
         if self.state == "HALF_OPEN":
             self.state = "CLOSED"
+            self._consecutive_opens = 0
         self.failures = []
 
     def record_failure(self):
@@ -165,14 +172,16 @@ class CircuitBreaker:
         if self.state == "HALF_OPEN":
             self.state = "OPEN"
             self.opened_at = now
+            self._consecutive_opens += 1
         elif self.state == "CLOSED" and len(self.failures) >= self.threshold:
             self.state = "OPEN"
             self.opened_at = now
+            self._consecutive_opens += 1
 
     def get_status(self) -> dict:
         remaining = 0
         if self.state == "OPEN" and self.opened_at is not None:
-            remaining = max(0, int(self.cooldown - (time.time() - self.opened_at)))
+            remaining = max(0, int(self._get_cooldown() - (time.time() - self.opened_at)))
         return {
             "state": self.state,
             "failure_count": len([t for t in self.failures if time.time() - t < self.window]),
@@ -180,10 +189,10 @@ class CircuitBreaker:
         }
 
 
-circuit_scielo = CircuitBreaker("scielo")
-circuit_lilacs = CircuitBreaker("lilacs")
-circuit_latindex = CircuitBreaker("latindex")
-circuit_elsevier = CircuitBreaker("elsevier")
+circuit_scielo = CircuitBreaker("scielo", failure_threshold=5, window_seconds=60, cooldown_seconds=120)
+circuit_lilacs = CircuitBreaker("lilacs", failure_threshold=5, window_seconds=60, cooldown_seconds=120)
+circuit_latindex = CircuitBreaker("latindex", failure_threshold=10, window_seconds=120, cooldown_seconds=300)
+circuit_elsevier = CircuitBreaker("elsevier", failure_threshold=3, window_seconds=60, cooldown_seconds=180)
 
 
 def get_all_circuit_statuses() -> dict:
