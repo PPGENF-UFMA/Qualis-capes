@@ -1,0 +1,5 @@
+[    3957ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8080/favicon.ico:0
+[  742493ms] [LOG] [Lattes Preview] Modal opened with 16 articles. @ http://127.0.0.1:8080/js/ui.js:214
+[ 1024113ms] [LOG] [Lattes Preview] Modal opened with 1 articles. @ http://127.0.0.1:8080/js/ui.js:214
+[ 1154009ms] [LOG] [Lattes Preview] Modal opened with 1 articles. @ http://127.0.0.1:8080/js/ui.js:214
+[ 1213725ms] [LOG] [Lattes Preview] Modal opened with 1 articles. @ http://127.0.0.1:8080/js/ui.js:214

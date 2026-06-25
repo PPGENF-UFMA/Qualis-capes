@@ -3,6 +3,7 @@ import sys
 import time
 import asyncio
 from collections import defaultdict
+from contextlib import asynccontextmanager
 
 import httpx
 from dotenv import load_dotenv
@@ -37,16 +38,38 @@ load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 _is_production = os.environ.get("ENVIRONMENT", "development").lower() == "production"
 
+
+# CORS restrito a origens locais (produção: adicionar domínio real)
+_allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
+
+_http_client: httpx.AsyncClient | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _http_client
+    _http_client = httpx.AsyncClient(timeout=30.0)
+    _load_trusted_proxies()
+    enricher.load_database()
+    api_key_set = "SIM" if os.environ.get("ELSEVIER_API_KEY") else "NAO"
+    db_size = len(enricher.load_database())
+    logger.info(f"Base carregada: {db_size} periodicos")
+    logger.info(f"ELSEVIER_API_KEY configurada: {api_key_set}")
+    logger.info(f"Servidor iniciado. Docs em /docs")
+    asyncio.create_task(enricher.run_latindex_canary(_http_client))
+    yield
+    if _http_client:
+        await _http_client.aclose()
+
+
 app = FastAPI(
     title="Qualis CAPES Classifier API",
     description="Classificação de periódicos conforme os critérios da CAPES.",
     version="2.0.0",
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
+    lifespan=lifespan,
 )
-
-# CORS restrito a origens locais (produção: adicionar domínio real)
-_allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
@@ -54,7 +77,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 router_v1 = APIRouter(prefix="/api/v1")
 
@@ -119,30 +142,6 @@ def _get_client_ip(request: Request) -> str:
         return forwarded.split(",")[0].strip()
     return client_host or "unknown"
 
-_http_client: httpx.AsyncClient | None = None
-
-
-@app.on_event("startup")
-async def startup():
-    global _http_client
-    _http_client = httpx.AsyncClient(timeout=30.0)
-    _load_trusted_proxies()
-    enricher.load_database()
-    api_key_set = "SIM" if os.environ.get("ELSEVIER_API_KEY") else "NAO"
-    db_size = len(enricher.load_database())
-    logger.info(f"Base carregada: {db_size} periodicos")
-    logger.info(f"ELSEVIER_API_KEY configurada: {api_key_set}")
-    logger.info(f"Servidor iniciado. Docs em /docs")
-    # Canary check do Latindex em background (não bloqueia startup)
-    asyncio.create_task(enricher.run_latindex_canary(_http_client))
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    global _http_client
-    if _http_client:
-        await _http_client.aclose()
-
 
 def get_http_client() -> httpx.AsyncClient:
     if _http_client is None:
@@ -172,12 +171,16 @@ async def api_status():
     db = enricher.load_database()
     has_key = bool(os.environ.get("ELSEVIER_API_KEY"))
     meta = enricher.get_database_meta()
+    total = len(db)
+    with_cs = sum(1 for r in db.values() if isinstance(r.get("citeScore"), (int, float)))
+    pct = round(with_cs / total * 100, 1) if total > 0 else 0
     return {
         "status": "ok",
         "version": "2.0.0",
-        "database_size": len(db),
+        "database_size": total,
         "elsevier_api_key": has_key,
         "citeScoreAvailable": has_key,
+        "citeScoreCoverage": {"count": with_cs, "total": total, "percent": pct},
         "circuits": cache.get_all_circuit_statuses(),
         "database_meta": meta,
     }

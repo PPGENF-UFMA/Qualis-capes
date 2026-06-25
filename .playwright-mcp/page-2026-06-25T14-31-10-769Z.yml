@@ -1,0 +1,90 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - img "Logo Qualis CAPES" [ref=e5]
+        - paragraph [ref=e7]: Classificador de Artigos (Enfermagem)
+      - generic [ref=e8]:
+        - button "Entenda como funciona a classificação" [ref=e9] [cursor=pointer]:
+          - img [ref=e10]
+          - generic [ref=e13]: Como funciona
+        - button "Alternar entre modo claro e escuro" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - generic [ref=e21]: Modo Claro
+    - generic [ref=e22]:
+      - complementary [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - button "Individual" [ref=e26] [cursor=pointer]:
+              - img [ref=e27]
+              - generic [ref=e30]: Individual
+            - button "Lote" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+              - generic [ref=e36]: Lote
+            - button "Planilha" [ref=e37] [cursor=pointer]:
+              - img [ref=e38]
+              - generic [ref=e41]: Planilha
+            - button "Currículo" [ref=e42] [cursor=pointer]:
+              - img [ref=e43]
+              - generic [ref=e46]: Currículo
+            - button "Comparar" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+              - generic [ref=e53]: Comparar
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - generic [ref=e57]: "Digite o ISSN ou Nome do Periódico:"
+              - textbox "Digite o ISSN ou Nome do Periódico:" [ref=e58]:
+                - /placeholder: "Ex: 0104-1169 ou Revista Latino-Americana de Enfermagem"
+            - button "Classificar Periódico" [ref=e59] [cursor=pointer]
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - heading "Periódicos Frequentes (PPGENF)" [level=3] [ref=e62]:
+              - img [ref=e63]
+              - text: Periódicos Frequentes (PPGENF)
+            - generic [ref=e66]:
+              - button "RLAE (A2)" [ref=e67] [cursor=pointer]
+              - button "REBEn (A4)" [ref=e68] [cursor=pointer]
+              - button "Acta Paulista (A3)" [ref=e69] [cursor=pointer]
+              - button "Texto & Contexto (A3)" [ref=e70] [cursor=pointer]
+          - generic [ref=e71]:
+            - heading "Buscas Recentes" [level=3] [ref=e72]:
+              - img [ref=e73]
+              - text: Buscas Recentes
+            - generic [ref=e78]: Nenhuma busca recente realizada.
+        - generic [ref=e80]: Carregando base local...
+      - main [ref=e81]:
+        - generic [ref=e82]:
+          - img [ref=e84]
+          - heading "Bem-vindo ao Classificador Qualis" [level=3] [ref=e86]
+          - paragraph [ref=e87]: "Esta ferramenta automatiza a classificação de periódicos seguindo as regras da CAPES (Área: Enfermagem)."
+          - generic [ref=e88]:
+            - generic [ref=e89]:
+              - img [ref=e91]
+              - heading "1. Escolha o Método" [level=4] [ref=e97]
+              - paragraph [ref=e98]: Use o menu lateral para selecionar entre busca individual, lote, arquivo CSV ou Currículo Lattes.
+            - generic [ref=e99]:
+              - img [ref=e101]
+              - heading "2. Processamento" [level=4] [ref=e104]
+              - paragraph [ref=e105]: O sistema buscará os dados em múltiplas bases (Qualis, SciELO, Scopus, JCR) e calculará o melhor estrato.
+            - generic [ref=e106]:
+              - img [ref=e108]
+              - heading "3. Análise" [level=4] [ref=e111]
+              - paragraph [ref=e112]: Examine a tabela detalhada, exporte para CSV ou analise os gráficos de distribuição no dashboard.
+  - contentinfo [ref=e113]:
+    - paragraph [ref=e114]: © 2026 - Classificador Qualis CAPES Automatizado. Desenvolvido para auxílio acadêmico.
+  - dialog "Selecione o Periódico":
+    - generic:
+      - generic:
+        - heading "Selecione o Periódico" [level=3]:
+          - img
+          - text: Selecione o Periódico
+        - button "Fechar modal":
+          - img
+      - paragraph: "Encontramos múltiplos periódicos para a sua busca. Escolha um abaixo para classificar:"
+  - alert "Carregando":
+    - generic:
+      - generic:
+        - generic:
+          - img
+      - heading "Processando Periódico" [level=3]
+      - paragraph: Consultando bases oficiais e aplicando critérios CAPES...

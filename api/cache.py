@@ -64,18 +64,12 @@ def check_cache_validity(cache_dict: dict, key: str, ttl_days: int = 30) -> dict
     return None
 
 
-_session_cache: dict[str, dict] = {}
-
 _scielo_cache: dict = load_json_cache(SCI_ELO_CACHE_PATH)
 _lilacs_cache: dict = load_json_cache(LILACS_CACHE_PATH)
 _latindex_cache: dict = load_json_cache(LATINDEX_CACHE_PATH)
 _citescore_cache: dict = load_json_cache(CITESCORE_CACHE_PATH)
 
 _discoveries_cache: dict = load_json_cache(DISCOVERIES_PATH)
-
-
-def get_session_cache() -> dict:
-    return _session_cache
 
 
 def get_scielo_cache() -> dict:

@@ -101,7 +101,7 @@ function setupEventListeners() {
     const rawIssns = batchText.split(/[\n,;\s]+/).map(i => i.trim()).filter(i => i !== '');
 
     // Processamento em lotes paralelos (5 por vez) para melhor performance
-    const CONCURRENCY = 5;
+    const CONCURRENCY = 10;
     let processedCount = 0;
     updateLoadingProgress(0, rawIssns.length);
     for (let i = 0; i < rawIssns.length; i += CONCURRENCY) {

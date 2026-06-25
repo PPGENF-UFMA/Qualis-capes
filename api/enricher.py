@@ -356,9 +356,13 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
         return result
     except httpx.HTTPStatusError as e:
         cb.record_failure()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        cache.save_scielo_cache({issn: {"scielo": False, "revenf": False, "title": None, "updated_at": today_str, "status": "error"}})
         return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": f"SciELO API error: {e.response.status_code}"}
     except (httpx.RequestError, httpx.TimeoutException):
         cb.record_failure()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        cache.save_scielo_cache({issn: {"scielo": False, "revenf": False, "title": None, "updated_at": today_str, "status": "error"}})
         return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": "Timeout"}
 
 
@@ -425,6 +429,8 @@ async def fetch_lilacs(issn: str, http_client: httpx.AsyncClient) -> dict:
         return result
 
     cb.record_failure()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    cache.save_lilacs_cache({issn: {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": today_str, "status": "error"}})
     return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "LILACS API error (primary + fallback)"}
 
 
@@ -470,9 +476,13 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
         return result
     except httpx.HTTPStatusError as e:
         cb.record_failure()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        cache.save_latindex_cache({issn: {"latindex": False, "title": None, "updated_at": today_str, "status": "error"}})
         return {"latindex": False, "title": None, "updated_at": None, "error": f"Latindex error: {e.response.status_code}"}
     except (httpx.RequestError, httpx.TimeoutException):
         cb.record_failure()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        cache.save_latindex_cache({issn: {"latindex": False, "title": None, "updated_at": today_str, "status": "error"}})
         return {"latindex": False, "title": None, "updated_at": None, "error": "Timeout"}
 
 
