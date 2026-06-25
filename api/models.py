@@ -27,6 +27,10 @@ class BatchClassifyRequest(BaseModel):
     issns: list[str]
 
 
+class BatchSearchRequest(BaseModel):
+    queries: list[str]
+
+
 class DbSummaryItem(BaseModel):
     issn: str
     title: str

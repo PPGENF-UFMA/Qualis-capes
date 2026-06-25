@@ -322,9 +322,9 @@ export function matchJournalToISSN(journalName, dbItems) {
   }
 
   // Define Adaptive Threshold based on query length
-  let THRESHOLD = 0.85;
-  if (normalizedQuery.length <= 10) THRESHOLD = 0.92;
-  else if (normalizedQuery.length <= 25) THRESHOLD = 0.88;
+  let THRESHOLD = 0.90;
+  if (normalizedQuery.length <= 10) THRESHOLD = 0.93;
+  else if (normalizedQuery.length <= 25) THRESHOLD = 0.90;
 
   let bestMatch = null;
   let highestScore = 0;

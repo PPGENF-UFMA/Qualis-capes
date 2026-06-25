@@ -47,7 +47,7 @@ def save_json_cache(path: str, data: dict):
         logger.error(f"Falha ao salvar cache no arquivo {path}: {e}")
 
 
-def check_cache_validity(cache_dict: dict, key: str) -> dict | None:
+def check_cache_validity(cache_dict: dict, key: str, ttl_days: int = 30) -> dict | None:
     entry = cache_dict.get(key)
     if not entry:
         return None
@@ -57,7 +57,7 @@ def check_cache_validity(cache_dict: dict, key: str) -> dict | None:
     try:
         updated_at = datetime.strptime(updated_at_str, "%Y-%m-%d")
         delta = datetime.now() - updated_at
-        if delta.days < 30:
+        if delta.days < ttl_days:
             return entry
     except ValueError:
         pass
@@ -139,6 +139,7 @@ class CircuitBreaker:
         self.window = window_seconds
         self.cooldown_base = cooldown_seconds
         self._consecutive_opens = 0
+        self._half_open_probe_in_flight = False
 
     def _get_cooldown(self) -> int:
         """Cooldown com backoff exponencial: base -> base*2 -> base*4 -> base*8 (máx 600s)."""
@@ -156,9 +157,14 @@ class CircuitBreaker:
         if self.state == "OPEN":
             if self.opened_at is not None and (time.time() - self.opened_at) >= self._get_cooldown():
                 self.state = "HALF_OPEN"
+                self._half_open_probe_in_flight = True
+                logger.info(f"Circuit breaker '{self.name}' half-open: probe liberado.")
                 return True
             return False
         if self.state == "HALF_OPEN":
+            if self._half_open_probe_in_flight:
+                return False
+            self._half_open_probe_in_flight = True
             return True
         return False
 
@@ -168,11 +174,13 @@ class CircuitBreaker:
             self._consecutive_opens = 0
             logger.info(f"Circuit breaker '{self.name}' fechou (half-open → closed)")
         self.failures = []
+        self._half_open_probe_in_flight = False
 
     def record_failure(self):
         now = time.time()
         self.failures.append(now)
         self._clean_old_failures()
+        self._half_open_probe_in_flight = False
         if self.state == "HALF_OPEN":
             self.state = "OPEN"
             self.opened_at = now

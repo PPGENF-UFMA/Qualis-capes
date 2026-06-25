@@ -5,14 +5,14 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { loadDatabase, enrichAndClassify, normalizeISSN, searchByName, classifyByName } from './enricher.js';
+import { enrichAndClassify, normalizeISSN, searchByName, classifyByName, searchBatch } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
 import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js';
-import { parseLattesText, initLattesParser } from './lattesParser.js';
+import { initLattesParser, segmentLattesText, parseSingleArticle } from './lattesParser.js';
 import { updateComparisonDashboard } from './compare.js';
 import {
   switchTab, switchInputType,
@@ -317,8 +317,7 @@ function setupEventListeners() {
       showLoadingState('Analisando Currículo Lattes', 'Segmentando artigos e aplicando inteligência de abreviações...', 'file-text');
 
       try {
-        const dbItems = appState.dbSummary.items;
-        const parsedArticles = parseLattesText(lattesText, dbItems);
+        const parsedArticles = await parseLattesWithServerMatching(lattesText);
         
         if (parsedArticles.length === 0) {
           hideLoadingState();
@@ -358,9 +357,8 @@ function setupEventListeners() {
       showLoadingState('Comparando Currículos', 'Processando artigos e calculando indicadores...', 'git-compare');
 
       try {
-        const dbItems = appState.dbSummary.items;
-        const articlesA = parseLattesText(textA, dbItems);
-        const articlesB = parseLattesText(textB, dbItems);
+        const articlesA = await parseLattesWithServerMatching(textA);
+        const articlesB = await parseLattesWithServerMatching(textB);
 
         if (articlesA.length === 0 && articlesB.length === 0) {
           hideLoadingState();
@@ -514,18 +512,14 @@ async function checkCircuitsStatus() {
 
 /**
  * Inicializa a Base de Dados e exibe status na interface.
+ * Busca apenas a contagem de periódicos via API de status (nao carrega 35K itens).
  */
 async function initDatabase() {
   try {
-    const db = await loadDatabase();
-    appState.dbSummary.total = db.total;
-    appState.dbSummary.items = db.items.map(value => ({
-      issn: value.issn,
-      title: value.title,
-      area: value.area,
-      jcr: value.jcr,
-      citeScore: value.citeScore
-    }));
+    const resp = await fetch('/api/v1/status');
+    if (!resp.ok) throw new Error('Status API error');
+    const data = await resp.json();
+    appState.dbSummary.total = data.database_size || 0;
 
     dom.dbStatus.textContent = `Base Conectada (${appState.dbSummary.total} revistas)`;
   } catch (error) {
@@ -534,6 +528,31 @@ async function initDatabase() {
     dom.dbStatus.style.color = 'var(--error)';
     showToast('Falha ao carregar a base de dados de periódicos.', 'error');
   }
+}
+
+/**
+ * Parseia texto Lattes com matching server-side (via /api/v1/search/batch).
+ * Substitui o matching local Jaro-Winkler por busca no backend.
+ * @param {string} text Texto bruto do Lattes
+ * @returns {Promise<Object[]>} Artigos parseados com matchedIssn resolvido
+ */
+async function parseLattesWithServerMatching(text) {
+  const segments = segmentLattesText(text);
+  const parsed = segments.map(s => parseSingleArticle(s)).filter(a => a.type !== 'congresso');
+  
+  if (parsed.length === 0) return [];
+
+  const namesToResolve = parsed.map(a => a.journal);
+  const resolved = await searchBatch(namesToResolve);
+  
+  for (let i = 0; i < parsed.length; i++) {
+    const match = resolved[i];
+    if (match && match.issn) {
+      parsed[i].matchedIssn = match.issn;
+    }
+  }
+  
+  return parsed;
 }
 
 /**

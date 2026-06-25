@@ -94,3 +94,24 @@ export async function classifyByName(journalName) {
   }
   return null;
 }
+
+/**
+ * Busca em lote por nomes de periódicos no backend.
+ * @param {string[]} queries Lista de nomes de periódicos
+ * @returns {Promise<Object[]>} Lista de resultados (cada posição corresponde à query)
+ */
+export async function searchBatch(queries) {
+  try {
+    const response = await fetch('/api/v1/search/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries })
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error('[API] Erro na busca em lote:', error);
+    return [];
+  }
+}

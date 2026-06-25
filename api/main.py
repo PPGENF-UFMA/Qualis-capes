@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 from . import cache
 from . import enricher
-from .models import BatchClassifyRequest, ClassifyResponse
+from .models import BatchClassifyRequest, BatchSearchRequest, ClassifyResponse
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
@@ -54,10 +54,27 @@ router_v1 = APIRouter(prefix="/api/v1")
 # ─── Rate Limiter simples (in-memory token bucket) ─────────────────
 
 _rate_limits: dict[str, list[float]] = defaultdict(list)
+_rate_limit_calls: int = 0
+_RATE_LIMIT_GC_INTERVAL = 200
+
+
+def _cleanup_rate_limits():
+    """Remove chaves expiradas para evitar memory leak."""
+    evicted = 0
+    stale: list[str] = []
+    for key, ts_list in _rate_limits.items():
+        if not ts_list:
+            stale.append(key)
+            evicted += 1
+    for key in stale:
+        del _rate_limits[key]
+    if evicted > 0:
+        logger.debug(f"Rate limiter GC: {evicted} chaves removidas, {len(_rate_limits)} restantes.")
 
 
 def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
     """Retorna True se a request é permitida, False se excedeu o limite."""
+    global _rate_limit_calls
     now = time.time()
     timestamps = _rate_limits[key]
     # Limpar timestamps antigos
@@ -65,15 +82,34 @@ def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
     if len(_rate_limits[key]) >= max_requests:
         return False
     _rate_limits[key].append(now)
+
+    _rate_limit_calls += 1
+    if _rate_limit_calls % _RATE_LIMIT_GC_INTERVAL == 0:
+        _cleanup_rate_limits()
     return True
 
 
+_trusted_proxies: set[str] = set()
+
+def _load_trusted_proxies():
+    """Carrega lista de proxies confiáveis da env var TRUSTED_PROXIES (CSV ou IP único)."""
+    raw = os.environ.get("TRUSTED_PROXIES", "")
+    if raw:
+        _trusted_proxies.update(ip.strip() for ip in raw.split(",") if ip.strip())
+
+
 def _get_client_ip(request: Request) -> str:
-    """Obtém IP do cliente para rate limiting."""
+    """Obtém IP do cliente para rate limiting.
+
+    Só confia no header X-Forwarded-For se o request veio de um proxy
+    listado em TRUSTED_PROXIES (env var). Caso contrário, usa o IP direto
+    da conexão para evitar bypass via header spoofed.
+    """
+    client_host = request.client.host if request.client else None
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    if forwarded and client_host and client_host in _trusted_proxies:
         return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return client_host or "unknown"
 
 _http_client: httpx.AsyncClient | None = None
 
@@ -82,6 +118,7 @@ _http_client: httpx.AsyncClient | None = None
 async def startup():
     global _http_client
     _http_client = httpx.AsyncClient(timeout=30.0)
+    _load_trusted_proxies()
     enricher.load_database()
     api_key_set = "SIM" if os.environ.get("ELSEVIER_API_KEY") else "NAO"
     db_size = len(enricher.load_database())
@@ -243,6 +280,30 @@ async def api_search(q: str = "", request: Request = None):
             cb.record_failure()
 
     return {"results": results, "count": len(results)}
+
+
+@router_v1.post("/search/batch")
+async def api_search_batch(body: BatchSearchRequest, request: Request):
+    if not body.queries:
+        raise HTTPException(status_code=400, detail="Lista de consultas vazia")
+    if len(body.queries) > 100:
+        raise HTTPException(status_code=400, detail="Máximo de 100 consultas por lote.")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"search:{ip}", max_requests=30, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de buscas excedido. Tente novamente em 1 minuto.")
+
+    def _resolve_one(name: str) -> dict | None:
+        if not name or not name.strip():
+            return None
+        results = enricher.search_by_name(name)
+        if results:
+            return results[0]
+        return None
+
+    import asyncio as _asyncio
+    loop = _asyncio.get_event_loop()
+    resolved = await loop.run_in_executor(None, lambda: [_resolve_one(q) for q in body.queries])
+    return {"results": resolved, "count": len(resolved)}
 
 
 # Aliases temporários (deprecated) com redirect

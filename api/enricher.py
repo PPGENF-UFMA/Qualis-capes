@@ -23,6 +23,7 @@ def get_api_key() -> str:
 
 _journals_db: dict[str, dict] | None = None
 _title_index: dict[str, list[str]] = {}
+_db_summary_cache: list[dict] | None = None
 
 import unicodedata
 
@@ -32,6 +33,79 @@ def _normalize_text(text: str) -> str:
     text = unicodedata.normalize("NFD", text)
     text = re.sub(r"[\u0300-\u036f]", "", text)
     return text
+
+
+def _jaro_winkler(s1: str, s2: str) -> float:
+    """Algoritmo Jaro-Winkler — similaridade entre 0.0 e 1.0."""
+    if s1 == s2:
+        return 1.0
+    len1, len2 = len(s1), len(s2)
+    if len1 == 0 or len2 == 0:
+        return 0.0
+    max_dist = max(len1, len2) // 2 - 1
+    hash_s1 = [0] * len1
+    hash_s2 = [0] * len2
+    m = 0
+    for i in range(len1):
+        start = max(0, i - max_dist)
+        end = min(len2, i + max_dist + 1)
+        for j in range(start, end):
+            if s1[i] == s2[j] and hash_s2[j] == 0:
+                hash_s1[i] = 1
+                hash_s2[j] = 1
+                m += 1
+                break
+    if m == 0:
+        return 0.0
+    t = 0
+    point = 0
+    for i in range(len1):
+        if hash_s1[i]:
+            while point < len2 and hash_s2[point] == 0:
+                point += 1
+            if point < len2 and s1[i] != s2[point]:
+                t += 1
+            point += 1
+    t = t // 2
+    jaro = (m / len1 + m / len2 + (m - t) / m) / 3.0
+    p = 0.1
+    l = 0
+    for i in range(min(4, min(len1, len2))):
+        if s1[i] == s2[i]:
+            l += 1
+        else:
+            break
+    return jaro + l * p * (1 - jaro)
+
+
+def _fuzzy_match_name(query: str, db_items: list[dict], threshold: float = 0.90) -> list[dict]:
+    """Busca fuzzy (Jaro-Winkler) entre um nome e os títulos da base local.
+
+    Retorna resultados ordenados por score de similaridade, acima do threshold.
+    """
+    if not query or not db_items:
+        return []
+    norm_query = _normalize_text(query)
+    if not norm_query:
+        return []
+    query_terms = [t for t in norm_query.split() if len(t) >= 3]
+    candidates = []
+    for item in db_items:
+        title = item.get("title") or ""
+        norm_title = _normalize_text(title)
+        if not norm_title:
+            continue
+        if query_terms:
+            if not any(t in norm_title for t in query_terms):
+                continue
+        score = _jaro_winkler(norm_query, norm_title)
+        if score >= threshold:
+            candidates.append((item.get("issn"), item.get("title"), score))
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    return [
+        {"issn": issn, "title": title, "area": "Outras Áreas", "source": "local-fuzzy"}
+        for issn, title, _ in candidates[:20]
+    ]
 
 def _build_title_index():
     global _title_index
@@ -114,7 +188,7 @@ def _merge_records(r1: dict, r2: dict) -> dict:
     return merged
 
 def load_database() -> dict[str, dict]:
-    global _journals_db, _database_meta
+    global _journals_db, _database_meta, _db_summary_cache
     
     # Fast path if already loaded
     if _journals_db is not None:
@@ -183,6 +257,7 @@ def load_database() -> dict[str, dict]:
 
             _journals_db = temp_db
             _build_title_index()
+            _db_summary_cache = build_summary_cache(temp_db)
             return _journals_db
         except Exception as e:
             logger.error(f"Falha ao carregar {JOURNALS_PATH}: {e}")
@@ -196,8 +271,8 @@ def get_database_meta() -> dict | None:
     return _database_meta
 
 
-def get_db_summary() -> list[dict]:
-    db = load_database()
+def build_summary_cache(db: dict[str, dict]) -> list[dict]:
+    """Pré-constrói a lista de resumo para evitar O(N) a cada request."""
     items = []
     for issn, record in db.items():
         items.append({
@@ -206,6 +281,12 @@ def get_db_summary() -> list[dict]:
             "area": record.get("area", "Outras Áreas"),
         })
     return items
+
+
+def get_db_summary() -> list[dict]:
+    if _db_summary_cache is not None:
+        return _db_summary_cache
+    return build_summary_cache(load_database())
 
 
 async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
@@ -370,7 +451,7 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
 
 async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | None:
     citescore_cache = cache.get_citescore_cache()
-    cached = cache.check_cache_validity(citescore_cache, issn)
+    cached = cache.check_cache_validity(citescore_cache, issn, ttl_days=7)
     if cached:
         return cached.get("citeScore")
 
@@ -658,7 +739,7 @@ def search_by_name(query: str) -> list[dict]:
             break
             
     if not matched_issns:
-        return []
+        return _fuzzy_match_name(query_norm, get_db_summary())
         
     results = []
     for issn in matched_issns:
@@ -669,5 +750,13 @@ def search_by_name(query: str) -> list[dict]:
             "area": record.get("area", "Outras Áreas"),
             "source": "local",
         })
-        
-    return results[:50]
+
+    limited = results[:50]
+    if len(limited) < 3:
+        fuzzy = _fuzzy_match_name(query_norm, get_db_summary())
+        seen = set(r["issn"] for r in limited)
+        for fr in fuzzy:
+            if fr["issn"] not in seen:
+                limited.append(fr)
+                seen.add(fr["issn"])
+    return limited
