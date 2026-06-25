@@ -141,18 +141,23 @@ export function segmentLattesText(text) {
   cleanText = cleanText.replace(/\r?\n/g, " ");
   cleanText = cleanText.replace(/\s+/g, " ");
 
-  // Expressão regular para encontrar artigos (cada um termina com o ano e ponto)
-  // O padrão busca por: conteúdo geral + vírgula + volume/páginas (opcional) + ano (4 dígitos) + ponto final
+  // Regex primária: artigos que terminam com ano + ponto (ex: "..., 2023.")
   const articleRegex = /(.*?,\s*\d{4}\.(?:\s*Citações:\d+)?)/gi;
-  const matches = cleanText.match(articleRegex);
+  const matches = cleanText.match(articleRegex) || [];
+
+  // Regex secundária: artigos "no prelo" / "in press" (sem ano)
+  const inPressPattern = /(.*?,\s*(?:no prelo|in press|aceito para publica[çc][aã]o)\s*\.?(?:\s*Citações:\d+)?)/gi;
+  const inPressMatches = cleanText.match(inPressPattern) || [];
+
+  const allMatches = [...matches, ...inPressMatches];
   
-  if (!matches) {
+  if (allMatches.length === 0) {
     // Se a regex global falhar, tenta quebrar por numeração clássica (ex: "1. ", "2. ")
     const numberedSplit = cleanText.split(/\s+\b\d+\.\s+/);
     return numberedSplit.map(s => s.trim()).filter(s => s.length > 20);
   }
 
-  return matches.map(s => s.trim()).filter(s => s.length > 20);
+  return allMatches.map(s => s.trim()).filter(s => s.length > 20);
 }
 
 const CONGRESS_KEYWORDS = [

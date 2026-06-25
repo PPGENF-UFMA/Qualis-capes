@@ -289,6 +289,33 @@ def get_db_summary() -> list[dict]:
     return build_summary_cache(load_database())
 
 
+# ISSNs de periódicos estabelecidos de Enfermagem que devem estar no Latindex.
+# Se TODOS falharem, o scraping do Latindex provavelmente quebrou.
+_LATINDEX_CANARY_ISSNS = ["0034-7167", "1518-8345"]
+
+
+async def run_latindex_canary(http_client: httpx.AsyncClient):
+    """Verifica se o scraping do Latindex está funcionando.
+    
+    Consulta ISSNs canários conhecidos. Se todos falharem, loga WARNING.
+    Deve ser chamado no startup do servidor.
+    """
+    failures = 0
+    for issn in _LATINDEX_CANARY_ISSNS:
+        cached = cache.check_cache_validity(cache.get_latindex_cache(), issn)
+        if cached:
+            continue
+        result = await fetch_latindex(issn, http_client)
+        if not result.get("latindex"):
+            failures += 1
+    if failures == len(_LATINDEX_CANARY_ISSNS):
+        logger.warning(
+            "Latindex canary: TODOS os ISSNs canarios falharam. "
+            "O scraping do Latindex pode estar quebrado. "
+            "Classificacoes A8 podem estar incorretas."
+        )
+
+
 async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
     cached = cache.check_cache_validity(cache.get_scielo_cache(), issn)
     if cached:
@@ -613,6 +640,17 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
             if "SCOPUS" not in [idx.upper() for idx in indexers]:
                 indexers.append("SCOPUS")
                 db_record["indexers"] = indexers
+
+        # Persistir CiteScore no cache de discoveries para sobreviver a restarts
+        discoveries = cache.get_discoveries()
+        if normalized in discoveries:
+            discoveries[normalized]["citeScore"] = db_record.get("citeScore")
+            discoveries[normalized]["jcr"] = db_record.get("jcr")
+            discoveries[normalized]["indexers"] = list(db_record.get("indexers") or [])
+            cache.save_json_cache(
+                os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json"),
+                discoveries
+            )
 
     classification = engine.classify_journal(db_record)
 

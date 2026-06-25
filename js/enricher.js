@@ -3,10 +3,21 @@ let dbSummary = null;
 export function normalizeISSN(issn) {
   if (typeof issn !== 'string') return '';
   const cleaned = issn.replace(/[^0-9Xx]/g, '').toUpperCase();
-  if (cleaned.length === 8) {
-    return `${cleaned.substring(0, 4)}-${cleaned.substring(4)}`;
+  if (cleaned.length !== 8) return '';
+  if (cleaned.slice(0, 7).includes('X')) return '';
+  const weights = [8, 7, 6, 5, 4, 3, 2];
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    total += parseInt(cleaned[i], 10) * weights[i];
   }
-  return '';
+  const rem = total % 11;
+  const check = 11 - rem;
+  let expected;
+  if (check === 10) expected = 'X';
+  else if (check === 11) expected = '0';
+  else expected = String(check);
+  if (cleaned[7] !== expected) return '';
+  return `${cleaned.substring(0, 4)}-${cleaned.substring(4)}`;
 }
 
 export async function loadDatabase() {

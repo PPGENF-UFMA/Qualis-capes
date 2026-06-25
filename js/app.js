@@ -163,14 +163,32 @@ function setupEventListeners() {
     switchInputType('single');
   });
 
-  dom.btnExport.addEventListener('click', () => {
+  dom.btnExport.addEventListener('click', async () => {
     if (appState.classifiedItems.length === 0) return;
     const searchVal = dom.searchBox.value;
     const filterVal = dom.filterEstrato.value;
     const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
     const sortVal = dom.sortBy ? dom.sortBy.value : 'relevance';
     const filtered = getFilteredItems(searchVal, filterVal, filterYearVal, sortVal);
-    const csvContent = generateCSV(filtered);
+
+    // Buscar metadados da base para incluir no CSV
+    let csvMeta = {};
+    try {
+      const statusResp = await fetch('/api/v1/status');
+      if (statusResp.ok) {
+        const statusData = await statusResp.json();
+        const meta = statusData.database_meta || {};
+        csvMeta = {
+          date: new Date().toISOString(),
+          compiledAt: meta.compiled_at || '',
+          jcrYear: meta.jcr_year || '',
+          cuidenEdition: meta.cuiden_edition || '',
+          totalItems: filtered.length
+        };
+      }
+    } catch (_) { /* silencioso — metadados são opcionais */ }
+
+    const csvContent = generateCSV(filtered, csvMeta);
     const dateStr = new Date().toISOString().slice(0, 10);
     downloadFile(csvContent, `qualis_classificado_${dateStr}.csv`, 'text/csv');
     showToast('Arquivo CSV exportado com sucesso!', 'success');
@@ -476,6 +494,20 @@ async function checkCiteScoreStatus() {
         dom.dbCompiledAt.textContent = `📅 Base compilada: ${formatted}${warning}`;
         dom.dbCompiledAt.style.display = 'block';
         dom.dbCompiledAt.style.color = color;
+
+        // Exibir edições das fontes de dados
+        if (data.database_meta) {
+          const parts = [];
+          if (data.database_meta.jcr_year) parts.push(`JCR ${data.database_meta.jcr_year}`);
+          if (data.database_meta.cuiden_edition) parts.push(`CUIDEN ${data.database_meta.cuiden_edition}`);
+          if (parts.length > 0) {
+            const el = document.getElementById('db-sources-info');
+            if (el) {
+              el.textContent = `📚 Fontes: ${parts.join(' · ')}`;
+              el.style.display = 'block';
+            }
+          }
+        }
       } catch (_) { /* ignore date parse errors */ }
     }
   } catch (e) {

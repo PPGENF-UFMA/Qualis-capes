@@ -161,11 +161,34 @@ export function processCSVData(parsedCSV) {
 /**
  * Converte os dados classificados de volta para o formato CSV.
  * @param {Object[]} classifiedItems Array de itens classificados
+ * @param {Object} [meta] Metadados opcionais de auditoria
  * @returns {string} String CSV formatada
  */
-export function generateCSV(classifiedItems) {
+export function generateCSV(classifiedItems, meta = {}) {
   const delimiter = ';'; // Ponto e vírgula é ideal para o Excel brasileiro
-  
+
+  const escapeCSV = (val) => {
+    if (val === null || val === undefined) return '';
+    const stringVal = String(val);
+    if (stringVal.includes(delimiter) || stringVal.includes('"') || stringVal.includes('\n')) {
+      return `"${stringVal.replace(/"/g, '""')}"`;
+    }
+    return stringVal;
+  };
+
+  const rows = [];
+
+  // Bloco de metadados de auditoria (visível como comentários # no topo)
+  if (meta.date || meta.compiledAt || meta.jcrYear) {
+    rows.push('# ===== METADADOS DA CONSULTA =====');
+    if (meta.date) rows.push(`# Data da consulta: ${meta.date}`);
+    if (meta.compiledAt) rows.push(`# Base compilada em: ${meta.compiledAt}`);
+    if (meta.jcrYear) rows.push(`# Edicao JCR: ${meta.jcrYear}`);
+    if (meta.cuidenEdition) rows.push(`# Edicao CUIDEN: ${meta.cuidenEdition}`);
+    if (meta.totalItems !== undefined) rows.push(`# Total de itens: ${meta.totalItems}`);
+    rows.push('# ===== DADOS =====');
+  }
+
   const headers = [
     'Título do Artigo',
     'ISSN',
@@ -178,16 +201,7 @@ export function generateCSV(classifiedItems) {
     'Justificativa da Regra'
   ];
 
-  const escapeCSV = (val) => {
-    if (val === null || val === undefined) return '';
-    const stringVal = String(val);
-    if (stringVal.includes(delimiter) || stringVal.includes('"') || stringVal.includes('\n')) {
-      return `"${stringVal.replace(/"/g, '""')}"`;
-    }
-    return stringVal;
-  };
-
-  const rows = [headers.map(escapeCSV).join(delimiter)];
+  rows.push(headers.map(escapeCSV).join(delimiter));
 
   for (const item of classifiedItems) {
     const indexersStr = Array.isArray(item.indexers) ? item.indexers.join(', ') : '';

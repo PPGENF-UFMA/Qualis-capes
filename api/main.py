@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import asyncio
 from collections import defaultdict
 
 import httpx
@@ -19,6 +20,13 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+audit_logger = logging.getLogger("audit")
+audit_logger.setLevel(logging.INFO)
+# Garantir que o log de auditoria tenha seu próprio handler saindo no console
+_audit_handler = logging.StreamHandler(sys.stdout)
+_audit_handler.setFormatter(logging.Formatter('%(asctime)s|AUDIT|%(message)s'))
+audit_logger.addHandler(_audit_handler)
+audit_logger.propagate = False
 
 from . import cache
 from . import enricher
@@ -125,6 +133,8 @@ async def startup():
     logger.info(f"Base carregada: {db_size} periodicos")
     logger.info(f"ELSEVIER_API_KEY configurada: {api_key_set}")
     logger.info(f"Servidor iniciado. Docs em /docs")
+    # Canary check do Latindex em background (não bloqueia startup)
+    asyncio.create_task(enricher.run_latindex_canary(_http_client))
 
 
 @app.on_event("shutdown")
@@ -193,6 +203,7 @@ async def api_classify(issn: str, request: Request):
         raise HTTPException(status_code=429, detail="Limite de requisições excedido. Tente novamente em 1 minuto.")
     client = get_http_client()
     result = await enricher.enrich_and_classify(issn, client)
+    audit_logger.info(f"classify|ip={ip}|issn={issn}|estrato={result.get('classification', {}).get('estrato', '?')}|area={result.get('area', '?')}")
     return result
 
 
@@ -279,6 +290,7 @@ async def api_search(q: str = "", request: Request = None):
         else:
             cb.record_failure()
 
+    audit_logger.info(f"search|ip={ip}|q={q[:80]}|results={len(results)}")
     return {"results": results, "count": len(results)}
 
 
@@ -300,8 +312,7 @@ async def api_search_batch(body: BatchSearchRequest, request: Request):
             return results[0]
         return None
 
-    import asyncio as _asyncio
-    loop = _asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
     resolved = await loop.run_in_executor(None, lambda: [_resolve_one(q) for q in body.queries])
     return {"results": resolved, "count": len(resolved)}
 
