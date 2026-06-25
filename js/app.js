@@ -5,7 +5,7 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { loadDatabase, enrichAndClassify, normalizeISSN, searchByName } from './enricher.js';
+import { loadDatabase, enrichAndClassify, normalizeISSN, searchByName, classifyByName } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
@@ -22,7 +22,8 @@ import {
   initTheme, toggleTheme, showToast,
   addRecentSearch, renderRecentSearches,
   updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal,
-  initQuadrienios
+  initQuadrienios,
+  showClassificationInfoModal, closeClassificationInfoModal
 } from './ui.js';
 
 // ─── Inicialização ───────────────────────────────────────────────
@@ -254,6 +255,9 @@ function setupEventListeners() {
     if (e.key === 'Escape' && dom.comparisonModal && dom.comparisonModal.classList.contains('active')) {
       closeComparisonModal();
     }
+    if (e.key === 'Escape' && dom.classificationInfoModal && dom.classificationInfoModal.style.display === 'flex') {
+      closeClassificationInfoModal();
+    }
   });
 
   // Modal de Comparação
@@ -266,6 +270,19 @@ function setupEventListeners() {
   if (dom.comparisonModal) {
     dom.comparisonModal.addEventListener('click', (e) => {
       if (e.target === dom.comparisonModal) closeComparisonModal();
+    });
+  }
+
+  // Modal "Como funciona a classificação"
+  if (dom.btnClassificationInfo) {
+    dom.btnClassificationInfo.addEventListener('click', showClassificationInfoModal);
+  }
+  if (dom.btnCloseClassificationInfo) {
+    dom.btnCloseClassificationInfo.addEventListener('click', closeClassificationInfoModal);
+  }
+  if (dom.classificationInfoModal) {
+    dom.classificationInfoModal.addEventListener('click', (e) => {
+      if (e.target === dom.classificationInfoModal) closeClassificationInfoModal();
     });
   }
 
@@ -354,26 +371,14 @@ function setupEventListeners() {
         // Processar perfil A
         const itemsA = [];
         for (const article of articlesA) {
-          const classified = await enrichAndClassify(article.matchedIssn || article.journal);
-          if (article.title && classified.title === 'Periódico Não Identificado na Base') {
-            classified.title = `[Não Identificado] ${article.journal}`;
-          } else if (article.title && classified.title) {
-            classified.title = `${article.title} (${classified.title})`;
-          }
-          classified.year = article.year;
+          const classified = await classifyArticleWithFallback(article);
           itemsA.push(classified);
         }
 
         // Processar perfil B
         const itemsB = [];
         for (const article of articlesB) {
-          const classified = await enrichAndClassify(article.matchedIssn || article.journal);
-          if (article.title && classified.title === 'Periódico Não Identificado na Base') {
-            classified.title = `[Não Identificado] ${article.journal}`;
-          } else if (article.title && classified.title) {
-            classified.title = `${article.title} (${classified.title})`;
-          }
-          classified.year = article.year;
+          const classified = await classifyArticleWithFallback(article);
           itemsB.push(classified);
         }
 
@@ -532,6 +537,39 @@ async function initDatabase() {
 }
 
 /**
+ * Classifica um artigo do Lattes com fallback de busca por nome.
+ * Se o artigo tem matchedIssn, classifica diretamente.
+ * Se não tem, tenta busca por nome; se encontrar 1 resultado, usa.
+ * Caso contrário, marca como não identificado.
+ * @param {Object} article Artigo parseado pelo lattesParser
+ * @returns {Promise<Object>} Item classificado
+ */
+async function classifyArticleWithFallback(article) {
+  let classified;
+
+  if (article.matchedIssn) {
+    classified = await enrichAndClassify(article.matchedIssn);
+  } else {
+    const fallback = await classifyByName(article.journal);
+    if (fallback) {
+      classified = fallback;
+    } else {
+      classified = await enrichAndClassify(article.journal);
+      classified.unmatchedLattes = true;
+    }
+  }
+
+  if (article.title && classified.title === 'Periódico Não Identificado na Base') {
+    classified.title = `[Não Identificado] ${article.journal}`;
+  } else if (article.title && classified.title) {
+    classified.title = `${article.title} (${classified.title})`;
+  }
+
+  classified.year = article.year;
+  return classified;
+}
+
+/**
  * Processa a lista de artigos do Lattes: enriquece, classifica e atualiza a UI.
  * @param {Object[]} parsedArticles Artigos parseados pelo lattesParser
  * @param {string} researcherName Nome do pesquisador
@@ -546,23 +584,11 @@ async function processLattesArticles(parsedArticles, researcherName) {
   for (const article of parsedArticles) {
     if (article.type === 'congresso') continue;
 
-    if (!article.matchedIssn) {
+    const classified = await classifyArticleWithFallback(article);
+
+    if (classified.unmatchedLattes) {
       unmatchedCount++;
     }
-
-    const classified = await enrichAndClassify(article.matchedIssn || article.journal);
-
-    if (!article.matchedIssn) {
-      classified.unmatchedLattes = true;
-    }
-    
-    if (article.title && classified.title === 'Periódico Não Identificado na Base') {
-      classified.title = `[Não Identificado] ${article.journal}`;
-    } else if (article.title && classified.title) {
-      classified.title = `${article.title} (${classified.title})`;
-    }
-
-    classified.year = article.year;
 
     addClassifiedItem(classified);
     countNew++;

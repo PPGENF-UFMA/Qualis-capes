@@ -129,7 +129,12 @@ const dom = {
   paneComparison: document.getElementById('tab-content-comparison'),
   comparisonKpisBody: document.getElementById('comparison-kpis-body'),
   comparisonRadarChart: document.getElementById('comparison-radar-chart'),
-  comparisonEstratoChart: document.getElementById('comparison-estrato-chart')
+  comparisonEstratoChart: document.getElementById('comparison-estrato-chart'),
+
+  // Modal "Como funciona a classificação"
+  btnClassificationInfo: document.getElementById('btn-classification-info'),
+  classificationInfoModal: document.getElementById('classification-info-modal'),
+  btnCloseClassificationInfo: document.getElementById('btn-close-classification-info')
 };
 
 export default dom;

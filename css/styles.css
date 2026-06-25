@@ -218,6 +218,40 @@ body.light-theme .logo-image {
   border-color: rgba(99, 102, 241, 0.4);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-info-btn {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: var(--font-title);
+  font-weight: 500;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+  backdrop-filter: blur(10px);
+}
+
+.header-info-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--text-primary);
+}
+
+.header-info-btn .lucide {
+  width: 16px;
+  height: 16px;
+}
+
 /* --- GLASS PANEL CARD --- */
 .card {
   background: var(--panel-bg);
@@ -2387,4 +2421,123 @@ body.light-theme .insight-item {
 
 #comparison-modal .compare-profile-col {
   padding: 16px;
+}
+
+/* ─── Modal "Como funciona a classificação" ───────────────────── */
+
+#classification-info-modal .search-modal-card {
+  overflow-y: auto;
+}
+
+.classification-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  max-height: 60vh;
+  padding-right: 8px;
+}
+
+.info-section h4 {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-section h4 .lucide {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+}
+
+.info-section p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.info-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px !important;
+}
+
+.classification-rules-table,
+.sources-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.classification-rules-table th,
+.classification-rules-table td,
+.sources-table th,
+.sources-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.classification-rules-table th,
+.sources-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.classification-rules-table td {
+  color: var(--text-primary);
+}
+
+.sources-table td {
+  color: var(--text-secondary);
+}
+
+.sources-table td:first-child {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.info-section ol,
+.info-section ul {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  padding-left: 20px;
+}
+
+.info-section li {
+  margin-bottom: 6px;
+}
+
+.classification-rules-table .estrato-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+@media (max-width: 768px) {
+  .header-info-btn span {
+    display: none;
+  }
+
+  .header-info-btn {
+    padding: 10px 12px;
+  }
+
+  #classification-info-modal .search-modal-card {
+    width: 95%;
+    padding: 20px;
+  }
+
+  .classification-rules-table,
+  .sources-table {
+    font-size: 11px;
+  }
 }

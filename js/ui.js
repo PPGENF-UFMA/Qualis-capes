@@ -318,6 +318,36 @@ export function closeComparisonModal() {
   if (dom.comparisonTextB) dom.comparisonTextB.value = '';
 }
 
+// ─── MODAL "COMO FUNCIONA A CLASSIFICAÇÃO" ────────────────────────
+
+/**
+ * Abre o modal explicativo com as regras de classificação, fontes e limitações.
+ */
+export function showClassificationInfoModal() {
+  if (dom.classificationInfoModal) {
+    dom.classificationInfoModal.classList.add('active');
+    dom.classificationInfoModal.style.display = 'flex';
+
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons({
+        attrs: { class: 'lucide' },
+        nameAttr: 'data-lucide',
+        node: dom.classificationInfoModal
+      });
+    }
+  }
+}
+
+/**
+ * Fecha o modal explicativo de classificação.
+ */
+export function closeClassificationInfoModal() {
+  if (dom.classificationInfoModal) {
+    dom.classificationInfoModal.classList.remove('active');
+    dom.classificationInfoModal.style.display = 'none';
+  }
+}
+
 // ─── TEMA CLARO/ESCURO ────────────────────────────────────────────
 
 /**

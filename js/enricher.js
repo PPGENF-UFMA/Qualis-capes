@@ -77,3 +77,20 @@ export async function searchByName(query) {
     return [];
   }
 }
+
+/**
+ * Tenta classificar um periódico pelo nome quando não há ISSN.
+ * Faz busca por nome no backend; se encontrar exatamente 1 resultado,
+ * classifica esse ISSN. Se encontrar múltiplos, não decide automaticamente.
+ * @param {string} journalName Nome do periódico
+ * @returns {Promise<Object|null>} Item classificado ou null se não encontrado/ambíguo
+ */
+export async function classifyByName(journalName) {
+  if (!journalName || !journalName.trim()) return null;
+
+  const results = await searchByName(journalName);
+  if (results.length === 1) {
+    return await enrichAndClassify(results[0].issn);
+  }
+  return null;
+}

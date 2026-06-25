@@ -27,12 +27,14 @@ from .models import BatchClassifyRequest, ClassifyResponse
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
+_is_production = os.environ.get("ENVIRONMENT", "development").lower() == "production"
+
 app = FastAPI(
     title="Qualis CAPES Classifier API",
     description="Classificação de periódicos conforme os critérios da CAPES.",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
 )
 
 # CORS restrito a origens locais (produção: adicionar domínio real)

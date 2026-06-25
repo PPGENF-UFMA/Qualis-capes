@@ -8,9 +8,15 @@
   <meta name="description"
     content="Ferramenta automatizada para enriquecimento de métricas e classificação de periódicos científicos de acordo com as regras da CAPES para Enfermagem e Outras Áreas.">
   <link rel="stylesheet" href="css/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/lucide@0.469.0" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
+    integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4"
+    crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+    integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
+    crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@0.469.0"
+    integrity="sha384-hJnF5AwidE18GSWTAGHv3ByzzvfNZ1Tcx5y1UUV3WkauuMCEzBJBMSwSt/PUPXnM"
+    crossorigin="anonymous"></script>
 </head>
 
 <body>
@@ -30,8 +36,14 @@
         <div class="header-divider"></div>
         <p class="header-subtitle">Classificador de Artigos (Enfermagem)</p>
       </div>
-      <button id="theme-toggle" class="theme-toggle-btn" aria-label="Alternar entre modo claro e escuro"><i
-          data-lucide="moon"></i> <span>Modo Escuro</span></button>
+      <div class="header-actions">
+        <button id="btn-classification-info" class="header-info-btn" title="Entenda como funciona a classificação"
+          aria-label="Entenda como funciona a classificação">
+          <i data-lucide="help-circle"></i> <span>Como funciona</span>
+        </button>
+        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Alternar entre modo claro e escuro"><i
+            data-lucide="moon"></i> <span>Modo Escuro</span></button>
+      </div>
     </header>
 
     <!-- Layout Principal de Duas Colunas -->
@@ -570,6 +582,203 @@
             <!-- Renderizado via JS -->
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal "Como funciona a classificação" -->
+  <div id="classification-info-modal" class="search-modal" role="dialog" aria-modal="true"
+    aria-labelledby="classification-info-title" style="display: none;">
+    <div class="search-modal-card" style="max-width: 720px;">
+      <div class="search-modal-header">
+        <h3 id="classification-info-title" class="search-modal-title"><i data-lucide="book-open"></i> Como Funciona a
+          Classificação</h3>
+        <button id="btn-close-classification-info" class="btn-close-modal" aria-label="Fechar modal"><i
+            data-lucide="x"></i></button>
+      </div>
+
+      <div class="classification-info-content">
+        <!-- SEÇÃO 1: Regra do Melhor Caso -->
+        <section class="info-section">
+          <h4><i data-lucide="trending-up" style="width: 16px; height: 16px;"></i> Regra do Melhor Caso</h4>
+          <p>O sistema avalia <strong>todos os critérios disponíveis</strong> (JCR, CiteScore e indexadores) e retorna
+            o <strong>maior estrato possível</strong>. Por exemplo: se um periódico possui JCR correspondente a A3 e
+            também está indexado no MEDLINE (que garante A3), ele recebe A3. Se além disso tiver CiteScore
+            correspondente a A2, recebe A2 — o sistema sempre escolhe o estrato mais vantajoso.</p>
+        </section>
+
+        <!-- SEÇÃO 2: Tabela de Estratos — Enfermagem -->
+        <section class="info-section">
+          <h4><i data-lucide="award" style="width: 16px; height: 16px;"></i> Classificação para Enfermagem</h4>
+          <p class="info-subtitle">Aplicada quando o periódico é identificado como pertencente à área de Enfermagem.</p>
+          <div class="table-responsive">
+            <table class="classification-rules-table">
+              <thead>
+                <tr>
+                  <th>Estrato</th>
+                  <th>JCR</th>
+                  <th>CiteScore</th>
+                  <th>Indexadores</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="estrato-badge A1">A1</span></td>
+                  <td>&ge; 1.8</td>
+                  <td>&ge; 2.9</td>
+                  <td>&mdash;</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A2">A2</span></td>
+                  <td>1.1 &ndash; 1.7</td>
+                  <td>1.8 &ndash; 2.8</td>
+                  <td>&mdash;</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A3">A3</span></td>
+                  <td>0.6 &ndash; 1.0</td>
+                  <td>0.7 &ndash; 1.7</td>
+                  <td>MEDLINE</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A4">A4</span></td>
+                  <td>0.1 &ndash; 0.5</td>
+                  <td>0.1 &ndash; 0.6</td>
+                  <td>SciELO, RevEnf</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A5">A5</span></td>
+                  <td>&mdash;</td>
+                  <td>&mdash;</td>
+                  <td>LILACS, BDENF</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A6">A6</span></td>
+                  <td>&mdash;</td>
+                  <td>&mdash;</td>
+                  <td>RIC/CUIDEN (&iacute;ndice &ge; 1.5)</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A7">A7</span></td>
+                  <td>&mdash;</td>
+                  <td>&mdash;</td>
+                  <td>CINAHL ou RIC/CUIDEN (0.1 &ndash; 1.4)</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge A8">A8</span></td>
+                  <td>&mdash;</td>
+                  <td>&mdash;</td>
+                  <td>Latindex</td>
+                </tr>
+                <tr>
+                  <td><span class="estrato-badge NC">NC</span></td>
+                  <td colspan="3">N&atilde;o atende a nenhum crit&eacute;rio acima</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- SEÇÃO 3: Outras Áreas -->
+        <section class="info-section">
+          <h4><i data-lucide="layers" style="width: 16px; height: 16px;"></i> Outras Áreas</h4>
+          <p>Periódicos n&atilde;o classificados como Enfermagem seguem crit&eacute;rios diferenciados, com thresholds
+            mais altos para JCR e CiteScore. Por exemplo: A1 exige JCR &ge; 5.0 ou CiteScore &ge; 5.0; A6 exige
+            indexa&ccedil;&atilde;o no SciELO; A7 exige LILACS. A regra exata aplicada a cada periódico aparece na
+            justificativa exibida na tabela de resultados (clique em "Ver detalhes").</p>
+        </section>
+
+        <!-- SEÇÃO 4: Como a área é determinada -->
+        <section class="info-section">
+          <h4><i data-lucide="search-check" style="width: 16px; height: 16px;"></i> Como a &Aacute;rea de Enfermagem
+            &eacute; Identificada</h4>
+          <p>Um periódico &eacute; classificado como Enfermagem quando atendidos <strong>todos</strong> os crit&eacute;rios
+            abaixo:</p>
+          <ol>
+            <li>Est&aacute; listado como Enfermagem na plataforma Sucupira (CAPES); <strong>E</strong></li>
+            <li>Aparece no JCR da categoria Nursing <strong>OU</strong> no Scopus na categoria Nursing
+              <strong>OU</strong> est&aacute; no CUIDEN <strong>OU</strong> possui palavras-chave de enfermagem no
+              t&iacute;tulo (ex: "enferm", "nursin", "cuidado", "enfermer").</li>
+          </ol>
+          <p>Caso n&atilde;o atenda a esses crit&eacute;rios, o periódico &eacute; classificado como "Outras
+            &Aacute;reas" e submetido aos thresholds do Cen&aacute;rio B.</p>
+        </section>
+
+        <!-- SEÇÃO 5: Fontes de Dados -->
+        <section class="info-section">
+          <h4><i data-lucide="database" style="width: 16px; height: 16px;"></i> Fontes de Dados</h4>
+          <div class="table-responsive">
+            <table class="sources-table">
+              <thead>
+                <tr>
+                  <th>Fonte</th>
+                  <th>Tipo</th>
+                  <th>Atualiza&ccedil;&atilde;o</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>JCR (Journal Citation Reports)</td>
+                  <td>Base local (CSV)</td>
+                  <td>Edi&ccedil;&atilde;o 2025 &mdash; recompila&ccedil;&atilde;o manual</td>
+                </tr>
+                <tr>
+                  <td>CiteScore (Scopus)</td>
+                  <td>API Elsevier</td>
+                  <td>Tempo real (requer API key)</td>
+                </tr>
+                <tr>
+                  <td>MEDLINE</td>
+                  <td>Base local (Scopus Sources)</td>
+                  <td>Recompila&ccedil;&atilde;o manual</td>
+                </tr>
+                <tr>
+                  <td>SciELO / RevEnf</td>
+                  <td>API articlemeta</td>
+                  <td>Tempo real (cache de 30 dias)</td>
+                </tr>
+                <tr>
+                  <td>LILACS / BDENF</td>
+                  <td>API BVS</td>
+                  <td>Tempo real (cache de 30 dias)</td>
+                </tr>
+                <tr>
+                  <td>RIC/CUIDEN</td>
+                  <td>Base local (Fundaci&oacute;n INDEX)</td>
+                  <td>Edi&ccedil;&atilde;o 2022</td>
+                </tr>
+                <tr>
+                  <td>Latindex</td>
+                  <td>Web scraping</td>
+                  <td>Tempo real (cache de 30 dias)</td>
+                </tr>
+                <tr>
+                  <td>Sucupira (classifica&ccedil;&atilde;o de &aacute;rea)</td>
+                  <td>Base local (XLSX)</td>
+                  <td>Recompila&ccedil;&atilde;o manual</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- SEÇÃO 6: Limitações -->
+        <section class="info-section">
+          <h4><i data-lucide="alert-triangle" style="width: 16px; height: 16px;"></i> Limita&ccedil;&otilde;es
+            Conhecidas</h4>
+          <ul>
+            <li><strong>Dados est&aacute;ticos</strong>: JCR, MEDLINE, CUIDEN e Sucupira s&atilde;o recompilados
+              manualmente. A data de compila&ccedil;&atilde;o da base aparece na barra lateral.</li>
+            <li><strong>CiteScore</strong>: depende de chave de API Elsevier configurada no servidor. Sem a chave,
+              este crit&eacute;rio n&atilde;o &eacute; avaliado (um aviso &eacute; exibido na barra lateral).</li>
+            <li><strong>Latindex</strong>: consultado via extra&ccedil;&atilde;o de HTML do site oficial. Pode ficar
+              indispon&iacute;vel temporariamente se o site alterar sua estrutura.</li>
+            <li><strong>APIs externas</strong>: se SciELO, LILACS ou Elsevier ficam indispon&iacute;veis, o sistema
+              degrada gradualmente usando dados em cache (v&aacute;lidos por 30 dias), mas pode n&atilde;o detectar
+              indexadores novos at&eacute; a pr&oacute;xima consulta ap&oacute;s recupera&ccedil;&atilde;o.</li>
+          </ul>
+        </section>
+
       </div>
     </div>
   </div>

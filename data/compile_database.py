@@ -236,6 +236,30 @@ def compile_database():
     # Carregar dados do CUIDEN
     cuiden_data = process_cuiden_csv(CUIDEN_PATH)
     logger.info(f"CUIDEN carregado em memória: {len(cuiden_data)} periódicos.")
+
+    # Carregar listas de ISSNs BDENF e RevEnf (geradas por fetch_bdenf_revenf.py)
+    bdenf_issns = set()
+    revenf_issns = set()
+    BDENF_LIST_PATH = os.path.join(DATA_DIR, "bdenf_issns.json")
+    REVENF_LIST_PATH = os.path.join(DATA_DIR, "revenf_issns.json")
+    if os.path.exists(BDENF_LIST_PATH):
+        try:
+            with open(BDENF_LIST_PATH, "r", encoding="utf-8") as f:
+                bdenf_issns = set(json.load(f))
+            logger.info(f"BDENF carregado: {len(bdenf_issns)} ISSNs.")
+        except Exception as e:
+            logger.warning(f"Erro ao carregar bdenf_issns.json: {e}")
+    else:
+        logger.info("bdenf_issns.json nao encontrado. Execute: python data/fetch_bdenf_revenf.py")
+    if os.path.exists(REVENF_LIST_PATH):
+        try:
+            with open(REVENF_LIST_PATH, "r", encoding="utf-8") as f:
+                revenf_issns = set(json.load(f))
+            logger.info(f"RevEnf carregado: {len(revenf_issns)} ISSNs.")
+        except Exception as e:
+            logger.warning(f"Erro ao carregar revenf_issns.json: {e}")
+    else:
+        logger.info("revenf_issns.json nao encontrado. Execute: python data/fetch_bdenf_revenf.py")
     
     # --- 1. PROCESSAR TODOS OS CSVs JCR (AUTO-DETECÇÃO) ---
     if JCR_FILES:
@@ -342,12 +366,12 @@ def compile_database():
                 title = str(row.get('Título', '')).strip()
                 area_aval = str(row.get('Área de Avaliação', '')).strip().upper()
                 
-                # Regra inteligente de Área Mãe (Enfermagem)
-                # O periódico pertence à área de Enfermagem apenas se:
-                # - For avaliado em Enfermagem em classificacao.xlsx E:
-                #   - Estiver no JCR de Enfermagem OU
-                #   - Estiver no Scopus na categoria Nursing OU
-                #   - Tiver palavra-chave de Enfermagem no título
+                # Regra de Área (Enfermagem) — Cruzamento Ampliado:
+                # O periódico é Enfermagem se o Sucupira o lista em Enfermagem E
+                # há evidência externa confirmando (JCR Nursing, Scopus Nursing,
+                # CUIDEN, BDENF, RevEnf, ou palavras-chave no título).
+                # A planilha do Sucupira não tem "Área Mãe" — lista o periódico
+                # em todas as áreas onde pode ser avaliado, incluindo interdisciplinares.
                 is_nursing_candidate = "ENFERMAGEM" in area_aval
                 is_real_nursing = False
                 if is_nursing_candidate:
@@ -355,6 +379,8 @@ def compile_database():
                         issn in jcr_nursing_issns or
                         issn in scopus_nursing_issns or
                         issn in cuiden_data or
+                        issn in bdenf_issns or
+                        issn in revenf_issns or
                         any(k in title.upper() for k in ["ENFERM", "NURSIN", "CUIDADO", "ENFERMER"])
                     )
                 
@@ -547,6 +573,8 @@ def compile_database():
     journals["_meta"] = {
         "compiled_at": datetime.now().isoformat(),
         "total_journals": len([k for k in journals if k != "_meta"]),
+        "jcr_year": "2025",
+        "cuiden_edition": "2022",
         "sources": {
             "jcr_files": [os.path.basename(f) for f in sorted(glob.glob(os.path.join(DATA_DIR, "[Jj][Cc][Rr]_*.csv")))],
             "scopus": "journals_scopus.xlsx" if os.path.exists(os.path.join(DATA_DIR, "journals_scopus.xlsx")) else None,
