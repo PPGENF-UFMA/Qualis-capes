@@ -169,8 +169,7 @@ export function renderResultsTable() {
           </span>
           <i data-lucide="info" class="info-icon"></i>
         </div>
-        ${item.classification && item.classification.all_candidates && item.classification.all_candidates.length > 0 ? 
-          `<button class="btn-details" style="margin-top: 8px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--border-color); color: var(--primary-color); cursor: pointer;" onclick="window.showCandidatesModal(this)" data-candidates="${escapeHTML(JSON.stringify(item.classification.all_candidates))}" data-title="${safeTitle}">Ver detalhes</button>` : ''}
+
       </td>
     `;
 
@@ -272,40 +271,7 @@ window.showLattesCandidatesModal = function(btn) {
   modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
 };
 
-// Global modal function for table inline click
-window.showCandidatesModal = function(btn) {
-  const candidatesRaw = btn.getAttribute('data-candidates');
-  const titleRaw = btn.getAttribute('data-title');
-  if (!candidatesRaw) return;
-  
-  const candidates = JSON.parse(candidatesRaw);
-  const modal = document.getElementById('candidates-modal');
-  const subtitle = document.getElementById('candidates-modal-subtitle');
-  const tbody = document.getElementById('candidates-modal-body');
-  
-  subtitle.textContent = `Critérios avaliados para: ${titleRaw}`;
-  tbody.innerHTML = '';
-  
-  candidates.forEach(c => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><span class="estrato-badge ${c.estrato}">${c.estrato}</span></td>
-      <td>${escapeHTML(c.reason)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  
-  modal.style.display = 'flex';
-  
-  const closeBtn = document.getElementById('btn-close-candidates-modal');
-  if (closeBtn) {
-    closeBtn.onclick = () => modal.style.display = 'none';
-  }
-  
-  modal.onclick = (e) => {
-    if (e.target === modal) modal.style.display = 'none';
-  };
-};
+
 
 /**
  * Exibe linhas esqueléticas (Skeleton Loader) na tabela de resultados.
