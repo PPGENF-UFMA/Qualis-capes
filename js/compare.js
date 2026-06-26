@@ -8,7 +8,7 @@ import appState from './state.js';
 
 const SCORE_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
 const PROFILE_COLORS = {
-  a: { fill: 'rgba(99, 102, 241, 0.2)', stroke: '#6366f1', bg: 'rgba(99, 102, 241, 0.7)' },
+  a: { fill: 'rgba(209, 26, 91, 0.2)', stroke: '#d11a5b', bg: 'rgba(209, 26, 91, 0.7)' },
   b: { fill: 'rgba(245, 158, 11, 0.2)', stroke: '#f59e0b', bg: 'rgba(245, 158, 11, 0.7)' }
 };
 
@@ -134,7 +134,7 @@ function renderRadarChart(profiles) {
           borderColor: PROFILE_COLORS.a.stroke,
           borderWidth: 2,
           pointBackgroundColor: PROFILE_COLORS.a.stroke,
-          pointBorderColor: isDark ? '#0b0f19' : '#ffffff',
+          pointBorderColor: isDark ? '#0f090b' : '#ffffff',
           pointBorderWidth: 2,
           pointRadius: 5
         },
@@ -145,7 +145,7 @@ function renderRadarChart(profiles) {
           borderColor: PROFILE_COLORS.b.stroke,
           borderWidth: 2,
           pointBackgroundColor: PROFILE_COLORS.b.stroke,
-          pointBorderColor: isDark ? '#0b0f19' : '#ffffff',
+          pointBorderColor: isDark ? '#0f090b' : '#ffffff',
           pointBorderWidth: 2,
           pointRadius: 5
         }
@@ -219,7 +219,7 @@ function renderComparisonEstratoChart(profiles) {
   const estratos = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'NC'];
   const estratoColors = {
     A1: 'rgba(16, 185, 129, 0.8)', A2: 'rgba(52, 211, 153, 0.8)', A3: 'rgba(6, 182, 212, 0.8)',
-    A4: 'rgba(59, 130, 246, 0.8)', A5: 'rgba(99, 102, 241, 0.8)', A6: 'rgba(251, 191, 36, 0.8)',
+    A4: 'rgba(59, 130, 246, 0.8)', A5: 'rgba(209, 26, 91, 0.8)', A6: 'rgba(251, 191, 36, 0.8)',
     A7: 'rgba(249, 115, 22, 0.8)', A8: 'rgba(239, 68, 68, 0.8)', NC: 'rgba(100, 116, 139, 0.8)'
   };
 
@@ -233,7 +233,7 @@ function renderComparisonEstratoChart(profiles) {
   const datasets = estratos.map(estrato => ({
     label: `Qualis ${estrato}`,
     data: [countsA[estrato] || 0, countsB[estrato] || 0],
-    backgroundColor: estratoColors[estrato] || 'rgba(99, 102, 241, 0.7)',
+    backgroundColor: estratoColors[estrato] || 'rgba(209, 26, 91, 0.7)',
     borderWidth: 0,
     borderRadius: 4
   }));

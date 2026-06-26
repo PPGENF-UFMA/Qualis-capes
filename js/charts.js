@@ -60,7 +60,7 @@ function getChartThemeConfig() {
   const isDark = isDarkTheme();
   return {
     isDark,
-    borderColor: isDark ? '#0b0f19' : '#ffffff',
+    borderColor: isDark ? '#0f090b' : '#ffffff',
     tooltip: {
       backgroundColor: isDark ? '#111827' : '#ffffff',
       titleColor: isDark ? '#f3f4f6' : '#0f172a',
@@ -344,7 +344,7 @@ function renderIndexersChart(counts) {
     'SciELO': { bg: 'rgba(249, 115, 22, 0.85)', hover: '#fb7185' },
     'Medline': { bg: 'rgba(59, 130, 246, 0.85)', hover: '#3b82f6' },
     'Scopus': { bg: 'rgba(245, 158, 11, 0.85)', hover: '#f59e0b' },
-    'JCR (WoS)': { bg: 'rgba(168, 85, 247, 0.85)', hover: '#a855f7' },
+    'JCR (WoS)': { bg: 'rgba(209, 26, 91, 0.85)', hover: '#d11a5b' },
     'Latindex': { bg: 'rgba(16, 185, 129, 0.85)', hover: '#10b981' },
     'RIC/CUIDEN': { bg: 'rgba(99, 102, 241, 0.85)', hover: '#6366f1' },
     'LILACS': { bg: 'rgba(6, 182, 212, 0.85)', hover: '#06b6d4' },
@@ -547,8 +547,8 @@ function renderQualisEvolutionChart(scores) {
   };
 
   const chartGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.clientHeight || 200);
-  chartGradient.addColorStop(0, 'rgba(168, 85, 247, 0.35)');
-  chartGradient.addColorStop(1, 'rgba(168, 85, 247, 0.01)');
+  chartGradient.addColorStop(0, 'rgba(209, 26, 91, 0.35)');
+  chartGradient.addColorStop(1, 'rgba(209, 26, 91, 0.01)');
 
   appState.charts.qualisEvolution = new Chart(ctx, {
     type: 'line',
@@ -557,12 +557,12 @@ function renderQualisEvolutionChart(scores) {
       datasets: [{
         label: 'Nota CAPES',
         data,
-        borderColor: '#a855f7',
+        borderColor: '#d11a5b',
         backgroundColor: chartGradient,
         borderWidth: 3,
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: '#a855f7',
+        pointBackgroundColor: '#d11a5b',
         pointBorderColor: theme.borderColor,
         pointBorderWidth: 2,
         pointRadius: 6,
