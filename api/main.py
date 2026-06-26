@@ -31,7 +31,11 @@ audit_logger.propagate = False
 
 from . import cache
 from . import enricher
-from .models import BatchClassifyRequest, BatchSearchRequest, ClassifyResponse
+from .models import (
+    BatchClassifyRequest, BatchSearchRequest, ClassifyResponse,
+    MatchBatchRequest, MatchLattesRequest,
+    SaveAliasRequest, FeedbackRequest,
+)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
@@ -318,6 +322,98 @@ async def api_search_batch(body: BatchSearchRequest, request: Request):
     loop = asyncio.get_event_loop()
     resolved = await loop.run_in_executor(None, lambda: [_resolve_one(q) for q in body.queries])
     return {"results": resolved, "count": len(resolved)}
+
+
+@router_v1.post("/match/batch")
+async def api_match_batch(body: MatchBatchRequest, request: Request):
+    """Matching de periódicos por nome — pipeline alias→exact→containment→Jaccard-IDF.
+
+    Body: {"queries": [str], "article_titles": [str] | None}
+    Retorna: {"results": [{issn, confidence, score, stage, candidates}], "count": int}
+    """
+    if not body.queries:
+        raise HTTPException(status_code=400, detail="Lista de consultas vazia")
+    if len(body.queries) > 200:
+        raise HTTPException(status_code=400, detail="Máximo de 200 consultas por lote.")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"match:{ip}", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de matching excedido. Tente novamente em 1 minuto.")
+
+    titles = body.article_titles or [None] * len(body.queries)
+    if len(titles) != len(body.queries):
+        titles = [None] * len(body.queries)
+
+    def _resolve(query: str, article_title: str | None) -> dict:
+        if not query or not query.strip():
+            return {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+        return enricher.match_journal(query, article_title=article_title)
+
+    loop = asyncio.get_event_loop()
+    resolved = await loop.run_in_executor(
+        None, lambda: [_resolve(q, t) for q, t in zip(body.queries, titles)]
+    )
+    audit_logger.info(f"match|ip={ip}|n={len(body.queries)}|high={sum(1 for r in resolved if r.get('confidence') == 'high')}")
+    return {"results": resolved, "count": len(resolved)}
+
+
+@router_v1.post("/match/lattes")
+async def api_match_lattes(body: MatchLattesRequest, request: Request):
+    """Pipeline completo: segmenta + parseia + match em 1 round-trip.
+
+    Body: {"text": str, "researcher_name": str | None}
+    Retorna: {"results": [{...parseSingleArticle, matchedIssn, confidence, matchScore, matchStage, matchCandidates}]}
+    """
+    if not body.text or not body.text.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio")
+    if len(body.text) > 200_000:
+        raise HTTPException(status_code=413, detail="Texto excede 200KB")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"match:{ip}", max_requests=60, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de matching excedido.")
+
+    def _process() -> list[dict]:
+        return enricher.parse_lattes_text(body.text)
+
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, _process)
+    articles = [r for r in results if r.get("type") != "congresso"]
+    audit_logger.info(f"match_lattes|ip={ip}|segments={len(results)}|articles={len(articles)}|high={sum(1 for r in articles if r.get('confidence') == 'high')}")
+    return {"results": articles, "count": len(articles)}
+
+
+@router_v1.post("/alias")
+async def api_save_alias(body: SaveAliasRequest, request: Request):
+    """Persiste um alias aprendido pelo usuário no servidor (Fase 2d).
+
+    O alias fica em data/user_aliases.json e é carregado em memória
+    por todos os clientes no próximo startup.
+    """
+    if not body.journal_name or not body.journal_name.strip() or not body.issn:
+        raise HTTPException(status_code=400, detail="journal_name e issn são obrigatórios")
+    ip = _get_client_ip(request)
+    enricher.save_user_alias(body.journal_name.strip(), body.issn.strip())
+    audit_logger.info(f"alias|ip={ip}|name={body.journal_name[:80]}|issn={body.issn}")
+    return {"status": "ok", "journal_name": body.journal_name, "issn": body.issn}
+
+
+@router_v1.post("/match/feedback")
+async def api_match_feedback(body: FeedbackRequest, request: Request):
+    """Registra feedback de correção via "Trocar revista" (Fase 3d).
+
+    Persiste o alias correto e registra para análise posterior.
+    """
+    if not body.query or not body.right_issn:
+        raise HTTPException(status_code=400, detail="query e right_issn são obrigatórios")
+    ip = _get_client_ip(request)
+    enricher.save_user_alias(body.query.strip(), body.right_issn.strip())
+    audit_logger.info(f"feedback|ip={ip}|query={body.query[:80]}|wrong={body.wrong_issn}|right={body.right_issn}")
+    return {"status": "ok", "saved_alias": body.right_issn}
+
+
+@router_v1.get("/stats/matching")
+async def api_match_stats(request: Request):
+    """Dashboard de taxa de acerto do matching (Fase 3e)."""
+    return enricher.get_match_stats()
 
 
 # Aliases temporários (deprecated) com redirect

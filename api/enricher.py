@@ -1,9 +1,11 @@
 import asyncio
 import json
+import math
 import os
 import re
 import threading
 import logging
+from collections import defaultdict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,9 @@ from . import engine
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JOURNALS_PATH = os.path.join(PROJECT_ROOT, "data", "journals.json")
+ALIASES_PATH = os.path.join(PROJECT_ROOT, "data", "aliases.json")
+USER_ALIASES_PATH = os.path.join(PROJECT_ROOT, "data", "user_aliases.json")
+CROSSREF_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "crossref_cache.json")
 ELSEVIER_BASE = "https://api.elsevier.com/content/serial/title/issn"
 
 def get_api_key() -> str:
@@ -23,20 +28,62 @@ def get_api_key() -> str:
 
 _journals_db: dict[str, dict] | None = None
 _title_index: dict[str, list[str]] = {}
+_idf_weights: dict[str, float] = {}
 _db_summary_cache: list[dict] | None = None
+_server_aliases: dict[str, str] = {}
+_user_aliases: dict[str, str] = {}
+_match_stats: dict[str, int] = defaultdict(int)  # fase 3a/3e
+_crossref_cache: dict[str, dict] = {}
 
 import unicodedata
 
+# Stopwords "generalistas" — peso IDF baixo no Jaccard. Espelha js/lattesParser.js.
+_MATCH_GENERIC_TERMS = {
+    "REVISTA", "JOURNAL", "JOURNALS", "REV", "R",
+    "CIENCIA", "CIENCIAS", "CIENCE", "SCIENCES", "SCIENCE",
+    "SAUDE", "HEALTH", "SAUDAVEL",
+    "EDUCACAO", "EDUCATION", "EDUCATIONAL",
+    "HUMANAS", "HUMANITIES", "SOCIAIS", "SOCIAL",
+    "BRASILEIRA", "BRASILEIRAS", "BRASIL", "BRAZIL", "BR",
+    "INTERNACIONAL", "INTERNATIONAL", "INTER", "NACIONAL", "NATIONAL",
+    "E", "Y", "ET", "UND",
+    "DA", "DE", "DO", "DAS", "DOS",
+    "OF", "THE", "IN", "ON", "FOR", "AND",
+    "ARTIGO", "ARTICLES", "PAPER",
+    "ONLINE", "IMPRESSO", "PRINT", "DIGITAL", "ELETRONICA", "ELETRONICO",
+    "COLETIVA", "COLETIVAS", "PUBLICA", "PUBLICAS",
+    "PUBLIC", "PUBLICACAO",
+}
+
+_STOPWORDS_RE = re.compile(
+    r"\b(?:DE|DA|DOS|DAS|DO|EM|OF|THE|IN|ON|PARA|SOB|A|O|AS|OS|UM|UNS|UMA|UMAS)\b"
+)
+
 def _normalize_text(text: str) -> str:
+    """Normalização alinhada com js/lattesParser.js::normalizeString.
+
+    Caixa alta + strip acentos + & -> E + pontuações viram espaço +
+    remoção de stopwords simples (DE, DA, DO, EM, OF, THE, IN, ON, ...).
+    """
     if not text: return ""
-    text = text.lower()
+    text = text.upper()
     text = unicodedata.normalize("NFD", text)
-    text = re.sub(r"[\u0300-\u036f]", "", text)
+    text = re.sub(r"[\u0300-\u036f]", "", text)  # remove acentos
+    text = text.replace("&", " E ")
+    text = re.sub(r"[\u2018\u2019\u201C\u201D]", "'", text)  # aspas curvas
+    text = re.sub(r"[\.\,\-\;\:\?\!\"\'\(\)\[\]\/]", " ", text)
+    text = _STOPWORDS_RE.sub(" ", text)
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
 def _jaro_winkler(s1: str, s2: str) -> float:
-    """Algoritmo Jaro-Winkler — similaridade entre 0.0 e 1.0."""
+    """Jaro-Winkler — similaridade 0.0–1.0.
+
+    Bônus de prefixo Winkler limitado a 2 caracteres (em vez de 4) para
+    evitar viés de "REVI"/"JOUR" inflar scores entre periódicos que
+    compartilham prefixos genéricos.
+    """
     if s1 == s2:
         return 1.0
     len1, len2 = len(s1), len(s2)
@@ -66,11 +113,11 @@ def _jaro_winkler(s1: str, s2: str) -> float:
             if point < len2 and s1[i] != s2[point]:
                 t += 1
             point += 1
-    t = t // 2
+    t = t / 2
     jaro = (m / len1 + m / len2 + (m - t) / m) / 3.0
     p = 0.1
     l = 0
-    for i in range(min(4, min(len1, len2))):
+    for i in range(min(2, min(len1, len2))):  # bônus limitado a 2 chars
         if s1[i] == s2[i]:
             l += 1
         else:
@@ -108,14 +155,93 @@ def _fuzzy_match_name(query: str, db_items: list[dict], threshold: float = 0.90)
     ]
 
 def _build_title_index():
-    global _title_index
+    """Reconstrói o índice invertido token→[issn] e os pesos IDF por token.
+
+    Indexa também variantes de título (_variants_raw) coletadas de APIs externas.
+    Chamar dentro de load_database (sob lock) — uma única passada no DB.
+    """
+    global _title_index, _idf_weights
     _title_index.clear()
+    _idf_weights.clear()
     if not _journals_db: return
+    df: dict[str, int] = defaultdict(int)
     for issn, record in _journals_db.items():
-        title = _normalize_text(record.get("title", ""))
-        for token in title.split():
-            if len(token) >= 3:
-                _title_index.setdefault(token, []).append(issn)
+        titles = [record.get("title", "")]
+        titles.extend(record.get("_variants_raw") or [])
+        seen = set()
+        for title in titles:
+            for token in _normalize_text(title).split():
+                if len(token) < 2: continue
+                if token in seen: continue
+                seen.add(token)
+                df[token] += 1
+    n = len(_journals_db)
+    for token, df_count in df.items():
+        _idf_weights[token] = math.log((n + 1) / (df_count + 1)) + 1
+    for issn, record in _journals_db.items():
+        titles = [record.get("title", "")]
+        titles.extend(record.get("_variants_raw") or [])
+        for title in titles:
+            for token in _normalize_text(title).split():
+                if len(token) >= 3:
+                    _title_index.setdefault(token, []).append(issn)
+
+
+def _load_server_aliases():
+    """Carrega data/aliases.json + data/user_aliases.json em memória.
+
+    User aliases têm precedência sobre aliases estáticos (foram validados
+    por um usuário real com feedback explícito).
+    """
+    global _server_aliases, _user_aliases
+    _server_aliases.clear()
+    _user_aliases.clear()
+
+    # Aliases estáticos (curados manualmente)
+    if os.path.exists(ALIASES_PATH):
+        try:
+            with open(ALIASES_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            for key, issn in raw.items():
+                norm_key = _normalize_text(key)
+                if norm_key:
+                    _server_aliases[norm_key] = issn
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Falha ao carregar {ALIASES_PATH}: {e}")
+
+    # User aliases (aprendidos via feedback explícito — mais confiáveis)
+    if os.path.exists(USER_ALIASES_PATH):
+        try:
+            with open(USER_ALIASES_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            for key, issn in raw.items():
+                norm_key = _normalize_text(key)
+                if norm_key:
+                    _user_aliases[norm_key] = issn
+                    _server_aliases[norm_key] = issn  # user alias sobrepõe estáticos
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Falha ao carregar {USER_ALIASES_PATH}: {e}")
+
+
+def save_user_alias(journal_name: str, issn: str):
+    """Persiste um alias aprendido no disco para todos os clientes."""
+    global _server_aliases, _user_aliases
+    norm_key = _normalize_text(journal_name)
+    if not norm_key or not issn:
+        return
+    _server_aliases[norm_key] = issn
+    _user_aliases[norm_key] = issn
+    try:
+        # Append-only: carrega existente, mescla, salva
+        existing = {}
+        if os.path.exists(USER_ALIASES_PATH):
+            with open(USER_ALIASES_PATH, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        existing[journal_name] = issn
+        with open(USER_ALIASES_PATH, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Falha ao salvar user alias: {e}")
 
 
 def normalize_issn(issn: str) -> str:
@@ -257,6 +383,8 @@ def load_database() -> dict[str, dict]:
 
             _journals_db = temp_db
             _build_title_index()
+            _load_server_aliases()
+            _load_crossref_cache()
             _db_summary_cache = build_summary_cache(temp_db)
             return _journals_db
         except Exception as e:
@@ -716,6 +844,23 @@ def _merge_indexer_result(db_record: dict, issn: str, result: dict):
     res_type = result.get("type")
     data = result.get("data", {})
 
+    # Coletar títulos alternativos (variants) — Fase 2c
+    alt_title = data.get("title")
+    if alt_title and alt_title != db_record.get("title"):
+        variants = set(db_record.get("variants") or [])
+        variants.add(alt_title)
+        # Adiciona também versão normalizada como alias automático
+        if len(variants) > 0:
+            db_record["_variants_raw"] = list(variants)
+            # Re-indexa as variantes no índice invertido incrementalmente
+            norm_title = _normalize_text(alt_title)
+            for token in norm_title.split():
+                if len(token) >= 3:
+                    if token not in _title_index:
+                        _title_index[token] = []
+                    if issn not in _title_index[token]:
+                        _title_index[token].append(issn)
+
     if res_type == "scielo" and data.get("scielo"):
         if "indexers" not in db_record or db_record["indexers"] is None:
             db_record["indexers"] = []
@@ -808,3 +953,460 @@ def search_by_name(query: str) -> list[dict]:
                 limited.append(fr)
                 seen.add(fr["issn"])
     return limited
+# ─── Parser Lattes + Matching engine (Fase 1) ───────────────────────
+# Portado de js/lattesParser.js para Python. Pipeline idêntico:
+#   1. Alias server-side (data/aliases.json)
+#   2. Match exato de string normalizada
+#   3. ISSN extraído diretamente do texto do artigo
+#   4. Containment (todos tokens presentes, menor título vence)
+#   5. Jaccard-IDF ponderado + Jaro-Winkler desempate
+
+_CONGRESS_KEYWORDS = (
+    'anais', 'congresso', 'simposio', 'simpósio', 'encontro',
+    'conference', 'proceedings', 'workshop', 'seminário', 'jornada'
+)
+
+def _fix_encoding(text: str) -> str:
+    """Corrige dupla-codificação UTF-8 → Latin-1 (mojibake)."""
+    replacements = {
+        'Ã©': 'é', 'Ã£': 'ã', 'Ã¡': 'á', 'Ã­': 'í',
+        'Ãµ': 'õ', 'Ã³': 'ó', 'Ãº': 'ú', 'Ã§': 'ç',
+        'Ã¢': 'â', 'Ãª': 'ê', 'Ã´': 'ô', 'Ã ': 'à',
+        'Ã¼': 'ü', 'Ã±': 'ñ',
+        'Ã‰': 'É', 'Ã‡': 'Ç', 'Ã"': 'Ó', 'Ãš': 'Ú',
+    }
+    result = text
+    for bad, good in replacements.items():
+        result = result.replace(bad, good)
+    result = re.sub(r'[\u0000-\u001F\uFFFD\u25A1]', '', result)
+    return result
+
+
+def segment_lattes_text(text: str) -> list[str]:
+    """Segmenta texto bruto colado do Lattes em artigos individuais.
+
+    Portado de js/lattesParser.js::segmentLattesText.
+    """
+    if not text:
+        return []
+    clean = _fix_encoding(text)
+    clean = re.sub(r"M\?BATNA", "M'BATNA", clean, flags=re.IGNORECASE)
+    # Remover injeções de extensões de navegador (ex: Qualis Lattes) antes de linearizar
+    clean = re.sub(r".*Qualis\s*\(ISSN:.*\n?", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r".*fonte Qualis\/CAPES.*\n?", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r".*Não classificado,\s*ISSN.*\n?", "", clean, flags=re.IGNORECASE)
+    # Linearizar quebras de linha
+    clean = clean.replace("\r\n", " ").replace("\n", " ")
+    clean = re.sub(r"\s+", " ", clean)
+
+    # Regex primária: artigos terminando com ano + ponto (aceita AAAA-MM, AAAA.)
+    article_regex = re.compile(
+        r"(.*?,\s*(?:\d{4}-\d{2}\s*,\s*)?\d{4}\.(?:\s*Citações:\d+)?)",
+        re.IGNORECASE,
+    )
+    matches = article_regex.findall(clean)
+
+    # Regex secundária: "no prelo" / "in press" (sem ano)
+    in_press_regex = re.compile(
+        r"(.*?,\s*(?:no prelo|in press|aceito para publica[çc][aã]o)\s*\.?(?:\s*Citações:\d+)?)",
+        re.IGNORECASE,
+    )
+    matches.extend(in_press_regex.findall(clean))
+
+    if not matches:
+        numbered = re.split(r"\s+\b\d+\.\s+", clean)
+        return [s.strip() for s in numbered if len(s.strip()) > 20]
+
+    return [s.strip() for s in matches if len(s.strip()) > 20]
+
+
+def _is_congress(text: str) -> bool:
+    if not text:
+        return False
+    lower = text.lower()
+    return any(kw in lower for kw in _CONGRESS_KEYWORDS)
+
+
+def _extract_issn_from_text(text: str) -> str | None:
+    """Regex ISSN literal (XXXX-XXXX com dígito-verificador validado)."""
+    if not text:
+        return None
+    for m in re.finditer(r"\b(\d{4}-\d{3}[\dXx])\b", text):
+        issn = normalize_issn(m.group(1))
+        if issn:
+            return issn
+    return None
+
+
+def _split_journal_title_sub_title(journal: str) -> str:
+    """Quebra "Título-Subtítulo" e mantém só a cabeça quando aplicável.
+
+    Conservador: head ≥3 palavras e tail ≥1.5× palavras head.
+    Não corta "REBEN - X", "INTERFACES CIENTÍFICAS - HUMANAS".
+    """
+    if not journal:
+        return journal
+    m = re.match(r"^(.{3,}?)\s*[-–]\s*(.{3,})$", journal)
+    if not m:
+        return journal
+    head = m.group(1).strip()
+    tail = m.group(2).strip()
+    head_words = len(head.split())
+    tail_words = len(tail.split())
+    if head_words >= 3 and tail_words >= 3 and tail_words >= head_words * 1.5:
+        return head
+    return journal
+
+
+def parse_single_article(article_text: str) -> dict:
+    """Parser de um artigo Lattes isolado. Espelha js/lattesParser.js.
+
+    Retorna: {authors, title, journal, journalRaw, year, volume, pages,
+              type, extractedIssn}
+    """
+    clean = re.sub(r"\s*Citações.*$", "", article_text, flags=re.IGNORECASE).strip()
+    clean = re.sub(r"^\s*\d+\.\s*", "", clean)
+
+    # Regex robusta: , [v. N,] [p. P,] [AAAA-MM,] AAAA. [Citações:K]
+    pub_regex = re.compile(
+        r",\s*(?:v\.\s*([^,]+?)\s*,\s*)?"  # volume (lazy)
+        r"(?:p\.\s*([^,]+?)\s*,\s*)?"       # páginas (lazy)
+        r"(?:\d{4}-\d{2}\s*,\s*)?"         # mes-ano opcional
+        r"(\d{4})\s*\.?(?:\s*Cita[çc].*?\d+)?$",
+        re.IGNORECASE,
+    )
+    match = pub_regex.search(clean)
+
+    authors = "Autores Não Identificados"
+    title = "Título Não Identificado"
+    journal = "Periódico Não Identificado"
+    journal_raw = ""
+    year = None
+    volume = ""
+    pages = ""
+    extracted_issn = None
+
+    if match:
+        volume = (match.group(1) or "").strip()
+        pages = (match.group(2) or "").strip()
+        year = int(match.group(3))
+        main_block = clean[:match.start()].strip()
+        extracted_issn = _extract_issn_from_text(main_block)
+
+        # Procurar último ponto final fora de parênteses — separa Periódico
+        nesting = 0
+        last_dot = -1
+        for i, ch in enumerate(main_block):
+            if ch == "(":
+                nesting += 1
+            elif ch == ")":
+                nesting -= 1
+            elif ch == "." and nesting == 0:
+                after = main_block[i + 1:].strip()
+                if not after.startswith("("):
+                    last_dot = i
+
+        remaining_block = main_block
+        if last_dot != -1:
+            journal = main_block[last_dot + 1:].strip()
+            remaining_block = main_block[:last_dot].strip()
+        else:
+            journal = main_block
+        journal_raw = journal
+        journal = _split_journal_title_sub_title(journal)
+
+        # Separar autores e título no ponto após o último ";"
+        last_semicolon = remaining_block.rfind(";")
+        if last_semicolon != -1:
+            first_dot_after = remaining_block.find(".", last_semicolon)
+            if first_dot_after != -1:
+                authors = remaining_block[:first_dot_after].strip()
+                title = remaining_block[first_dot_after + 1:].strip()
+            else:
+                authors = remaining_block[:last_semicolon].strip()
+                title = remaining_block[last_semicolon + 1:].strip()
+        else:
+            first_dot = remaining_block.find(".")
+            if first_dot != -1 and first_dot < len(remaining_block) - 15:
+                authors = remaining_block[:first_dot].strip()
+                title = remaining_block[first_dot + 1:].strip()
+            else:
+                title = remaining_block
+    else:
+        parts = clean.split(".")
+        if len(parts) >= 3:
+            authors = parts[0].strip()
+            title = parts[1].strip()
+            journal = parts[2].strip()
+            journal_raw = journal
+            journal = _split_journal_title_sub_title(journal)
+        else:
+            title = clean
+        extracted_issn = _extract_issn_from_text(clean)
+
+    title = re.sub(r"\.$", "", title).strip()
+
+    article_type = "congresso" if (_is_congress(journal) or _is_congress(title)) else "article"
+
+    return {
+        "authors": authors,
+        "title": title,
+        "journal": journal,
+        "journalRaw": journal_raw,
+        "year": year,
+        "volume": volume,
+        "pages": pages,
+        "type": article_type,
+        "extractedIssn": extracted_issn,
+    }
+
+
+def _idf_weight(token: str, n: int) -> float:
+    """Peso IDF de um termo. Stopwords generalistas → 0.1."""
+    if token in _MATCH_GENERIC_TERMS:
+        return 0.1
+    return _idf_weights.get(token, math.log((n + 1) / 1) + 1)
+
+
+def _weighted_jaccard(q_tokens: set[str], db_tokens: set[str], n: int) -> float:
+    inter_w = sum(_idf_weight(t, n) for t in q_tokens if t in db_tokens)
+    union_w = sum(_idf_weight(t, n) for t in q_tokens | db_tokens)
+    if union_w == 0:
+        return 0.0
+    return inter_w / union_w
+
+
+def _load_crossref_cache():
+    global _crossref_cache
+    _crossref_cache.clear()
+    if os.path.exists(CROSSREF_CACHE_PATH):
+        try:
+            with open(CROSSREF_CACHE_PATH, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            now = datetime.now()
+            for key, entry in raw.items():
+                ts = entry.get("_ts", "")
+                try:
+                    dt = datetime.strptime(ts, "%Y-%m-%d")
+                    if (now - dt).days <= 30:
+                        _crossref_cache[key] = entry
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+
+
+def _save_crossref_cache():
+    try:
+        for entry in _crossref_cache.values():
+            if "_ts" not in entry:
+                entry["_ts"] = datetime.now().strftime("%Y-%m-%d")
+        with open(CROSSREF_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_crossref_cache, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _crossref_lookup(article_title: str) -> dict | None:
+    if not article_title or len(article_title.strip()) < 10:
+        return None
+    cache_key = _normalize_text(article_title)[:120]
+    if cache_key in _crossref_cache:
+        entry = _crossref_cache[cache_key]
+        if entry.get("issn"):
+            return {"issn": entry["issn"], "title": entry.get("title", "")}
+        return None
+    url = "https://api.crossref.org/works"
+    params = {"query.bibliographic": article_title.strip(), "rows": 3, "select": "DOI,container-title,ISSN"}
+    try:
+        resp = httpx.get(url, params=params, timeout=10.0, follow_redirects=True)
+        if resp.status_code != 200:
+            _crossref_cache[cache_key] = {"issn": None, "_ts": datetime.now().strftime("%Y-%m-%d")}
+            return None
+        data = resp.json()
+        items = (data.get("message") or {}).get("items") or []
+        if items:
+            for item in items:
+                issn_list = item.get("ISSN") or []
+                journal_title = (item.get("container-title") or [None])[0]
+                if issn_list and journal_title:
+                    issn = normalize_issn(issn_list[0])
+                    if issn:
+                        _crossref_cache[cache_key] = {"issn": issn, "title": journal_title, "_ts": datetime.now().strftime("%Y-%m-%d")}
+                        _save_crossref_cache()
+                        return {"issn": issn, "title": journal_title}
+        _crossref_cache[cache_key] = {"issn": None, "_ts": datetime.now().strftime("%Y-%m-%d")}
+        _save_crossref_cache()
+    except Exception:
+        pass
+    return None
+
+
+def _match_title_against_variants(query_norm: str, db: dict) -> tuple:
+    for issn, record in db.items():
+        title = record.get("title") or ""
+        if _normalize_text(title) == query_norm:
+            return issn, title
+    for issn, record in db.items():
+        for vtitle in (record.get("_variants_raw") or []):
+            if _normalize_text(vtitle) == query_norm:
+                return issn, vtitle
+    return None, None
+
+
+def _crossref_or_none(result: dict, query_norm: str, article_title: str | None) -> dict:
+    if article_title:
+        cr = _crossref_lookup(article_title)
+        if cr and cr.get("issn"):
+            result["issn"] = cr["issn"]
+            result["confidence"] = "high"
+            result["score"] = 0.85
+            result["stage"] = "crossref"
+            result["candidates"] = [{"issn": cr["issn"], "title": cr.get("title", "") or article_title, "score": 0.85}]
+            global _match_stats
+            _match_stats["stage_crossref"] += 1
+            _match_stats["conf_high"] += 1
+            return result
+    _match_stats["conf_none"] += 1
+    return result
+
+
+def match_journal(
+    query: str,
+    article_title: str | None = None,
+    top_k: int = 3,
+) -> dict:
+    global _match_stats
+    db = load_database()
+    if not query or not db:
+        _match_stats["none_empty"] += 1
+        return {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+    query_norm = _normalize_text(query)
+    if not query_norm:
+        _match_stats["none_empty"] += 1
+        return {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+
+    # 1. Alias
+    if query_norm in _server_aliases:
+        _match_stats["stage_alias"] += 1
+        _match_stats["conf_high"] += 1
+        issn = _server_aliases[query_norm]
+        return {"issn": issn, "confidence": "high", "score": 1.0, "stage": "alias",
+                "candidates": [{"issn": issn, "title": query, "score": 1.0}]}
+
+    # 2. Match exato (title + variants)
+    variant_issn, variant_title = _match_title_against_variants(query_norm, db)
+    if variant_issn:
+        _match_stats["stage_exact"] += 1
+        _match_stats["conf_high"] += 1
+        return {"issn": variant_issn, "confidence": "high", "score": 1.0, "stage": "exact",
+                "candidates": [{"issn": variant_issn, "title": variant_title or query, "score": 1.0}]}
+
+    # 3. Containment (verify variants too)
+    q_tokens = {t for t in query_norm.split() if len(t) >= 2}
+    containment_hits: list[tuple[str, str, int]] = []
+    if q_tokens:
+        for issn, record in db.items():
+            titles = [record.get("title") or ""]
+            titles.extend(record.get("_variants_raw") or [])
+            for title in titles:
+                if not title: continue
+                db_tokens = set(_normalize_text(title).split())
+                if q_tokens.issubset(db_tokens):
+                    containment_hits.append((issn, title, len(db_tokens)))
+                    break
+    if containment_hits:
+        containment_hits.sort(key=lambda x: x[2])
+        best = containment_hits[0]
+        _match_stats["stage_containment"] += 1
+        _match_stats["conf_high"] += 1
+        return {"issn": best[0], "confidence": "high", "score": 0.95, "stage": "containment",
+                "candidates": [{"issn": i, "title": t, "score": 0.95} for i, t, _ in containment_hits[:top_k]]}
+
+    # 4. Jaccard-IDF
+    n = len(db)
+    q_tokens_for_fuzzy = {t for t in query_norm.split() if len(t) >= 2}
+    if not q_tokens_for_fuzzy:
+        none_result = {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+        return _crossref_or_none(none_result, query_norm, article_title)
+
+    candidate_issns: set[str] = set()
+    for token in q_tokens_for_fuzzy:
+        for issn in _title_index.get(token, []):
+            candidate_issns.add(issn)
+    if not candidate_issns:
+        for token in q_tokens_for_fuzzy:
+            for idx_token, issns in _title_index.items():
+                if idx_token.startswith(token):
+                    candidate_issns.update(issns)
+    if not candidate_issns:
+        none_result = {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+        return _crossref_or_none(none_result, query_norm, article_title)
+
+    fuzzy_results: list[tuple[str, str, float]] = []
+    for issn in candidate_issns:
+        record = db.get(issn, {})
+        title = record.get("title") or ""
+        if not title: continue
+        norm_title = _normalize_text(title)
+        db_tokens = set(norm_title.split())
+        jaccard = _weighted_jaccard(q_tokens_for_fuzzy, db_tokens, n)
+        jw = _jaro_winkler(query_norm, norm_title)
+        score = 0.7 * jaccard + 0.3 * jw
+        fuzzy_results.append((issn, title, score))
+    fuzzy_results.sort(key=lambda x: x[2], reverse=True)
+    if not fuzzy_results:
+        none_result = {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
+        return _crossref_or_none(none_result, query_norm, article_title)
+
+    best = fuzzy_results[0]
+    best_score = best[2]
+    top = fuzzy_results[:top_k]
+    confidence = "none"
+    if best_score >= 0.78: confidence = "high"
+    elif best_score >= 0.62: confidence = "review"
+    _match_stats[f"conf_{confidence}"] += 1
+    _match_stats["stage_jaccard"] += 1
+
+    result = {"issn": best[0] if confidence != "none" else None,
+              "confidence": confidence, "score": best_score, "stage": "jaccard",
+              "candidates": [{"issn": i, "title": t, "score": s} for i, t, s in top]}
+
+    # 5. Crossref fallback
+    if best_score < 0.80 and article_title:
+        return _crossref_or_none(result, query_norm, article_title)
+    return result
+
+
+def parse_lattes_text(text: str) -> list[dict]:
+    """Pipeline completo: segmenta → parseia → match (com ISSN extraído优先).
+
+    Retorna lista de artigos com campos de parseSingleArticle + campos:
+      matchedIssn, confidence, matchScore, matchStage, matchCandidates
+    """
+    segments = segment_lattes_text(text)
+    results = []
+    for seg in segments:
+        parsed = parse_single_article(seg)
+        if parsed["extractedIssn"]:
+            match_result = {
+                "issn": parsed["extractedIssn"], "confidence": "high",
+                "score": 1.0, "stage": "issn-extracted", "candidates": [],
+            }
+        else:
+            match_result = match_journal(parsed["journal"])
+        results.append({
+            **parsed,
+            "matchedIssn": match_result["issn"],
+            "confidence": match_result["confidence"],
+            "matchScore": match_result["score"],
+            "matchStage": match_result["stage"],
+            "matchCandidates": match_result["candidates"],
+        })
+    return results
+
+
+def get_match_stats() -> dict:
+    """Retorna estatísticas de matching para observabilidade (Fase 3e)."""
+    global _match_stats
+    return dict(_match_stats) if _match_stats else {}

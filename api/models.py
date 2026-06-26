@@ -42,3 +42,43 @@ class SearchResult(BaseModel):
     title: str
     area: str
     source: str
+
+
+class MatchCandidate(BaseModel):
+    issn: str
+    title: str
+    score: float
+
+
+class MatchResult(BaseModel):
+    issn: str | None
+    confidence: str  # "high" | "review" | "none"
+    score: float
+    stage: str  # "alias" | "exact" | "issn-extracted" | "containment" | "jaccard" | "none"
+    candidates: list[MatchCandidate] = []
+
+
+class MatchBatchRequest(BaseModel):
+    queries: list[str]
+    article_titles: list[str] | None = None
+
+
+class MatchBatchResponse(BaseModel):
+    results: list[MatchResult]
+    count: int
+
+
+class MatchLattesRequest(BaseModel):
+    text: str
+    researcher_name: str | None = None
+
+
+class SaveAliasRequest(BaseModel):
+    journal_name: str
+    issn: str
+
+
+class FeedbackRequest(BaseModel):
+    query: str
+    wrong_issn: str | None = None
+    right_issn: str | None = None

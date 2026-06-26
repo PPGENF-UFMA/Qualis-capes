@@ -5,14 +5,14 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, normalizeISSN, searchByName, classifyByName, searchBatch } from './enricher.js';
+import { enrichAndClassify, normalizeISSN, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
 import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js';
-import { initLattesParser, segmentLattesText, parseSingleArticle } from './lattesParser.js';
+import { initLattesParser, segmentLattesText, parseSingleArticle, parseLattesText, matchJournalToISSN, saveUserAlias } from './lattesParser.js';
 import { updateComparisonDashboard } from './compare.js';
 import {
   switchTab, switchInputType,
@@ -67,6 +67,37 @@ function setupEventListeners() {
     if (appState.classifiedItems.length > 0) {
       renderResultsTable();
     }
+  });
+
+  // Reclassifica um item quando o usuário troca manualmente a revista
+  // no modal de candidatos (parser Lattes). Persiste alias aprendido.
+  window.addEventListener('lattes-reclassify', async (e) => {
+    const { oldIssn, newIssn, newTitle } = e.detail || {};
+    if (!newIssn) return;
+
+    const idx = appState.classifiedItems.findIndex(
+      it => it.issn === oldIssn && it.confidence === 'review'
+    );
+    if (idx === -1) return;
+
+    showLoadingState('Reclassificando', `Buscando ${newIssn}...`, 'refresh-cw');
+    const newClassified = await enrichAndClassify(newIssn);
+    if (newTitle) newClassified.title = `${appState.classifiedItems[idx].title.replace(/^\[[^\]]+\]\s*/, '').replace(/\n/g, ' ').split(' (')[0]} (${newTitle})`;
+
+    newClassified.confidence = 'high';
+    newClassified.lattesCandidates = undefined;
+    newClassified.year = appState.classifiedItems[idx].year;
+
+    // Persiste alias no servidor (compartilhado) + localStorage (fallback offlline)
+    const journalRaw = appState.classifiedItems[idx].lattesJournalRaw || appState.classifiedItems[idx].title;
+    saveUserAlias(journalRaw, newIssn);
+    saveServerAlias(journalRaw, newIssn);
+    sendMatchFeedback(journalRaw, oldIssn, newIssn);
+
+    appState.classifiedItems[idx] = newClassified;
+    hideLoadingState();
+    renderResultsTable();
+    showToast('Revista atualizada, classificada e alias salvo no servidor.', 'success');
   });
 
   // Consulta Individual (Busca Híbrida por ISSN ou Nome)
@@ -544,7 +575,9 @@ async function checkCircuitsStatus() {
 
 /**
  * Inicializa a Base de Dados e exibe status na interface.
- * Busca apenas a contagem de periódicos via API de status (nao carrega 35K itens).
+ * Busca a contagem de periódicos via API de status e carrega a lista
+ * completa (issn + título + área) em memória para o matching local
+ * do parser Lattes (Jaccard-IDF + aliases).
  */
 async function initDatabase() {
   try {
@@ -554,6 +587,11 @@ async function initDatabase() {
     appState.dbSummary.total = data.database_size || 0;
 
     dom.dbStatus.textContent = `Base Conectada (${appState.dbSummary.total} revistas)`;
+
+    // Carrega items {issn,title,area} para matching local do Lattes
+    try {
+      await loadDatabase();
+    } catch (_) { /* ignore — fallback server-side mantém fluxo */ }
   } catch (error) {
     dom.dbStatus.textContent = 'Erro ao carregar banco';
     dom.dbStatus.style.background = 'var(--error-bg)';
@@ -563,27 +601,95 @@ async function initDatabase() {
 }
 
 /**
- * Parseia texto Lattes com matching server-side (via /api/v1/search/batch).
- * Substitui o matching local Jaro-Winkler por busca no backend.
+ * Parseia texto Lattes — pipeline Fase 1 (backend matching authoritative).
+ *
+ * Fluxo:
+ *   1. Segmentação + parser via lattesParser.js (cliente) — só regex.
+ *   2. ISSN extraído literalmente do texto tem precedência (client-side).
+ *   3. Restante enviado para `/api/v1/match/batch` (backend) com IDF + índice
+ *      invertido + aliases compartilhados server-side.
+ *   4. Se servidor falhar (offline, erro 5xx), cai no matcher local
+ *      `parseLattesText` (Jaccard-IDF cliente) como fallback offline.
+ *
  * @param {string} text Texto bruto do Lattes
- * @returns {Promise<Object[]>} Artigos parseados com matchedIssn resolvido
+ * @returns {Promise<Object[]>} Artigos parseados com matchedIssn/confidence resolvidos
  */
 async function parseLattesWithServerMatching(text) {
+  // 1. Pipeline local: segmentar + parsear (regex) — sempre no cliente.
+  //    Mesmo fallback, garante estrutura consistente.
+  let dbItems = [];
+  try {
+    const db = await loadDatabase();
+    dbItems = (db && db.items) ? db.items : [];
+  } catch (_) { /* ignore — server-side ainda funcionará */ }
+
   const segments = segmentLattesText(text);
   const parsed = segments.map(s => parseSingleArticle(s)).filter(a => a.type !== 'congresso');
-  
   if (parsed.length === 0) return [];
 
-  const namesToResolve = parsed.map(a => a.journal);
-  const resolved = await searchBatch(namesToResolve);
-  
-  for (let i = 0; i < parsed.length; i++) {
-    const match = resolved[i];
-    if (match && match.issn) {
-      parsed[i].matchedIssn = match.issn;
+  // 2. ISSN extraído do texto (client-side) tem precedência absoluta.
+  for (const a of parsed) {
+    if (a.extractedIssn) {
+      a.matchedIssn = a.extractedIssn;
+      a.confidence = 'high';
+      a.matchScore = 1.0;
+      a.matchStage = 'issn-extracted';
+      a.matchCandidates = [];
     }
   }
-  
+
+  // 3. Restante vai para o backend (matching authoritative com IDF + aliases + Crossref).
+  const needsServer = parsed.filter(a => !a.matchedIssn);
+  if (needsServer.length > 0) {
+    const queries = needsServer.map(a => a.journalRaw || a.journal);
+    const articleTitles = needsServer.map(a => a.title);
+    try {
+      const resolved = await matchBatch(queries, articleTitles);
+      if (resolved.length === needsServer.length) {
+        for (let i = 0; i < needsServer.length; i++) {
+          const m = resolved[i];
+          const a = needsServer[i];
+          if (m && m.issn) {
+            a.matchedIssn = m.issn;
+            a.confidence = m.confidence || 'high';
+            a.matchScore = m.score || 0.95;
+            a.matchStage = m.stage || 'jaccard';
+            a.matchCandidates = m.candidates || [];
+          } else if (m) {
+            // Backend retornou explicitamente "none" com score baixo
+            a.matchedIssn = null;
+            a.confidence = m.confidence || 'none';
+            a.matchScore = m.score || 0;
+            a.matchStage = m.stage || 'none';
+            a.matchCandidates = m.candidates || [];
+          }
+        }
+      }
+    } catch (_) { /* ignore — fallback abaixo */ }
+  }
+
+  // 4. Quem ainda não foi resolvido pelo servidor (offline, erro, ou sem match)
+  //    cai no matcher local Jaccard-IDF como fallback offline.
+  const stillUnresolved = parsed.filter(a => !a.matchedIssn && !a.confidence);
+  if (stillUnresolved.length > 0 && dbItems.length > 0) {
+    for (const a of stillUnresolved) {
+      const local = matchJournalToISSN(a.journal, dbItems);
+      if (local.issn) {
+        a.matchedIssn = local.issn;
+        a.confidence = local.confidence;
+        a.matchScore = local.score;
+        a.matchStage = local.confidence === 'high' ? 'local-jaccard' : 'local-fuzzy';
+        a.matchCandidates = local.candidates || [];
+      } else {
+        a.matchedIssn = null;
+        a.confidence = 'none';
+        a.matchScore = local.score || 0;
+        a.matchStage = 'none';
+        a.matchCandidates = local.candidates || [];
+      }
+    }
+  }
+
   return parsed;
 }
 
@@ -610,6 +716,20 @@ async function classifyArticleWithFallback(article) {
     }
   }
 
+  // Propagar sinalizadores de confiança do parser Lattes
+  if (article.confidence) {
+    classified.confidence = article.confidence;
+  }
+  if (article.matchStage) {
+    classified.matchStage = article.matchStage;
+  }
+  if (article.matchCandidates && article.matchCandidates.length > 0) {
+    classified.lattesCandidates = article.matchCandidates;
+  }
+  if (article.journalRaw) {
+    classified.lattesJournalRaw = article.journalRaw;
+  }
+
   if (article.title && classified.title === 'Periódico Não Identificado na Base') {
     classified.title = `[Não Identificado] ${article.journal}`;
   } else if (article.title && classified.title) {
@@ -630,8 +750,9 @@ async function processLattesArticles(parsedArticles, researcherName) {
   
   let countNew = 0;
   let unmatchedCount = 0;
+  let reviewCount = 0;
   updateLoadingProgress(0, parsedArticles.length);
-  
+
   for (const article of parsedArticles) {
     if (article.type === 'congresso') continue;
 
@@ -639,6 +760,8 @@ async function processLattesArticles(parsedArticles, researcherName) {
 
     if (classified.unmatchedLattes) {
       unmatchedCount++;
+    } else if (classified.confidence === 'review') {
+      reviewCount++;
     }
 
     addClassifiedItem(classified);
@@ -656,9 +779,11 @@ async function processLattesArticles(parsedArticles, researcherName) {
   hideLoadingState();
   renderResultsTable();
   switchTab('analytics');
-  
+
   if (unmatchedCount > 0) {
     showToast(`⚠ ${unmatchedCount} de ${parsedArticles.length} artigos não foram reconhecidos. Verifique a tabela manualmente.`, 'warning');
+  } else if (reviewCount > 0) {
+    showToast(`✓ ${countNew} artigos processados. ${reviewCount} precisam de revisão (linhas destacadas).`, 'warning');
   } else {
     showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
   }

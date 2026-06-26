@@ -126,3 +126,67 @@ export async function searchBatch(queries) {
     return [];
   }
 }
+
+/**
+ * Matching de periódicos por nome — pipeline server-side:
+ * alias → exato → containment → Jaccard-IDF + Jaro-Winkler.
+ *
+ * @param {string[]} queries Lista de nomes de periódicos (1 por artigo).
+ * @param {string[]|null} articleTitles Títulos de artigo (opcional, usado
+ *        em Fase 2 p/ desambiguação Crossref; hoje ignorado pelo backend).
+ * @returns {Promise<Object[]>} Results: {issn, confidence, score, stage, candidates}
+ */
+export async function matchBatch(queries, articleTitles = null) {
+  try {
+    const body = { queries };
+    if (articleTitles && articleTitles.length === queries.length) {
+      body.article_titles = articleTitles;
+    }
+    const response = await fetch('/api/v1/match/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.results || [];
+  } catch (error) {
+    console.error('[API] Erro no matchBatch:', error);
+    return [];
+  }
+}
+
+/**
+ * Salva um alias aprendido no servidor (compartilhado entre clientes).
+ * @param {string} journalName Nome do periódico
+ * @param {string} issn ISSN correto
+ */
+export async function saveServerAlias(journalName, issn) {
+  try {
+    await fetch('/api/v1/alias', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ journal_name: journalName, issn })
+    });
+  } catch (error) {
+    console.error('[API] Erro ao salvar alias:', error);
+  }
+}
+
+/**
+ * Envia feedback de correção manual (Fase 3d).
+ * @param {string} query Nome do periódico original
+ * @param {string} wrongIssn ISSN errado (ou null)
+ * @param {string} rightIssn ISSN correto escolhido pelo usuário
+ */
+export async function sendMatchFeedback(query, wrongIssn, rightIssn) {
+  try {
+    await fetch('/api/v1/match/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, wrong_issn: wrongIssn, right_issn: rightIssn })
+    });
+  } catch (error) {
+    console.error('[API] Erro ao enviar feedback:', error);
+  }
+}

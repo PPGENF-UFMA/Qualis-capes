@@ -17,3 +17,6 @@ requests>=2.31.0
 
 # Scraping robusto (Latindex, fallback)
 beautifulsoup4>=4.12.0
+
+# Testes (Fase 1 — backend matching engine)
+pytest>=7.4.0

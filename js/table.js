@@ -107,11 +107,20 @@ export function renderResultsTable() {
     const areaBadge = `<span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">${safeArea}</span>`;
 
     let titleWarning = '';
+    let reviewButton = '';
     if (item.unmatchedLattes) {
       row.style.background = 'rgba(245, 158, 11, 0.05)';
       titleWarning = `<span style="color: var(--warning); display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-top: 4px;">
         <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> Não encontrado na base
       </span>`;
+    } else if (item.confidence === 'review') {
+      row.style.background = 'rgba(59, 130, 246, 0.05)';
+      titleWarning = `<span style="color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-top: 4px;">
+        <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Correspondência aproximada — revise
+      </span>`;
+      if (item.lattesCandidates && item.lattesCandidates.length > 0) {
+        reviewButton = `<button class="btn-details" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); cursor: pointer;" onclick="window.showLattesCandidatesModal(this)" data-candidates="${escapeHTML(JSON.stringify(item.lattesCandidates))}" data-item-key="${escapeHTML(item.issn + '|' + (item.title || ''))}">Trocar revista</button>`;
+      }
     }
 
     let finalJustification = safeJustification;
@@ -127,6 +136,7 @@ export function renderResultsTable() {
             <span>${safeTitle}</span>
             ${areaBadge}
             ${titleWarning}
+            ${reviewButton}
           </div>
         </div>
       </td>
@@ -171,6 +181,95 @@ export function renderResultsTable() {
     lucide.createIcons({ node: dom.resultsTableBody });
   }
 }
+
+window.showLattesCandidatesModal = function(btn) {
+  const candidatesRaw = btn.getAttribute('data-candidates');
+  const itemKeyRaw = btn.getAttribute('data-item-key');
+  if (!candidatesRaw) return;
+
+  let candidates = [];
+  try { candidates = JSON.parse(candidatesRaw); } catch (_) { return; }
+
+  // Constrói/reativa modal reusando o container de candidates-modal
+  let modal = document.getElementById('lattes-candidates-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'lattes-candidates-modal';
+    modal.className = 'search-modal';
+    modal.innerHTML = `
+      <div class="search-modal-card" style="max-width: 620px;">
+        <div class="search-modal-header">
+          <h2 class="search-modal-title">Confirmar revista correta</h2>
+          <button id="btn-close-lattes-modal" class="btn-close-modal" aria-label="Fechar">&times;</button>
+        </div>
+        <p id="lattes-modal-subtitle" class="search-modal-subtitle" style="margin-bottom: 12px;"></p>
+        <div style="max-height: 380px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="text-align: left; font-size: 12px; color: var(--text-muted);">
+                <th style="padding: 6px;">ISSN</th>
+                <th style="padding: 6px;">Título</th>
+                <th style="padding: 6px;">Score</th>
+                <th style="padding: 6px;"></th>
+              </tr>
+            </thead>
+            <tbody id="lattes-modal-body"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  const subtitle = modal.querySelector('#lattes-modal-subtitle');
+  const tbody = modal.querySelector('#lattes-modal-body');
+  subtitle.textContent = `Candidatos sugeridos para: ${itemKeyRaw || ''}`;
+  tbody.innerHTML = '';
+
+  candidates.forEach(c => {
+    const tr = document.createElement('tr');
+    tr.style.borderTop = '1px solid var(--border-color)';
+    tr.innerHTML = `
+      <td style="padding: 8px; font-family: monospace; font-size: 12px;">${escapeHTML(c.issn || '')}</td>
+      <td style="padding: 8px; font-size: 13px;">${escapeHTML(c.title || '')}</td>
+      <td style="padding: 8px; font-size: 12px; color: var(--text-muted);">${(c.score || 0).toFixed(3)}</td>
+      <td style="padding: 8px; text-align: right;">
+        <button class="btn-primary" style="font-size: 11px; padding: 5px 10px;"
+          data-issn="${escapeHTML(c.issn || '')}"
+          data-title="${escapeHTML(c.title || '')}">Selecionar</button>
+      </td>
+    `;
+    tr.querySelector('button').addEventListener('click', () => {
+      const newIssn = c.issn;
+      const newTitle = c.title;
+      // Persistir alias aprendido — local + servidor + feedback
+      try {
+        const journalRaw = itemKeyRaw ? itemKeyRaw.split('|').slice(1).join('|') : '';
+        if (journalRaw && newIssn) {
+          import('/js/lattesParser.js').then(({ saveUserAlias }) => {
+            saveUserAlias(journalRaw, newIssn);  // localStorage fallback offline
+          });
+          import('/js/enricher.js').then(({ saveServerAlias, sendMatchFeedback }) => {
+            saveServerAlias(journalRaw, newIssn);  // compartilhado no servidor
+            const oldIssn = (itemKeyRaw || '').split('|')[0];
+            sendMatchFeedback(journalRaw, oldIssn || null, newIssn);  // auditoria
+          });
+        }
+      } catch (_) {}
+      // Disparar evento para reclassificar
+      window.dispatchEvent(new CustomEvent('lattes-reclassify', {
+        detail: { oldIssn: itemKeyRaw ? itemKeyRaw.split('|')[0] : null, newIssn, newTitle }
+      }));
+      modal.classList.remove('active');
+    });
+    tbody.appendChild(tr);
+  });
+
+  modal.classList.add('active');
+  const closeBtn = modal.querySelector('#btn-close-lattes-modal');
+  if (closeBtn) closeBtn.onclick = () => modal.classList.remove('active');
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
+};
 
 // Global modal function for table inline click
 window.showCandidatesModal = function(btn) {

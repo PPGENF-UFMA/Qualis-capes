@@ -24,3 +24,14 @@ __pycache__/
 # Agentes
 .agents/
 agents/
+
+# Python test cache
+.pytest_cache/
+
+# Servidor: aliases aprendidos pelos usuários (runtime)
+data/user_aliases.json
+
+# Playwright / Chrome DevTools logs e snapshots
+.playwright-mcp/
+*.heapsnapshot
+*.log
