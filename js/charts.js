@@ -283,8 +283,8 @@ function renderQualisChart(counts) {
 
   const theme = getChartThemeConfig();
   const colorMapping = {
-    A1: '#f59e0b', A2: '#94a3b8', A3: '#b7791f', A4: '#db2777',
-    A5: '#1d4ed8', A6: '#0891b2', A7: '#0f766e', A8: '#047857', NC: '#4b5563'
+    A1: '#10b981', A2: '#34d399', A3: '#06b6d4', A4: '#3b82f6',
+    A5: '#6366f1', A6: '#fbbf24', A7: '#f97316', A8: '#ef4444', NC: '#64748b'
   };
 
   const labels = [];
@@ -415,8 +415,8 @@ function renderPublicationsYearChart(yearEstratoCounts) {
 
   const theme = getChartThemeConfig();
   const colorMapping = {
-    A1: '#f59e0b', A2: '#94a3b8', A3: '#b7791f', A4: '#db2777',
-    A5: '#1d4ed8', A6: '#0891b2', A7: '#0f766e', A8: '#047857', NC: '#4b5563'
+    A1: '#10b981', A2: '#34d399', A3: '#06b6d4', A4: '#3b82f6',
+    A5: '#6366f1', A6: '#fbbf24', A7: '#f97316', A8: '#ef4444', NC: '#64748b'
   };
 
   const datasets = [];
@@ -546,6 +546,10 @@ function renderQualisEvolutionChart(scores) {
     }
   };
 
+  const chartGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.clientHeight || 200);
+  chartGradient.addColorStop(0, 'rgba(168, 85, 247, 0.35)');
+  chartGradient.addColorStop(1, 'rgba(168, 85, 247, 0.01)');
+
   appState.charts.qualisEvolution = new Chart(ctx, {
     type: 'line',
     data: {
@@ -554,10 +558,10 @@ function renderQualisEvolutionChart(scores) {
         label: 'Nota CAPES',
         data,
         borderColor: '#a855f7',
-        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+        backgroundColor: chartGradient,
         borderWidth: 3,
         fill: true,
-        tension: 0.3,
+        tension: 0.4,
         pointBackgroundColor: '#a855f7',
         pointBorderColor: theme.borderColor,
         pointBorderWidth: 2,

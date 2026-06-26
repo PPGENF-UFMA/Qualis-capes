@@ -178,14 +178,34 @@
           </div>
         </div>
 
-        <!-- Status da Conexão da Base de Referência -->
-        <div class="db-status-footer">
-          <div id="db-status" class="db-badge">Carregando base local...</div>
-          <div id="db-compiled-at" class="db-badge" style="display: none; font-size: 11px; opacity: 0.8;"></div>
-          <div id="db-sources-info" class="db-badge" style="display: none; font-size: 11px; opacity: 0.8;"></div>
-          <div id="db-jcr-edition" class="db-badge" style="display: none; font-size: 11px; opacity: 0.8;"></div>
-          <div id="citescore-status" class="db-badge citescore-badge" style="display: none;"></div>
-          <div id="circuits-status" class="db-badge circuit-badge" style="display: none;"></div>
+        <!-- Card de Status da Base de Referência -->
+        <div class="card status-card">
+          <div class="status-header">
+            <span class="status-dot pulsing" id="status-indicator-dot"></span>
+            <h4 class="status-title">Status das Bases</h4>
+          </div>
+          <div class="status-list">
+            <div class="status-item" id="db-status-item">
+              <i data-lucide="database"></i>
+              <span id="db-status">Carregando base local...</span>
+            </div>
+            <div class="status-item" id="db-compiled-at-item" style="display: none;">
+              <i data-lucide="calendar"></i>
+              <span id="db-compiled-at"></span>
+            </div>
+            <div class="status-item" id="db-sources-item" style="display: none;">
+              <i data-lucide="book-open"></i>
+              <span id="db-sources-info"></span>
+            </div>
+            <div class="status-item" id="citescore-status-item" style="display: none;">
+              <i data-lucide="activity"></i>
+              <span id="citescore-status"></span>
+            </div>
+            <div class="status-item" id="circuits-status-item" style="display: none;">
+              <i data-lucide="zap-off"></i>
+              <span id="circuits-status"></span>
+            </div>
+          </div>
         </div>
 
       </aside>

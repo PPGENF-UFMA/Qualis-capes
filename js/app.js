@@ -106,7 +106,7 @@ function setupEventListeners() {
     const query = dom.singleIssnInput.value.trim();
     if (!query) return;
 
-    showLoadingState('Analisando Consulta', 'Verificando formato do termo digitado...', 'search');
+    showLoadingState('Analisando Consulta', 'Verificando formato do termo digitado...', 'search', true);
 
     const normalized = normalizeISSN(query);
     if (normalized) {
@@ -469,7 +469,7 @@ function setupEventListeners() {
       const issn = btn.getAttribute('data-issn');
       if (!issn) return;
 
-      showLoadingState('Analisando Consulta', 'Classificando periódico a partir do atalho...', 'search');
+      showLoadingState('Analisando Consulta', 'Classificando periódico a partir do atalho...', 'search', true);
       const classified = await enrichAndClassify(issn);
       addClassifiedItem(classified);
       addRecentSearch(classified.issn, classified.title);
@@ -492,16 +492,16 @@ async function checkCiteScoreStatus() {
     if (!resp.ok) return;
     const data = await resp.json();
     if (!dom.citeScoreStatus) return;
+    
+    const citescoreItem = dom.citeScoreStatus.parentElement;
+    citescoreItem.style.display = 'flex';
+    citescoreItem.className = 'status-item'; // reset
     if (!data.citeScoreAvailable) {
       dom.citeScoreStatus.textContent = 'CiteScore indisponível (sem API key)';
-      dom.citeScoreStatus.style.display = 'block';
-      dom.citeScoreStatus.style.background = 'var(--warning-bg, rgba(245, 158, 11, 0.15))';
-      dom.citeScoreStatus.style.color = 'var(--warning, #f59e0b)';
+      citescoreItem.classList.add('warning');
     } else {
       dom.citeScoreStatus.textContent = 'CiteScore disponível';
-      dom.citeScoreStatus.style.display = 'block';
-      dom.citeScoreStatus.style.background = 'rgba(16, 185, 129, 0.15)';
-      dom.citeScoreStatus.style.color = 'var(--success, #10b981)';
+      citescoreItem.classList.add('success');
     }
 
     // Exibir data de compilação da base (DB-3/UX-1)
@@ -513,18 +513,19 @@ async function checkCiteScoreStatus() {
           hour: '2-digit', minute: '2-digit'
         });
         const daysSince = Math.floor((Date.now() - compiledDate.getTime()) / 86400000);
-        let color = 'var(--text-secondary)';
+        let statusClass = 'success';
         let warning = '';
         if (daysSince > 180) {
-          color = 'var(--error, #ef4444)';
+          statusClass = 'error';
           warning = ' ⚠ Desatualizado!';
         } else if (daysSince > 90) {
-          color = 'var(--warning, #f59e0b)';
+          statusClass = 'warning';
           warning = ' ⚠ Verificar atualização';
         }
-        dom.dbCompiledAt.textContent = `📅 Base compilada: ${formatted}${warning}`;
-        dom.dbCompiledAt.style.display = 'block';
-        dom.dbCompiledAt.style.color = color;
+        dom.dbCompiledAt.textContent = `Base compilada: ${formatted}${warning}`;
+        const compiledItem = dom.dbCompiledAt.parentElement;
+        compiledItem.style.display = 'flex';
+        compiledItem.className = `status-item ${statusClass}`;
 
         // Exibir edições das fontes de dados
         if (data.database_meta) {
@@ -534,8 +535,8 @@ async function checkCiteScoreStatus() {
           if (parts.length > 0) {
             const el = document.getElementById('db-sources-info');
             if (el) {
-              el.textContent = `📚 Fontes: ${parts.join(' · ')}`;
-              el.style.display = 'block';
+              el.textContent = `Fontes: ${parts.join(' · ')}`;
+              el.parentElement.style.display = 'flex';
             }
           }
         }
@@ -560,13 +561,20 @@ async function checkCircuitsStatus() {
         return `${label} (${s.cooldown_remaining}s)`;
       });
 
+    const circuitsItem = dom.circuitsStatus.parentElement;
+    const indicator = document.getElementById('status-indicator-dot');
     if (openCircuits.length > 0) {
-      dom.circuitsStatus.textContent = `⚠ API indisponível: ${openCircuits.join(', ')}`;
-      dom.circuitsStatus.style.display = 'block';
-      dom.circuitsStatus.style.background = 'rgba(239, 68, 68, 0.15)';
-      dom.circuitsStatus.style.color = 'var(--error, #ef4444)';
+      dom.circuitsStatus.textContent = `APIs offline: ${openCircuits.join(', ')}`;
+      circuitsItem.style.display = 'flex';
+      circuitsItem.className = 'status-item error';
+      if (indicator) {
+        indicator.className = 'status-dot red pulsing';
+      }
     } else {
-      dom.circuitsStatus.style.display = 'none';
+      circuitsItem.style.display = 'none';
+      if (indicator && dom.dbStatus && !dom.dbStatus.parentElement.classList.contains('error')) {
+        indicator.className = 'status-dot green pulsing';
+      }
     }
   } catch (e) {
     // silencioso
@@ -586,6 +594,8 @@ async function initDatabase() {
     const data = await resp.json();
     appState.dbSummary.total = data.database_size || 0;
 
+    const dbStatusItem = dom.dbStatus.parentElement;
+    dbStatusItem.className = 'status-item success';
     dom.dbStatus.textContent = `Base Conectada (${appState.dbSummary.total} revistas)`;
 
     // Carrega items {issn,title,area} para matching local do Lattes
@@ -593,9 +603,13 @@ async function initDatabase() {
       await loadDatabase();
     } catch (_) { /* ignore — fallback server-side mantém fluxo */ }
   } catch (error) {
+    const dbStatusItem = dom.dbStatus.parentElement;
+    dbStatusItem.className = 'status-item error';
     dom.dbStatus.textContent = 'Erro ao carregar banco';
-    dom.dbStatus.style.background = 'var(--error-bg)';
-    dom.dbStatus.style.color = 'var(--error)';
+    const indicator = document.getElementById('status-indicator-dot');
+    if (indicator) {
+      indicator.className = 'status-dot red pulsing';
+    }
     showToast('Falha ao carregar a base de dados de periódicos.', 'error');
   }
 }
@@ -853,7 +867,7 @@ async function handleSearchByName(nameQuery) {
   }
 
   if (results.length === 1) {
-    showLoadingState('Analisando ISSN', 'Consultando APIs e aplicando regras de extratos CAPES...', 'search');
+    showLoadingState('Analisando ISSN', 'Consultando APIs e aplicando regras de extratos CAPES...', 'search', true);
     const classified = await enrichAndClassify(results[0].issn);
     addClassifiedItem(classified);
     addRecentSearch(classified.issn, classified.title);

@@ -8,7 +8,7 @@ import appState from './state.js';
 import { escapeHTML } from './utils.js';
 import { enrichAndClassify } from './enricher.js';
 import { addClassifiedItem } from './state.js';
-import { renderResultsTable } from './table.js';
+import { renderResultsTable, showTableSkeletons } from './table.js';
 
 // ─── SISTEMA DE ABAS ──────────────────────────────────────────────
 
@@ -94,9 +94,16 @@ function setSubmitButtonsDisabled(disabled) {
  * @param {string} subtitle Subtítulo descritivo
  * @param {string} iconName Nome do ícone Lucide
  */
-export function showLoadingState(title = 'Processando Periódico', subtitle = 'Consultando bases oficiais e aplicando critérios CAPES...', iconName = 'search') {
+export function showLoadingState(title = 'Processando Periódico', subtitle = 'Consultando bases oficiais e aplicando critérios CAPES...', iconName = 'search', useSkeleton = false) {
   document.body.style.cursor = 'wait';
   setSubmitButtonsDisabled(true);
+  
+  if (useSkeleton) {
+    showTableSkeletons(1);
+    switchTab('table');
+    return;
+  }
+
   if (dom.loadingOverlay) {
     dom.loadingTitle.textContent = title;
     dom.loadingSubtitle.textContent = subtitle;
@@ -418,6 +425,7 @@ export function showToast(message, type = 'info', duration = 4000) {
     <i data-lucide="${iconMap[type] || 'info'}" class="toast-icon"></i>
     <span class="toast-message">${escapeHTML(message)}</span>
     <button class="toast-close" aria-label="Fechar notificação"><i data-lucide="x"></i></button>
+    <div class="toast-progress" style="animation-duration: ${duration}ms;"></div>
   `;
 
   const closeBtn = toast.querySelector('.toast-close');

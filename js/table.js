@@ -71,6 +71,7 @@ export function renderResultsTable() {
 
   filtered.forEach((item, index) => {
     const row = document.createElement('tr');
+    row.className = 'animated-row';
 
     // Sanitizar dados externos para prevenir XSS
     const safeTitle = escapeHTML(item.title);
@@ -305,3 +306,37 @@ window.showCandidatesModal = function(btn) {
     if (e.target === modal) modal.style.display = 'none';
   };
 };
+
+/**
+ * Exibe linhas esqueléticas (Skeleton Loader) na tabela de resultados.
+ * @param {number} rowCount Quantidade de linhas de esqueleto a renderizar
+ */
+export function showTableSkeletons(rowCount = 3) {
+  if (!dom.resultsTableBody) return;
+  dom.resultsContainer.style.display = 'block';
+  dom.resultsTableBody.innerHTML = '';
+  
+  for (let i = 0; i < rowCount; i++) {
+    const row = document.createElement('tr');
+    row.className = 'skeleton-row';
+    row.innerHTML = `
+      <td>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="skeleton-bar title shimmer-effect"></div>
+          <div class="skeleton-bar shimmer-effect" style="width: 80px; height: 14px;"></div>
+        </div>
+      </td>
+      <td><div class="skeleton-bar issn shimmer-effect"></div></td>
+      <td><div class="skeleton-bar metric shimmer-effect"></div></td>
+      <td><div class="skeleton-bar metric shimmer-effect"></div></td>
+      <td>
+        <div style="display: flex; gap: 4px;">
+          <div class="skeleton-bar shimmer-effect" style="width: 50px; height: 18px; border-radius: 4px;"></div>
+          <div class="skeleton-bar shimmer-effect" style="width: 60px; height: 18px; border-radius: 4px;"></div>
+        </div>
+      </td>
+      <td><div class="skeleton-bar badge shimmer-effect"></div></td>
+    `;
+    dom.resultsTableBody.appendChild(row);
+  }
+}

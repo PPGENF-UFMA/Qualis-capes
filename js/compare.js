@@ -218,9 +218,9 @@ function renderComparisonEstratoChart(profiles) {
 
   const estratos = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'NC'];
   const estratoColors = {
-    A1: 'rgba(245, 158, 11, 0.8)', A2: 'rgba(148, 163, 184, 0.8)', A3: 'rgba(183, 121, 31, 0.8)',
-    A4: 'rgba(219, 39, 119, 0.8)', A5: 'rgba(59, 130, 246, 0.8)', A6: 'rgba(6, 182, 212, 0.8)',
-    A7: 'rgba(20, 184, 166, 0.8)', A8: 'rgba(4, 120, 87, 0.8)', NC: 'rgba(75, 85, 99, 0.8)'
+    A1: 'rgba(16, 185, 129, 0.8)', A2: 'rgba(52, 211, 153, 0.8)', A3: 'rgba(6, 182, 212, 0.8)',
+    A4: 'rgba(59, 130, 246, 0.8)', A5: 'rgba(99, 102, 241, 0.8)', A6: 'rgba(251, 191, 36, 0.8)',
+    A7: 'rgba(249, 115, 22, 0.8)', A8: 'rgba(239, 68, 68, 0.8)', NC: 'rgba(100, 116, 139, 0.8)'
   };
 
   const isDark = !document.body.classList.contains('light-theme');
