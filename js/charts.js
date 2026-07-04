@@ -6,6 +6,7 @@
 
 import dom from './dom.js';
 import appState from './state.js';
+import { escapeHTML } from './utils.js';
 
 // Pesos de Score CAPES recomendados
 const SCORE_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
@@ -624,12 +625,16 @@ function renderTopJournals(items) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  tableBody.innerHTML = sorted.map(([journal, qty]) => `
+  tableBody.innerHTML = sorted.map(([journal, qty]) => {
+    const safeJournal = escapeHTML(journal);
+    const safeQty = escapeHTML(qty);
+    return `
     <tr>
-      <td class="top-journal-name" title="${journal}">${journal}</td>
-      <td class="top-journal-count">${qty}</td>
+      <td class="top-journal-name" title="${safeJournal}">${safeJournal}</td>
+      <td class="top-journal-count">${safeQty}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 /** Renderiza a lista de insights do currículo baseado em regras heurísticas. */
@@ -704,7 +709,7 @@ function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent,
   if (concentrationPercent > 30 && totalItems >= 3) {
     insights.push({
       icon: 'alert-circle',
-      text: `<strong>Alta Concentração:</strong> ${concentrationPercent}% das publicações estão concentradas no periódico <strong>${maxJournal}</strong> (máx. recomendado: 30%). Recomenda-se diversificar os canais para fortalecer o currículo frente aos critérios CAPES.`
+      text: `<strong>Alta Concentração:</strong> ${concentrationPercent}% das publicações estão concentradas no periódico <strong>${escapeHTML(maxJournal)}</strong> (máx. recomendado: 30%). Recomenda-se diversificar os canais para fortalecer o currículo frente aos critérios CAPES.`
     });
   }
 

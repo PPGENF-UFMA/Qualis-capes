@@ -10,6 +10,58 @@ import { enrichAndClassify } from './enricher.js';
 import { addClassifiedItem } from './state.js';
 import { renderResultsTable, showTableSkeletons } from './table.js';
 
+let activeModal = null;
+let lastFocusedElement = null;
+
+function getFocusableElements(container) {
+  return Array.from(container.querySelectorAll(
+    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(el => el.offsetParent !== null);
+}
+
+function handleModalKeydown(e) {
+  if (!activeModal || e.key !== 'Tab') return;
+  const focusable = getFocusableElements(activeModal);
+  if (focusable.length === 0) {
+    e.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function openManagedModal(modal, preferredFocus) {
+  if (!modal) return;
+  lastFocusedElement = document.activeElement;
+  activeModal = modal;
+  document.addEventListener('keydown', handleModalKeydown);
+  modal.classList.add('active');
+  modal.style.display = 'flex';
+  const focusTarget = preferredFocus || getFocusableElements(modal)[0];
+  if (focusTarget) focusTarget.focus();
+}
+
+function closeManagedModal(modal) {
+  if (!modal) return;
+  modal.classList.remove('active');
+  modal.style.display = 'none';
+  if (activeModal === modal) {
+    activeModal = null;
+    document.removeEventListener('keydown', handleModalKeydown);
+  }
+  if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+    lastFocusedElement.focus();
+  }
+  lastFocusedElement = null;
+}
+
 // ─── SISTEMA DE ABAS ──────────────────────────────────────────────
 
 /**
@@ -21,26 +73,46 @@ export function switchTab(tabId) {
 
   // Reset all tabs
   [dom.tabTable, dom.tabAnalytics, dom.tabComparison].forEach(t => {
-    if (t) t.classList.remove('active');
+    if (t) {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+      t.setAttribute('tabindex', '-1');
+    }
   });
   [dom.paneTable, dom.paneAnalytics, dom.paneComparison].forEach(p => {
-    if (p) p.classList.remove('active');
+    if (p) {
+      p.classList.remove('active');
+      p.setAttribute('hidden', '');
+    }
   });
 
   if (tabId === 'table') {
     dom.tabTable.classList.add('active');
+    dom.tabTable.setAttribute('aria-selected', 'true');
+    dom.tabTable.setAttribute('tabindex', '0');
     dom.paneTable.classList.add('active');
+    dom.paneTable.removeAttribute('hidden');
   } else if (tabId === 'analytics') {
     dom.tabAnalytics.classList.add('active');
+    dom.tabAnalytics.setAttribute('aria-selected', 'true');
+    dom.tabAnalytics.setAttribute('tabindex', '0');
     dom.paneAnalytics.classList.add('active');
+    dom.paneAnalytics.removeAttribute('hidden');
 
     if (appState.charts.qualis) appState.charts.qualis.resize();
     if (appState.charts.indexers) appState.charts.indexers.resize();
     if (appState.charts.publicationsYear) appState.charts.publicationsYear.resize();
     if (appState.charts.qualisEvolution) appState.charts.qualisEvolution.resize();
   } else if (tabId === 'comparison') {
-    if (dom.tabComparison) dom.tabComparison.classList.add('active');
-    if (dom.paneComparison) dom.paneComparison.classList.add('active');
+    if (dom.tabComparison) {
+      dom.tabComparison.classList.add('active');
+      dom.tabComparison.setAttribute('aria-selected', 'true');
+      dom.tabComparison.setAttribute('tabindex', '0');
+    }
+    if (dom.paneComparison) {
+      dom.paneComparison.classList.add('active');
+      dom.paneComparison.removeAttribute('hidden');
+    }
 
     if (appState.charts.radar) appState.charts.radar.resize();
     if (appState.charts.comparisonEstrato) appState.charts.comparisonEstrato.resize();
@@ -57,7 +129,10 @@ export function switchInputType(type) {
 
   // Resetar classes active
   [dom.selectorSingle, dom.selectorBatch, dom.selectorUpload, dom.selectorLattes].forEach(s => {
-    if (s) s.classList.remove('active');
+    if (s) {
+      s.classList.remove('active');
+      s.setAttribute('aria-pressed', 'false');
+    }
   });
   [dom.paneInputSingle, dom.paneInputBatch, dom.paneInputUpload, dom.paneInputLattes].forEach(p => {
     if (p) p.classList.remove('active');
@@ -72,7 +147,10 @@ export function switchInputType(type) {
   };
 
   const [selector, pane] = selectorMap[type] || selectorMap.single;
-  if (selector) selector.classList.add('active');
+  if (selector) {
+    selector.classList.add('active');
+    selector.setAttribute('aria-pressed', 'true');
+  }
   if (pane) pane.classList.add('active');
 }
 
@@ -172,8 +250,7 @@ export function showLattesPreviewModal(articles, onConfirm) {
     return false;
   }
 
-  dom.lattesPreviewModal.classList.add('active');
-  dom.lattesPreviewModal.style.display = 'flex';
+  openManagedModal(dom.lattesPreviewModal, dom.btnConfirmLattes);
   
   if (dom.lattesPreviewCountText) {
     dom.lattesPreviewCountText.textContent = `Foram detectados ${articles.length} artigos no texto fornecido. Confirme a lista abaixo para iniciar a classificacao.`;
@@ -224,10 +301,7 @@ export function showLattesPreviewModal(articles, onConfirm) {
 }
 
 export function closeLattesPreviewModal() {
-  if (dom.lattesPreviewModal) {
-    dom.lattesPreviewModal.classList.remove('active');
-    dom.lattesPreviewModal.style.display = 'none';
-  }
+  closeManagedModal(dom.lattesPreviewModal);
 }
 
 // ─── TABS & PANELS ─────────────────────────────────────────────────
@@ -243,6 +317,8 @@ export function showSearchModal(items) {
   items.forEach(item => {
     const itemEl = document.createElement('div');
     itemEl.className = 'search-result-item';
+    itemEl.setAttribute('role', 'button');
+    itemEl.setAttribute('tabindex', '0');
     const safeTitleModal = escapeHTML(item.title);
     const safeAreaModal = escapeHTML(item.area);
     const safeIssnModal = escapeHTML(item.issn);
@@ -254,7 +330,7 @@ export function showSearchModal(items) {
       <div class="search-result-issn">${safeIssnModal}</div>
     `;
 
-    itemEl.addEventListener('click', async () => {
+    const classifySelected = async () => {
       closeSearchModal();
       showLoadingState('Analisando ISSN', 'Consultando APIs e aplicando regras de extratos CAPES...', 'search');
       const classified = await enrichAndClassify(item.issn);
@@ -264,13 +340,21 @@ export function showSearchModal(items) {
       dom.singleIssnInput.value = '';
       hideLoadingState();
       switchTab('table');
+    };
+
+    itemEl.addEventListener('click', classifySelected);
+    itemEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        classifySelected();
+      }
     });
 
     dom.searchResultsList.appendChild(itemEl);
   });
 
   if (dom.searchModal) {
-    dom.searchModal.classList.add('active');
+    openManagedModal(dom.searchModal, dom.searchResultsList.querySelector('.search-result-item'));
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons({
@@ -286,9 +370,7 @@ export function showSearchModal(items) {
  * Fecha o modal de seleção de periódicos.
  */
 export function closeSearchModal() {
-  if (dom.searchModal) {
-    dom.searchModal.classList.remove('active');
-  }
+  closeManagedModal(dom.searchModal);
 }
 
 // ─── MODAL DE COMPARAÇÃO ──────────────────────────────────────────
@@ -298,8 +380,7 @@ export function closeSearchModal() {
  */
 export function showComparisonModal() {
   if (dom.comparisonModal) {
-    dom.comparisonModal.classList.add('active');
-    dom.comparisonModal.style.display = 'flex';
+    openManagedModal(dom.comparisonModal, dom.comparisonNameA);
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons({
@@ -315,10 +396,7 @@ export function showComparisonModal() {
  * Fecha o modal de comparação de currículos e limpa o formulário.
  */
 export function closeComparisonModal() {
-  if (dom.comparisonModal) {
-    dom.comparisonModal.classList.remove('active');
-    dom.comparisonModal.style.display = 'none';
-  }
+  closeManagedModal(dom.comparisonModal);
   if (dom.comparisonNameA) dom.comparisonNameA.value = '';
   if (dom.comparisonTextA) dom.comparisonTextA.value = '';
   if (dom.comparisonNameB) dom.comparisonNameB.value = '';
@@ -332,8 +410,7 @@ export function closeComparisonModal() {
  */
 export function showClassificationInfoModal() {
   if (dom.classificationInfoModal) {
-    dom.classificationInfoModal.classList.add('active');
-    dom.classificationInfoModal.style.display = 'flex';
+    openManagedModal(dom.classificationInfoModal, dom.btnCloseClassificationInfo);
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons({
@@ -349,10 +426,7 @@ export function showClassificationInfoModal() {
  * Fecha o modal explicativo de classificação.
  */
 export function closeClassificationInfoModal() {
-  if (dom.classificationInfoModal) {
-    dom.classificationInfoModal.classList.remove('active');
-    dom.classificationInfoModal.style.display = 'none';
-  }
+  closeManagedModal(dom.classificationInfoModal);
 }
 
 // ─── TEMA CLARO/ESCURO ────────────────────────────────────────────

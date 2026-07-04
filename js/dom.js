@@ -6,6 +6,8 @@
 
 const dom = {
   dbStatus: document.getElementById('db-status'),
+  dbSourcesInfo: document.getElementById('db-sources-info'),
+  statusIndicatorDot: document.getElementById('status-indicator-dot'),
   dbCompiledAt: document.getElementById('db-compiled-at'),
   citeScoreStatus: document.getElementById('citescore-status'),
   circuitsStatus: document.getElementById('circuits-status'),
@@ -29,6 +31,7 @@ const dom = {
   btnExport: document.getElementById('btn-export'),
   btnReport: document.getElementById('btn-report'),
   btnClear: document.getElementById('btn-clear'),
+  printReportDate: document.getElementById('print-report-date'),
 
   themeToggle: document.getElementById('theme-toggle'),
 
@@ -65,6 +68,7 @@ const dom = {
   resultsTabs: document.getElementById('results-tabs'),
   tabTable: document.getElementById('tab-table'),
   tabAnalytics: document.getElementById('tab-analytics'),
+  activeTab: () => document.querySelector('.tab-btn.active'),
   paneTable: document.getElementById('tab-content-table'),
   paneAnalytics: document.getElementById('tab-content-analytics'),
 
@@ -81,6 +85,7 @@ const dom = {
 
   // Lista de Buscas Recentes
   recentSearchesList: document.getElementById('recent-searches-list'),
+  sidebarHistoryCard: document.getElementById('sidebar-history-card'),
 
   // Lattes
   selectorLattes: document.getElementById('selector-lattes'),

@@ -108,7 +108,7 @@
           <div id="input-pane-upload" class="input-pane">
             <div class="form-group">
               <label>Arraste e solte seu arquivo CSV:</label>
-              <div id="dropzone" class="dropzone">
+              <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Selecionar arquivo CSV ou Excel">
                 <div class="dropzone-icon"><i data-lucide="file-spreadsheet"></i></div>
                 <p>Arraste seu arquivo <strong>CSV ou Excel</strong> aqui ou <span class="highlight">clique para
                     selecionar</span></p>
@@ -268,15 +268,15 @@
           </div>
 
           <!-- Navegação por Abas Premium -->
-          <div id="results-tabs" class="tab-navigation" style="margin-bottom: 20px;">
-            <button id="tab-table" class="tab-btn active"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
-            <button id="tab-analytics" class="tab-btn"><i data-lucide="pie-chart"></i> Estatísticas & Dashboard</button>
-            <button id="tab-comparison" class="tab-btn" style="display: none;"><i data-lucide="git-compare"></i>
+          <div id="results-tabs" class="tab-navigation" role="tablist" aria-label="Resultados" style="margin-bottom: 20px;">
+            <button id="tab-table" class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-content-table"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
+            <button id="tab-analytics" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-content-analytics" tabindex="-1"><i data-lucide="pie-chart"></i> Estatísticas & Dashboard</button>
+            <button id="tab-comparison" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-content-comparison" tabindex="-1" style="display: none;"><i data-lucide="git-compare"></i>
               Comparação</button>
           </div>
 
           <!-- Aba do Painel Estatístico & Dashboard -->
-          <div id="tab-content-analytics" class="tab-pane">
+          <div id="tab-content-analytics" class="tab-pane" role="tabpanel" aria-labelledby="tab-analytics" hidden>
             <div class="analytics-header" style="margin-bottom: 25px;">
               <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i
                   data-lucide="pie-chart"></i> Visão Geral & Estatísticas Consolidadas</h2>
@@ -373,7 +373,7 @@
           </div>
 
           <!-- Aba de Comparação de Currículos -->
-          <div id="tab-content-comparison" class="tab-pane">
+          <div id="tab-content-comparison" class="tab-pane" role="tabpanel" aria-labelledby="tab-comparison" hidden>
             <div class="analytics-header" style="margin-bottom: 25px;">
               <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i
                   data-lucide="git-compare"></i> Comparação de Currículos</h2>
@@ -419,7 +419,7 @@
           </div>
 
           <!-- Aba da Tabela Detalhada -->
-          <div id="tab-content-table" class="tab-pane active">
+          <div id="tab-content-table" class="tab-pane active" role="tabpanel" aria-labelledby="tab-table">
             <!-- Tabela de Periódicos Classificados -->
             <div id="results-container" class="card">
               <div class="results-header">

@@ -5,7 +5,7 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, normalizeISSN, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
+import { enrichAndClassify, classifyBatch, normalizeISSN, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
@@ -131,17 +131,10 @@ function setupEventListeners() {
     showLoadingState('Processando Lote', 'Analisando múltiplos ISSNs e calculando estatísticas...', 'layers');
     const rawIssns = batchText.split(/[\n,;\s]+/).map(i => i.trim()).filter(i => i !== '');
 
-    // Processamento em lotes paralelos (5 por vez) para melhor performance
-    const CONCURRENCY = 10;
-    let processedCount = 0;
     updateLoadingProgress(0, rawIssns.length);
-    for (let i = 0; i < rawIssns.length; i += CONCURRENCY) {
-      const chunk = rawIssns.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(chunk.map(issn => enrichAndClassify(issn)));
-      results.forEach(addClassifiedItem);
-      processedCount += chunk.length;
-      updateLoadingProgress(processedCount, rawIssns.length);
-    }
+    const results = await classifyBatch(rawIssns);
+    results.forEach(addClassifiedItem);
+    updateLoadingProgress(results.length, rawIssns.length);
 
     dom.batchIssnInput.value = '';
     hideLoadingState();
@@ -152,6 +145,12 @@ function setupEventListeners() {
   // Upload CSV (Drag & Drop + Click)
   const dropzone = dom.dropzone;
   dropzone.addEventListener('click', () => dom.fileInput.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      dom.fileInput.click();
+    }
+  });
   dom.fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) handleUploadedFile(e.target.files[0]);
   });
@@ -231,7 +230,7 @@ function setupEventListeners() {
       if (appState.classifiedItems.length === 0) return;
 
       // Preencher data no cabeçalho do relatório
-      const reportDate = document.getElementById('print-report-date');
+      const reportDate = dom.printReportDate;
       if (reportDate) {
         const now = new Date();
         reportDate.textContent = `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -246,7 +245,7 @@ function setupEventListeners() {
       }
 
       // Garantir que a aba de analytics está ativa (gráficos precisam de dimensões)
-      const originalTab = document.querySelector('.tab-btn.active');
+      const originalTab = dom.activeTab ? dom.activeTab() : null;
       switchTab('analytics');
 
       // Re-renderizar gráficos com tema claro
@@ -301,6 +300,9 @@ function setupEventListeners() {
     if (e.key === 'Escape' && dom.lattesPreviewModal && dom.lattesPreviewModal.style.display === 'flex') {
       closeLattesPreviewModal();
     }
+    if (e.key === 'Escape' && dom.searchModal && dom.searchModal.classList.contains('active')) {
+      closeSearchModal();
+    }
     if (e.key === 'Escape' && dom.comparisonModal && dom.comparisonModal.classList.contains('active')) {
       closeComparisonModal();
     }
@@ -339,6 +341,23 @@ function setupEventListeners() {
   if (dom.tabTable) dom.tabTable.addEventListener('click', () => switchTab('table'));
   if (dom.tabAnalytics) dom.tabAnalytics.addEventListener('click', () => switchTab('analytics'));
   if (dom.tabComparison) dom.tabComparison.addEventListener('click', () => switchTab('comparison'));
+  if (dom.resultsTabs) {
+    dom.resultsTabs.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const tabs = [dom.tabTable, dom.tabAnalytics, dom.tabComparison].filter(tab => tab && tab.style.display !== 'none');
+      const currentIndex = tabs.indexOf(document.activeElement);
+      if (currentIndex === -1) return;
+      e.preventDefault();
+      let nextIndex = currentIndex;
+      if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+      if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      if (e.key === 'Home') nextIndex = 0;
+      if (e.key === 'End') nextIndex = tabs.length - 1;
+      tabs[nextIndex].focus();
+      const tabId = tabs[nextIndex] === dom.tabAnalytics ? 'analytics' : tabs[nextIndex] === dom.tabComparison ? 'comparison' : 'table';
+      switchTab(tabId);
+    });
+  }
 
   // Seletor Segmentado (Sidebar)
   if (dom.selectorSingle) dom.selectorSingle.addEventListener('click', () => switchInputType('single'));
@@ -415,19 +434,10 @@ function setupEventListeners() {
           return;
         }
 
-        // Processar perfil A
-        const itemsA = [];
-        for (const article of articlesA) {
-          const classified = await classifyArticleWithFallback(article);
-          itemsA.push(classified);
-        }
-
-        // Processar perfil B
-        const itemsB = [];
-        for (const article of articlesB) {
-          const classified = await classifyArticleWithFallback(article);
-          itemsB.push(classified);
-        }
+        const [itemsA, itemsB] = await Promise.all([
+          classifyArticlesWithFallbackBatch(articlesA, () => {}),
+          classifyArticlesWithFallbackBatch(articlesB, () => {})
+        ]);
 
         const profiles = [
           { name: nameA, items: itemsA },
@@ -460,7 +470,7 @@ function setupEventListeners() {
   }
 
   // Cliques nos atalhos rápidos e buscas recentes (delegação de evento)
-  const historyCard = document.getElementById('sidebar-history-card');
+  const historyCard = dom.sidebarHistoryCard;
   if (historyCard) {
     historyCard.addEventListener('click', async (e) => {
       const btn = e.target.closest('.quick-link-btn, .recent-search-btn');
@@ -533,7 +543,7 @@ async function checkCiteScoreStatus() {
           if (data.database_meta.jcr_year) parts.push(`JCR ${data.database_meta.jcr_year}`);
           if (data.database_meta.cuiden_edition) parts.push(`CUIDEN ${data.database_meta.cuiden_edition}`);
           if (parts.length > 0) {
-            const el = document.getElementById('db-sources-info');
+            const el = dom.dbSourcesInfo;
             if (el) {
               el.textContent = `Fontes: ${parts.join(' · ')}`;
               el.parentElement.style.display = 'flex';
@@ -562,7 +572,7 @@ async function checkCircuitsStatus() {
       });
 
     const circuitsItem = dom.circuitsStatus.parentElement;
-    const indicator = document.getElementById('status-indicator-dot');
+    const indicator = dom.statusIndicatorDot;
     if (openCircuits.length > 0) {
       dom.circuitsStatus.textContent = `APIs offline: ${openCircuits.join(', ')}`;
       circuitsItem.style.display = 'flex';
@@ -606,7 +616,7 @@ async function initDatabase() {
     const dbStatusItem = dom.dbStatus.parentElement;
     dbStatusItem.className = 'status-item error';
     dom.dbStatus.textContent = 'Erro ao carregar banco';
-    const indicator = document.getElementById('status-indicator-dot');
+    const indicator = dom.statusIndicatorDot;
     if (indicator) {
       indicator.className = 'status-dot red pulsing';
     }
@@ -730,7 +740,54 @@ async function classifyArticleWithFallback(article) {
     }
   }
 
-  // Propagar sinalizadores de confiança do parser Lattes
+  return applyArticleMetadata(classified, article);
+}
+
+async function classifyArticlesWithFallbackBatch(articles, onProgress) {
+  const articleList = articles.filter(article => article.type !== 'congresso');
+  const results = new Array(articleList.length);
+  const direct = [];
+  let processed = 0;
+
+  articleList.forEach((article, index) => {
+    if (article.matchedIssn) {
+      direct.push({ article, index });
+    }
+  });
+
+  if (direct.length > 0) {
+    const classifiedBatch = await classifyBatch(direct.map(item => item.article.matchedIssn));
+    direct.forEach((item, i) => {
+      results[item.index] = applyArticleMetadata(classifiedBatch[i], item.article);
+      processed++;
+      if (onProgress) onProgress(processed, articleList.length);
+    });
+  }
+
+  for (let i = 0; i < articleList.length; i++) {
+    if (results[i]) continue;
+    results[i] = await classifyArticleWithFallback(articleList[i]);
+    processed++;
+    if (onProgress) onProgress(processed, articleList.length);
+  }
+
+  return results.filter(Boolean);
+}
+
+function applyArticleMetadata(classified, article) {
+  if (!classified) {
+    classified = {
+      issn: article.matchedIssn || article.journal || 'N/A',
+      title: 'Erro ao consultar API',
+      area: 'Outras Áreas',
+      jcr: null,
+      citeScore: null,
+      indexers: [],
+      metrics: { cuiden: null },
+      classification: { estrato: 'NC', justification: 'Resposta ausente no lote.' }
+    };
+  }
+
   if (article.confidence) {
     classified.confidence = article.confidence;
   }
@@ -767,11 +824,11 @@ async function processLattesArticles(parsedArticles, researcherName) {
   let reviewCount = 0;
   updateLoadingProgress(0, parsedArticles.length);
 
-  for (const article of parsedArticles) {
-    if (article.type === 'congresso') continue;
+  const classifiedArticles = await classifyArticlesWithFallbackBatch(parsedArticles, (current, total) => {
+    updateLoadingProgress(current, total);
+  });
 
-    const classified = await classifyArticleWithFallback(article);
-
+  for (const classified of classifiedArticles) {
     if (classified.unmatchedLattes) {
       unmatchedCount++;
     } else if (classified.confidence === 'review') {
@@ -780,7 +837,6 @@ async function processLattesArticles(parsedArticles, researcherName) {
 
     addClassifiedItem(classified);
     countNew++;
-    updateLoadingProgress(countNew, parsedArticles.length);
   }
 
   if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
@@ -834,8 +890,11 @@ async function handleUploadedFile(file) {
   const records = processCSVData(parsed);
 
   let countNew = 0;
-  for (const record of records) {
-    const classified = await enrichAndClassify(record.issn);
+  updateLoadingProgress(0, records.length);
+  const classifiedRecords = await classifyBatch(records.map(record => record.issn));
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    const classified = classifiedRecords[i];
 
     if (record.title && record.title !== 'Artigo Importado' && classified.title === 'Periódico Não Identificado na Base') {
       classified.title = record.title;
@@ -845,6 +904,7 @@ async function handleUploadedFile(file) {
 
     addClassifiedItem(classified);
     countNew++;
+    updateLoadingProgress(countNew, records.length);
   }
 
   hideLoadingState();

@@ -9,6 +9,8 @@ import { getFilteredItems } from './state.js';
 import { escapeHTML } from './utils.js';
 import { updateAnalytics } from './charts.js';
 
+let lattesCandidatesModal = null;
+
 /**
  * Formata uma data no formato YYYY-MM-DD para DD/MM/YYYY.
  * @param {string} dateStr String contendo a data
@@ -86,7 +88,7 @@ export function renderResultsTable() {
 
     const indexersTags = item.indexers.map(idx => {
       const safeIdx = escapeHTML(idx);
-      const lowerIdx = idx.toLowerCase();
+      const lowerIdx = idx.toLowerCase().replace(/[^a-z0-9_-]/g, '');
       const upperIdx = idx.toUpperCase();
       
       let tooltipAttr = '';
@@ -120,7 +122,7 @@ export function renderResultsTable() {
         <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Correspondência aproximada — revise
       </span>`;
       if (item.lattesCandidates && item.lattesCandidates.length > 0) {
-        reviewButton = `<button class="btn-details" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); cursor: pointer;" onclick="window.showLattesCandidatesModal(this)" data-candidates="${escapeHTML(JSON.stringify(item.lattesCandidates))}" data-item-key="${escapeHTML(item.issn + '|' + (item.title || ''))}">Trocar revista</button>`;
+        reviewButton = `<button type="button" class="btn-details btn-review-candidates" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); cursor: pointer;" data-candidates="${escapeHTML(JSON.stringify(item.lattesCandidates))}" data-item-key="${escapeHTML(item.issn + '|' + (item.title || ''))}">Trocar revista</button>`;
       }
     }
 
@@ -174,6 +176,11 @@ export function renderResultsTable() {
     `;
 
     dom.resultsTableBody.appendChild(row);
+
+    const reviewCandidateButton = row.querySelector('.btn-review-candidates');
+    if (reviewCandidateButton) {
+      reviewCandidateButton.addEventListener('click', () => showLattesCandidatesModal(reviewCandidateButton));
+    }
   });
 
   // Re-inicializa os ícones Lucide apenas na tabela dinâmica
@@ -182,7 +189,7 @@ export function renderResultsTable() {
   }
 }
 
-window.showLattesCandidatesModal = function(btn) {
+function showLattesCandidatesModal(btn) {
   const candidatesRaw = btn.getAttribute('data-candidates');
   const itemKeyRaw = btn.getAttribute('data-item-key');
   if (!candidatesRaw) return;
@@ -191,15 +198,19 @@ window.showLattesCandidatesModal = function(btn) {
   try { candidates = JSON.parse(candidatesRaw); } catch (_) { return; }
 
   // Constrói/reativa modal reusando o container de candidates-modal
-  let modal = document.getElementById('lattes-candidates-modal');
+  let modal = lattesCandidatesModal;
   if (!modal) {
     modal = document.createElement('div');
+    lattesCandidatesModal = modal;
     modal.id = 'lattes-candidates-modal';
     modal.className = 'search-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'lattes-candidates-title');
     modal.innerHTML = `
       <div class="search-modal-card" style="max-width: 620px;">
         <div class="search-modal-header">
-          <h2 class="search-modal-title">Confirmar revista correta</h2>
+          <h2 id="lattes-candidates-title" class="search-modal-title">Confirmar revista correta</h2>
           <button id="btn-close-lattes-modal" class="btn-close-modal" aria-label="Fechar">&times;</button>
         </div>
         <p id="lattes-modal-subtitle" class="search-modal-subtitle" style="margin-bottom: 12px;"></p>
@@ -269,7 +280,8 @@ window.showLattesCandidatesModal = function(btn) {
   const closeBtn = modal.querySelector('#btn-close-lattes-modal');
   if (closeBtn) closeBtn.onclick = () => modal.classList.remove('active');
   modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('active'); };
-};
+  if (closeBtn) closeBtn.focus();
+}
 
 
 
