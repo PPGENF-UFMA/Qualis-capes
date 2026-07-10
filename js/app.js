@@ -5,7 +5,7 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, classifyBatch, normalizeISSN, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
+import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
@@ -31,6 +31,7 @@ import {
 window.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initQuadrienios();
+  initOrcidYearDefaults();
   setupEventListeners();
   restoreResults();
   restoreComparisonProfiles();
@@ -57,6 +58,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     lucide.createIcons();
   }
 });
+
+function initOrcidYearDefaults() {
+  if (!dom.orcidYearFrom || !dom.orcidYearTo) return;
+  const currentYear = new Date().getFullYear();
+  dom.orcidYearFrom.value = String(currentYear - 4);
+  dom.orcidYearTo.value = String(currentYear);
+}
 
 // ─── Setup de Eventos ────────────────────────────────────────────
 
@@ -364,6 +372,7 @@ function setupEventListeners() {
   if (dom.selectorBatch) dom.selectorBatch.addEventListener('click', () => switchInputType('batch'));
   if (dom.selectorUpload) dom.selectorUpload.addEventListener('click', () => switchInputType('upload'));
   if (dom.selectorLattes) dom.selectorLattes.addEventListener('click', () => switchInputType('lattes'));
+  if (dom.selectorOrcid) dom.selectorOrcid.addEventListener('click', () => switchInputType('orcid'));
   if (dom.selectorComparison) dom.selectorComparison.addEventListener('click', () => showComparisonModal());
 
   // Ajuda do Lattes
@@ -408,6 +417,37 @@ function setupEventListeners() {
         console.error("[Lattes Submit Error]", err);
         try { hideLoadingState(); } catch (e) { /* silencioso */ }
         showToast('Erro crítico ao processar o Currículo Lattes.', 'error');
+      }
+    });
+  }
+
+  // ORCID Form Submit
+  if (dom.orcidForm) {
+    dom.orcidForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const orcid = dom.orcidInput.value.trim();
+      const normalizedOrcid = normalizeORCID(orcid);
+      const yearFrom = dom.orcidYearFrom.value ? parseInt(dom.orcidYearFrom.value, 10) : null;
+      const yearTo = dom.orcidYearTo.value ? parseInt(dom.orcidYearTo.value, 10) : null;
+
+      if (!normalizedOrcid) {
+        showToast('ORCID invalido. Verifique o formato e o digito final.', 'warning');
+        return;
+      }
+      if ((Number.isInteger(yearFrom) && yearFrom < 1900) || (Number.isInteger(yearTo) && yearTo > 2100) || (Number.isInteger(yearFrom) && Number.isInteger(yearTo) && yearFrom > yearTo)) {
+        showToast('Intervalo de anos invalido.', 'warning');
+        return;
+      }
+
+      showLoadingState('Analisando ORCID', 'Buscando obras publicas, DOI/Crossref e matching por periodico...', 'fingerprint');
+
+      try {
+        const payload = await analyzeOrcid(normalizedOrcid, yearFrom, yearTo);
+        processOrcidResults(payload);
+      } catch (err) {
+        console.error('[ORCID Submit Error]', err);
+        try { hideLoadingState(); } catch (e) { /* silencioso */ }
+        showToast(err.message || 'Erro ao processar ORCID.', 'error');
       }
     });
   }
@@ -856,6 +896,46 @@ async function processLattesArticles(parsedArticles, researcherName) {
     showToast(`✓ ${countNew} artigos processados. ${reviewCount} precisam de revisão (linhas destacadas).`, 'warning');
   } else {
     showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
+  }
+}
+
+function processOrcidResults(payload) {
+  const results = payload.results || [];
+  let countNew = 0;
+  let unmatchedCount = 0;
+  let reviewCount = 0;
+
+  for (const item of results) {
+    if (!item.issn || item.issn === 'N/A' || item.confidence === 'none') {
+      unmatchedCount++;
+    } else if (item.confidence === 'review') {
+      reviewCount++;
+    }
+    addClassifiedItem(item);
+    countNew++;
+  }
+
+  if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
+    const label = payload.researcher_name || payload.orcid || 'ORCID';
+    const rangeLabel = payload.year_from && payload.year_to ? ` (${payload.year_from}-${payload.year_to})` : '';
+    dom.researcherNameDisplay.textContent = `${label}${rangeLabel}`;
+    dom.sessionResearcherTitle.style.display = 'block';
+  }
+
+  if (dom.orcidInput) dom.orcidInput.value = '';
+
+  hideLoadingState();
+  renderResultsTable();
+  switchTab(results.length > 0 ? 'analytics' : 'table');
+
+  if (results.length === 0) {
+    showToast('Nenhuma obra publica encontrada no ORCID para o intervalo informado.', 'warning');
+  } else if (unmatchedCount > 0) {
+    showToast(`${countNew} obras ORCID processadas. ${unmatchedCount} ficaram sem ISSN identificado.`, 'warning');
+  } else if (reviewCount > 0) {
+    showToast(`${countNew} obras ORCID processadas. ${reviewCount} precisam de revisao.`, 'warning');
+  } else {
+    showToast(`${countNew} obras ORCID classificadas com sucesso!`, 'success');
   }
 }
 

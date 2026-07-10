@@ -72,6 +72,10 @@
               <i data-lucide="file-text"></i>
               <span>Currículo</span>
             </button>
+            <button type="button" id="selector-orcid" class="selector-btn" title="Analise por ORCID iD">
+              <i data-lucide="fingerprint"></i>
+              <span>ORCID</span>
+            </button>
             <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
               <i data-lucide="git-compare"></i>
               <span>Comparar</span>
@@ -149,6 +153,29 @@
                   style="min-height: 120px;"></textarea>
               </div>
               <button type="submit" id="btn-submit-lattes" class="btn" style="width: 100%;">Analisar Currículo</button>
+            </form>
+          </div>
+
+          <!-- Painel 5: Analise por ORCID publico -->
+          <div id="input-pane-orcid" class="input-pane">
+            <form id="orcid-form">
+              <div class="form-group">
+                <label for="orcid-input">ORCID iD:</label>
+                <input type="text" id="orcid-input" class="text-input"
+                  placeholder="Ex: 0000-0002-1825-0097" autocomplete="off" required>
+              </div>
+              <div class="orcid-year-grid">
+                <div class="form-group">
+                  <label for="orcid-year-from">Ano inicial:</label>
+                  <input type="number" id="orcid-year-from" class="text-input" min="1900" max="2100" step="1">
+                </div>
+                <div class="form-group">
+                  <label for="orcid-year-to">Ano final:</label>
+                  <input type="number" id="orcid-year-to" class="text-input" min="1900" max="2100" step="1">
+                </div>
+              </div>
+              <p class="input-hint">Usa obras publicas do ORCID. Quando faltar ISSN, tenta DOI/Crossref e matching por nome do periodico.</p>
+              <button type="submit" id="btn-submit-orcid" class="btn" style="width: 100%;">Analisar ORCID</button>
             </form>
           </div>
         </div>

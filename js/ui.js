@@ -121,20 +121,20 @@ export function switchTab(tabId) {
 
 /**
  * Alterna o formulário de entrada da barra lateral (Individual / Lote / Planilha / Currículo).
- * @param {'single'|'batch'|'upload'|'lattes'} type Tipo de input selecionado
+ * @param {'single'|'batch'|'upload'|'lattes'|'orcid'} type Tipo de input selecionado
  */
 export function switchInputType(type) {
-  if (!dom.selectorSingle || !dom.selectorBatch || !dom.selectorUpload || !dom.selectorLattes ||
-    !dom.paneInputSingle || !dom.paneInputBatch || !dom.paneInputUpload || !dom.paneInputLattes) return;
+  if (!dom.selectorSingle || !dom.selectorBatch || !dom.selectorUpload || !dom.selectorLattes || !dom.selectorOrcid ||
+    !dom.paneInputSingle || !dom.paneInputBatch || !dom.paneInputUpload || !dom.paneInputLattes || !dom.paneInputOrcid) return;
 
   // Resetar classes active
-  [dom.selectorSingle, dom.selectorBatch, dom.selectorUpload, dom.selectorLattes].forEach(s => {
+  [dom.selectorSingle, dom.selectorBatch, dom.selectorUpload, dom.selectorLattes, dom.selectorOrcid].forEach(s => {
     if (s) {
       s.classList.remove('active');
       s.setAttribute('aria-pressed', 'false');
     }
   });
-  [dom.paneInputSingle, dom.paneInputBatch, dom.paneInputUpload, dom.paneInputLattes].forEach(p => {
+  [dom.paneInputSingle, dom.paneInputBatch, dom.paneInputUpload, dom.paneInputLattes, dom.paneInputOrcid].forEach(p => {
     if (p) p.classList.remove('active');
   });
 
@@ -143,7 +143,8 @@ export function switchInputType(type) {
     single: [dom.selectorSingle, dom.paneInputSingle],
     batch: [dom.selectorBatch, dom.paneInputBatch],
     upload: [dom.selectorUpload, dom.paneInputUpload],
-    lattes: [dom.selectorLattes, dom.paneInputLattes]
+    lattes: [dom.selectorLattes, dom.paneInputLattes],
+    orcid: [dom.selectorOrcid, dom.paneInputOrcid]
   };
 
   const [selector, pane] = selectorMap[type] || selectorMap.single;
@@ -161,7 +162,7 @@ export function switchInputType(type) {
  * @param {boolean} disabled
  */
 function setSubmitButtonsDisabled(disabled) {
-  [dom.btnSubmitSingle, dom.btnSubmitBatch, dom.btnSubmitLattes, dom.btnSubmitComparison].forEach(btn => {
+  [dom.btnSubmitSingle, dom.btnSubmitBatch, dom.btnSubmitLattes, dom.btnSubmitOrcid, dom.btnSubmitComparison].forEach(btn => {
     if (btn) btn.disabled = disabled;
   });
 }

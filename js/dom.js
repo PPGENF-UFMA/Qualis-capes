@@ -76,9 +76,11 @@ const dom = {
   selectorSingle: document.getElementById('selector-single'),
   selectorBatch: document.getElementById('selector-batch'),
   selectorUpload: document.getElementById('selector-upload'),
+  selectorOrcid: document.getElementById('selector-orcid'),
   paneInputSingle: document.getElementById('input-pane-single'),
   paneInputBatch: document.getElementById('input-pane-batch'),
   paneInputUpload: document.getElementById('input-pane-upload'),
+  paneInputOrcid: document.getElementById('input-pane-orcid'),
 
   // Container de Toasts
   toastContainer: document.getElementById('toast-container'),
@@ -93,6 +95,10 @@ const dom = {
   lattesForm: document.getElementById('lattes-form'),
   lattesResearcherName: document.getElementById('lattes-researcher-name'),
   lattesTextInput: document.getElementById('lattes-text-input'),
+  orcidForm: document.getElementById('orcid-form'),
+  orcidInput: document.getElementById('orcid-input'),
+  orcidYearFrom: document.getElementById('orcid-year-from'),
+  orcidYearTo: document.getElementById('orcid-year-to'),
   sessionResearcherTitle: document.getElementById('session-researcher-title'),
   researcherNameDisplay: document.getElementById('researcher-name-display'),
 
@@ -100,6 +106,7 @@ const dom = {
   btnSubmitSingle: document.getElementById('btn-submit-single'),
   btnSubmitBatch: document.getElementById('btn-submit-batch'),
   btnSubmitLattes: document.getElementById('btn-submit-lattes'),
+  btnSubmitOrcid: document.getElementById('btn-submit-orcid'),
 
   // Instruções Lattes
   btnLattesHelp: document.getElementById('btn-lattes-help'),

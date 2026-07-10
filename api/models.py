@@ -73,6 +73,13 @@ class MatchLattesRequest(BaseModel):
     researcher_name: str | None = None
 
 
+class OrcidAnalyzeRequest(BaseModel):
+    orcid: str
+    year_from: int | None = None
+    year_to: int | None = None
+    include_unclassified: bool = True
+
+
 class SaveAliasRequest(BaseModel):
     journal_name: str
     issn: str

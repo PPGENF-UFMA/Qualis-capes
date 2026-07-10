@@ -1558,6 +1558,19 @@ body.light-theme .selector-btn.active {
   transform: translateY(0);
 }
 
+.orcid-year-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.input-hint {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* --- SISTEMA DE TOAST NOTIFICATIONS --- */
 .toast-container {
   position: fixed;

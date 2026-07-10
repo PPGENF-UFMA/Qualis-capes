@@ -20,6 +20,22 @@ export function normalizeISSN(issn) {
   return `${cleaned.substring(0, 4)}-${cleaned.substring(4)}`;
 }
 
+export function normalizeORCID(orcid) {
+  if (typeof orcid !== 'string') return '';
+  const cleaned = orcid.replace(/[^0-9Xx]/g, '').toUpperCase();
+  if (cleaned.length !== 16 || !/^\d{15}[0-9X]$/.test(cleaned)) return '';
+
+  let total = 0;
+  for (let i = 0; i < 15; i++) {
+    total = (total + parseInt(cleaned[i], 10)) * 2;
+  }
+  const remainder = total % 11;
+  const result = (12 - remainder) % 11;
+  const expected = result === 10 ? 'X' : String(result);
+  if (cleaned[15] !== expected) return '';
+  return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(12)}`;
+}
+
 export async function loadDatabase() {
   if (dbSummary !== null) return dbSummary;
   try {
@@ -36,6 +52,31 @@ export async function loadDatabase() {
     dbSummary = {};
     return dbSummary;
   }
+}
+
+export async function analyzeOrcid(orcid, yearFrom = null, yearTo = null) {
+  const normalized = normalizeORCID(orcid);
+  if (!normalized) {
+    throw new Error('ORCID invalido. Use o formato 0000-0000-0000-000X.');
+  }
+
+  const body = {
+    orcid: normalized,
+    include_unclassified: true
+  };
+  if (Number.isInteger(yearFrom)) body.year_from = yearFrom;
+  if (Number.isInteger(yearTo)) body.year_to = yearTo;
+
+  const response = await fetch('/api/v1/orcid/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || `Erro ao analisar ORCID: ${response.statusText}`);
+  }
+  return data;
 }
 
 export function setDatabase(data) {

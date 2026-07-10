@@ -31,10 +31,11 @@ audit_logger.propagate = False
 
 from . import cache
 from . import enricher
+from . import orcid_client
 from .models import (
     BatchClassifyRequest, BatchSearchRequest, ClassifyResponse,
     MatchBatchRequest, MatchLattesRequest,
-    SaveAliasRequest, FeedbackRequest,
+    OrcidAnalyzeRequest, SaveAliasRequest, FeedbackRequest,
 )
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -379,6 +380,40 @@ async def api_match_lattes(body: MatchLattesRequest, request: Request):
     articles = [r for r in results if r.get("type") != "congresso"]
     audit_logger.info(f"match_lattes|ip={ip}|segments={len(results)}|articles={len(articles)}|high={sum(1 for r in articles if r.get('confidence') == 'high')}")
     return {"results": articles, "count": len(articles)}
+
+
+@router_v1.post("/orcid/analyze")
+async def api_orcid_analyze(body: OrcidAnalyzeRequest, request: Request):
+    if not body.orcid or not body.orcid.strip():
+        raise HTTPException(status_code=400, detail="ORCID nao informado")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"orcid:{ip}", max_requests=12, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de analises ORCID excedido. Tente novamente em 1 minuto.")
+
+    try:
+        result = await orcid_client.analyze_orcid_public(
+            body.orcid,
+            body.year_from,
+            body.year_to,
+            get_http_client(),
+            include_unclassified=body.include_unclassified,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Registro ORCID nao encontrado.")
+        raise HTTPException(status_code=502, detail=f"Falha ao consultar ORCID Public API: {exc.response.status_code}")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Falha de rede ao consultar ORCID Public API.")
+
+    audit_logger.info(
+        f"orcid|ip={ip}|orcid={result.get('orcid')}|range={body.year_from}-{body.year_to}|"
+        f"works={result.get('works_in_range')}|classified={result.get('works_classified')}"
+    )
+    return result
 
 
 @router_v1.post("/alias")
