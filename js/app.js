@@ -22,7 +22,7 @@ import {
   initTheme, toggleTheme, showToast,
   addRecentSearch, renderRecentSearches,
   updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal,
-  initQuadrienios,
+  initQuadrienios, initConsultationSidebar,
   showClassificationInfoModal, closeClassificationInfoModal
 } from './ui.js';
 
@@ -30,6 +30,7 @@ import {
 
 window.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+  initConsultationSidebar();
   initQuadrienios();
   initOrcidYearDefaults();
   setupEventListeners();
@@ -509,11 +510,11 @@ function setupEventListeners() {
     });
   }
 
-  // Cliques nos atalhos rápidos e buscas recentes (delegação de evento)
+  // Cliques nas consultas recentes (delegação de evento)
   const historyCard = dom.sidebarHistoryCard;
   if (historyCard) {
     historyCard.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.quick-link-btn, .recent-search-btn');
+      const btn = e.target.closest('.recent-search-btn');
       if (!btn) return;
 
       const issn = btn.getAttribute('data-issn');

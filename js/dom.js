@@ -73,6 +73,12 @@ const dom = {
   paneAnalytics: document.getElementById('tab-content-analytics'),
 
   // Seletor Segmentado (Sidebar)
+  workspace: document.getElementById('workspace'),
+  consultationSidebar: document.getElementById('consultation-sidebar'),
+  consultationPanel: document.getElementById('consultation-panel'),
+  sidebarOpen: document.getElementById('sidebar-open'),
+  sidebarClose: document.getElementById('sidebar-close'),
+  sidebarBackdrop: document.getElementById('sidebar-backdrop'),
   selectorSingle: document.getElementById('selector-single'),
   selectorBatch: document.getElementById('selector-batch'),
   selectorUpload: document.getElementById('selector-upload'),

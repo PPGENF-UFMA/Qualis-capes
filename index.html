@@ -71,7 +71,15 @@
     <div class="main-grid" id="workspace">
 
       <!-- Coluna da Esquerda: Barra Lateral de Ferramentas -->
-      <aside class="sidebar">
+      <aside id="consultation-sidebar" class="sidebar">
+        <button id="sidebar-open" class="sidebar-rail-toggle" type="button"
+          aria-controls="consultation-panel" aria-expanded="true" aria-label="Abrir Central de Consulta"
+          title="Abrir Central de Consulta">
+          <i data-lucide="panel-left-open" aria-hidden="true"></i>
+          <span>Consulta</span>
+        </button>
+
+        <div id="consultation-panel" class="consultation-panel">
 
         <!-- Card Unificado de Entrada de Dados -->
         <div class="card sidebar-input-card">
@@ -81,6 +89,10 @@
               <p class="section-eyebrow">Central de consulta</p>
               <h2>Como deseja analisar?</h2>
             </div>
+            <button id="sidebar-close" class="sidebar-close-btn" type="button"
+              aria-label="Fechar Central de Consulta" title="Fechar Central de Consulta">
+              <i data-lucide="panel-left-close" aria-hidden="true"></i>
+            </button>
           </div>
           <!-- Seletor Segmentado Premium -->
           <div class="input-selector" aria-label="Método de análise">
@@ -121,6 +133,13 @@
               <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar
                 Periódico</button>
             </form>
+            <section id="sidebar-history-card" class="recent-searches-section" aria-labelledby="recent-searches-title"
+              hidden>
+              <h3 id="recent-searches-title" class="recent-searches-heading">
+                <i data-lucide="history"></i> Consultas recentes
+              </h3>
+              <div id="recent-searches-list" class="recent-searches-list"></div>
+            </section>
           </div>
 
           <!-- Painel 2: Entrada em Lote -->
@@ -208,62 +227,12 @@
           </div>
         </div>
 
-        <!-- Card de Histórico e Atalhos Rápidos -->
-        <div id="sidebar-history-card" class="card sidebar-history-card">
-          <div class="history-section">
-            <h3 class="history-title"><i data-lucide="award"></i> Periódicos Frequentes (PPGENF)</h3>
-            <div class="quick-links-grid">
-              <button class="quick-link-btn" data-issn="0104-1169" title="Revista Latino-Americana de Enfermagem">RLAE
-                (A2)</button>
-              <button class="quick-link-btn" data-issn="0034-7167" title="Revista Brasileira de Enfermagem">REBEn
-                (A4)</button>
-              <button class="quick-link-btn" data-issn="1982-0194" title="Acta Paulista de Enfermagem">Acta Paulista
-                (A3)</button>
-              <button class="quick-link-btn" data-issn="0104-0707" title="Texto & Contexto Enfermagem">Texto & Contexto
-                (A3)</button>
-            </div>
-          </div>
-
-          <div class="history-section"
-            style="margin-top: 15px; border-top: 1px solid var(--panel-border); padding-top: 15px;">
-            <h3 class="history-title"><i data-lucide="history"></i> Buscas Recentes</h3>
-            <div id="recent-searches-list" class="recent-searches-list">
-              <span class="no-history-msg">Nenhuma busca recente realizada.</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card de Status da Base de Referência -->
-        <div class="card status-card">
-          <div class="status-header">
-            <span class="status-dot pulsing" id="status-indicator-dot"></span>
-            <h4 class="status-title">Status das Bases</h4>
-          </div>
-          <div class="status-list">
-            <div class="status-item" id="db-status-item">
-              <i data-lucide="database"></i>
-              <span id="db-status">Carregando base local...</span>
-            </div>
-            <div class="status-item" id="db-compiled-at-item" style="display: none;">
-              <i data-lucide="calendar"></i>
-              <span id="db-compiled-at"></span>
-            </div>
-            <div class="status-item" id="db-sources-item" style="display: none;">
-              <i data-lucide="book-open"></i>
-              <span id="db-sources-info"></span>
-            </div>
-            <div class="status-item" id="citescore-status-item" style="display: none;">
-              <i data-lucide="activity"></i>
-              <span id="citescore-status"></span>
-            </div>
-            <div class="status-item" id="circuits-status-item" style="display: none;">
-              <i data-lucide="zap-off"></i>
-              <span id="circuits-status"></span>
-            </div>
-          </div>
         </div>
 
       </aside>
+
+      <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" tabindex="-1"
+        aria-label="Fechar Central de Consulta"></button>
 
       <!-- Coluna da Direita: Área de Conteúdo Principal -->
       <main class="main-content">
@@ -550,8 +519,35 @@
   </div>
 
   <footer class="site-footer">
-    <p>Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
-    <span>Ferramenta de apoio à análise da produção científica</span>
+    <div class="footer-copy">
+      <p>Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
+      <span>Ferramenta de apoio à análise da produção científica</span>
+    </div>
+    <details class="system-health">
+      <summary class="system-health-summary">
+        <span class="status-dot pulsing" id="status-indicator-dot" aria-hidden="true"></span>
+        <span class="status-item" id="db-status-item"><span id="db-status">Verificando bases...</span></span>
+        <i data-lucide="chevron-down" aria-hidden="true"></i>
+      </summary>
+      <div class="system-health-details">
+        <div class="status-item" id="db-compiled-at-item" style="display: none;">
+          <i data-lucide="calendar"></i>
+          <span id="db-compiled-at"></span>
+        </div>
+        <div class="status-item" id="db-sources-item" style="display: none;">
+          <i data-lucide="book-open"></i>
+          <span id="db-sources-info"></span>
+        </div>
+        <div class="status-item" id="citescore-status-item" style="display: none;">
+          <i data-lucide="activity"></i>
+          <span id="citescore-status"></span>
+        </div>
+        <div class="status-item" id="circuits-status-item" style="display: none;">
+          <i data-lucide="zap-off"></i>
+          <span id="circuits-status"></span>
+        </div>
+      </div>
+    </details>
   </footer>
 
   <!-- Modal de Seleção de Periódico -->

@@ -12,6 +12,7 @@ import { renderResultsTable, showTableSkeletons } from './table.js';
 
 let activeModal = null;
 let lastFocusedElement = null;
+let consultationInitialized = false;
 
 function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(
@@ -60,6 +61,99 @@ function closeManagedModal(modal) {
     lastFocusedElement.focus();
   }
   lastFocusedElement = null;
+}
+
+// ─── CENTRAL DE CONSULTA RESPONSIVA ──────────────────────────────
+
+function resizeAllCharts() {
+  Object.values(appState.charts).forEach(chart => {
+    if (chart && typeof chart.resize === 'function') chart.resize();
+  });
+}
+
+function setConsultationInteractive(interactive) {
+  if (!dom.consultationPanel) return;
+  dom.consultationPanel.inert = !interactive;
+  if (interactive) {
+    dom.consultationPanel.removeAttribute('aria-hidden');
+  } else {
+    dom.consultationPanel.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function isDashboardFocus() {
+  return Boolean(dom.workspace?.classList.contains('dashboard-focus'));
+}
+
+export function openConsultationSidebar() {
+  if (!dom.workspace || !isDashboardFocus()) return;
+  dom.workspace.classList.add('consultation-open');
+  document.body.classList.add('consultation-drawer-open');
+  setConsultationInteractive(true);
+  dom.sidebarOpen?.setAttribute('aria-expanded', 'true');
+  requestAnimationFrame(() => dom.sidebarClose?.focus());
+}
+
+export function closeConsultationSidebar({ restoreFocus = true } = {}) {
+  if (!dom.workspace || !isDashboardFocus()) return;
+  dom.workspace.classList.remove('consultation-open');
+  document.body.classList.remove('consultation-drawer-open');
+  if (restoreFocus) dom.sidebarOpen?.focus({ preventScroll: true });
+  setConsultationInteractive(false);
+  dom.sidebarOpen?.setAttribute('aria-expanded', 'false');
+}
+
+function syncConsultationWithTab(tabId) {
+  if (!dom.workspace || !dom.consultationPanel) return;
+  const dashboardFocus = tabId === 'analytics' || tabId === 'comparison';
+  const focusWasInside = dom.consultationPanel.contains(document.activeElement);
+
+  dom.workspace.classList.toggle('dashboard-focus', dashboardFocus);
+  dom.workspace.classList.remove('consultation-open');
+  document.body.classList.remove('consultation-drawer-open');
+  if (dashboardFocus && focusWasInside) {
+    dom.activeTab()?.focus({ preventScroll: true });
+  }
+  setConsultationInteractive(!dashboardFocus);
+  dom.sidebarOpen?.setAttribute('aria-expanded', dashboardFocus ? 'false' : 'true');
+}
+
+function handleConsultationKeydown(event) {
+  if (!dom.workspace?.classList.contains('consultation-open')) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeConsultationSidebar();
+    return;
+  }
+
+  if (event.key !== 'Tab' || !dom.consultationPanel) return;
+  const focusable = getFocusableElements(dom.consultationPanel);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+export function initConsultationSidebar() {
+  if (consultationInitialized || !dom.workspace || !dom.consultationPanel) return;
+  consultationInitialized = true;
+
+  dom.sidebarOpen?.addEventListener('click', openConsultationSidebar);
+  dom.sidebarClose?.addEventListener('click', () => closeConsultationSidebar());
+  dom.sidebarBackdrop?.addEventListener('click', () => closeConsultationSidebar());
+  document.addEventListener('keydown', handleConsultationKeydown);
+  dom.workspace.addEventListener('transitionend', event => {
+    if (event.propertyName === 'grid-template-columns') resizeAllCharts();
+  });
+
+  syncConsultationWithTab('table');
 }
 
 // ─── SISTEMA DE ABAS ──────────────────────────────────────────────
@@ -117,6 +211,8 @@ export function switchTab(tabId) {
     if (appState.charts.radar) appState.charts.radar.resize();
     if (appState.charts.comparisonEstrato) appState.charts.comparisonEstrato.resize();
   }
+
+  syncConsultationWithTab(tabId);
 }
 
 /**
@@ -561,7 +657,8 @@ export function addRecentSearch(issn, title) {
 }
 
 /**
- * Renderiza dinamicamente a lista de buscas recentes na sidebar.
+ * Renderiza as consultas recentes dentro do formulário individual.
+ * A seção permanece oculta enquanto não houver histórico real.
  */
 export function renderRecentSearches() {
   const container = dom.recentSearchesList;
@@ -572,9 +669,12 @@ export function renderRecentSearches() {
     const history = saved ? JSON.parse(saved) : [];
     
     if (history.length === 0) {
-      container.innerHTML = '<span class="no-history-msg">Nenhuma busca recente realizada.</span>';
+      container.innerHTML = '';
+      if (dom.sidebarHistoryCard) dom.sidebarHistoryCard.hidden = true;
       return;
     }
+
+    if (dom.sidebarHistoryCard) dom.sidebarHistoryCard.hidden = false;
     
     container.innerHTML = history.map(item => {
       const safeTitle = escapeHTML(item.title);
@@ -587,6 +687,7 @@ export function renderRecentSearches() {
       `;
     }).join('');
   } catch (e) {
+    if (dom.sidebarHistoryCard) dom.sidebarHistoryCard.hidden = true;
     console.warn('[Histórico] Falha ao renderizar buscas recentes:', e.message);
   }
 }
