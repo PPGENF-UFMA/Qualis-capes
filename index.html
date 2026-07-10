@@ -8,6 +8,7 @@
   <meta name="description"
     content="Ferramenta automatizada para enriquecimento de métricas e classificação de periódicos científicos de acordo com as regras da CAPES para Enfermagem e Outras Áreas.">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/editorial.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
     integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4"
     crossorigin="anonymous"></script>
@@ -21,6 +22,8 @@
 
 <body>
 
+  <a class="skip-link" href="#workspace">Ir para a ferramenta</a>
+
   <!-- Gradientes de Fundo Ambientais -->
   <div class="ambient-bg">
     <div class="ambient-circle-1"></div>
@@ -30,11 +33,14 @@
   <div class="container">
 
     <!-- Cabeçalho Principal -->
-    <header>
+    <header class="site-header">
       <div class="logo-container">
         <img src="logo.svg" alt="Logo Qualis CAPES" class="logo-image">
         <div class="header-divider"></div>
-        <p class="header-subtitle">Classificador de Artigos (Enfermagem)</p>
+        <div class="brand-copy">
+          <span class="institution-kicker">UFMA · PPGENF</span>
+          <p class="header-subtitle">Mestrado em Enfermagem</p>
+        </div>
       </div>
       <div class="header-actions">
         <button id="btn-classification-info" class="header-info-btn" title="Entenda como funciona a classificação"
@@ -46,16 +52,38 @@
       </div>
     </header>
 
+    <section class="editorial-intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <p class="editorial-kicker"><span>01</span> Inteligência para produção científica</p>
+        <h1 id="page-title">Qualis em contexto.<br><em>Decisões com evidência.</em></h1>
+        <p class="intro-summary">Classifique periódicos, analise currículos e acompanhe a produção acadêmica com
+          critérios transparentes para a área de Enfermagem.</p>
+      </div>
+      <div class="intro-aside" aria-label="Informações da ferramenta">
+        <div class="clinical-line" aria-hidden="true"></div>
+        <p><span>Área de avaliação</span><strong>Enfermagem</strong></p>
+        <p><span>Programa</span><strong>PPGENF · UFMA</strong></p>
+        <p><span>Fontes</span><strong>CAPES + bases indexadoras</strong></p>
+      </div>
+    </section>
+
     <!-- Layout Principal de Duas Colunas -->
-    <div class="main-grid">
+    <div class="main-grid" id="workspace">
 
       <!-- Coluna da Esquerda: Barra Lateral de Ferramentas -->
       <aside class="sidebar">
 
         <!-- Card Unificado de Entrada de Dados -->
         <div class="card sidebar-input-card">
+          <div class="tool-heading">
+            <span class="section-index">02</span>
+            <div>
+              <p class="section-eyebrow">Central de consulta</p>
+              <h2>Como deseja analisar?</h2>
+            </div>
+          </div>
           <!-- Seletor Segmentado Premium -->
-          <div class="input-selector" style="margin-bottom: 20px;">
+          <div class="input-selector" aria-label="Método de análise">
             <button type="button" id="selector-single" class="selector-btn active" title="Consulta Individual">
               <i data-lucide="search"></i>
               <span>Individual</span>
@@ -242,31 +270,31 @@
 
         <!-- Estado Vazio (Empty State) -->
         <div id="empty-state" class="card empty-state">
-          <div class="empty-state-icon"><i data-lucide="bar-chart-3"></i></div>
-          <h3 style="margin-bottom: 16px;">Bem-vindo ao Classificador Qualis</h3>
-          <p style="margin-bottom: 24px; max-width: 600px; margin-inline: auto;">Esta ferramenta automatiza a
-            classificação de periódicos seguindo as regras da CAPES (Área: Enfermagem).</p>
+          <div class="empty-state-heading">
+            <p class="section-eyebrow">Fluxo de análise</p>
+            <h2>Da consulta à leitura estratégica</h2>
+            <p>Inicie pela central ao lado. O sistema cruza fontes, aplica os critérios CAPES e organiza o resultado
+              para leitura, comparação e exportação.</p>
+          </div>
 
-          <div class="onboarding-steps"
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; text-align: left; max-width: 800px; margin: 0 auto;">
+          <div class="onboarding-steps">
             <div class="onboarding-step-card">
-              <div style="color: var(--primary-color); margin-bottom: 8px;"><i data-lucide="mouse-pointer-click"></i>
-              </div>
-              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">1. Escolha o Método</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">Use o menu lateral para selecionar entre busca
-                individual, lote, arquivo CSV ou Currículo Lattes.</p>
+              <span class="step-number">01</span>
+              <i data-lucide="mouse-pointer-click"></i>
+              <h3>Escolha a entrada</h3>
+              <p>Consulte um periódico ou importe sua produção por planilha, Lattes ou ORCID.</p>
             </div>
             <div class="onboarding-step-card">
-              <div style="color: var(--warning); margin-bottom: 8px;"><i data-lucide="cpu"></i></div>
-              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">2. Processamento</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">O sistema buscará os dados em múltiplas bases
-                (Qualis, SciELO, Scopus, JCR) e calculará o melhor estrato.</p>
+              <span class="step-number">02</span>
+              <i data-lucide="database-zap"></i>
+              <h3>Cruze as evidências</h3>
+              <p>Qualis, SciELO, Scopus, JCR e outras fontes são consultadas de forma integrada.</p>
             </div>
             <div class="onboarding-step-card">
-              <div style="color: var(--success); margin-bottom: 8px;"><i data-lucide="pie-chart"></i></div>
-              <h4 style="color: var(--text-primary); margin-bottom: 4px; font-size: 15px;">3. Análise</h4>
-              <p style="font-size: 13px; color: var(--text-secondary);">Examine a tabela detalhada, exporte para CSV ou
-                analise os gráficos de distribuição no dashboard.</p>
+              <span class="step-number">03</span>
+              <i data-lucide="chart-no-axes-combined"></i>
+              <h3>Interprete o resultado</h3>
+              <p>Explore indicadores, compare perfis e exporte uma leitura pronta para decisão.</p>
             </div>
           </div>
         </div>
@@ -521,8 +549,9 @@
 
   </div>
 
-  <footer>
-    <p>&copy; 2026 - Classificador Qualis CAPES Automatizado. Desenvolvido para auxílio acadêmico.</p>
+  <footer class="site-footer">
+    <p>Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
+    <span>Ferramenta de apoio à análise da produção científica</span>
   </footer>
 
   <!-- Modal de Seleção de Periódico -->

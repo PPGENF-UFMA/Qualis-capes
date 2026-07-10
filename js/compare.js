@@ -8,8 +8,8 @@ import appState from './state.js';
 
 const SCORE_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
 const PROFILE_COLORS = {
-  a: { fill: 'rgba(209, 26, 91, 0.2)', stroke: '#d11a5b', bg: 'rgba(209, 26, 91, 0.7)' },
-  b: { fill: 'rgba(245, 158, 11, 0.2)', stroke: '#f59e0b', bg: 'rgba(245, 158, 11, 0.7)' }
+  a: { fill: 'rgba(122, 21, 56, 0.18)', stroke: '#7a1538', bg: 'rgba(122, 21, 56, 0.78)' },
+  b: { fill: 'rgba(23, 107, 91, 0.18)', stroke: '#176b5b', bg: 'rgba(23, 107, 91, 0.78)' }
 };
 
 // ─── COMPUTAÇÃO DE KPIs ──────────────────────────────────────────
@@ -134,7 +134,7 @@ function renderRadarChart(profiles) {
           borderColor: PROFILE_COLORS.a.stroke,
           borderWidth: 2,
           pointBackgroundColor: PROFILE_COLORS.a.stroke,
-          pointBorderColor: isDark ? '#0f090b' : '#ffffff',
+          pointBorderColor: isDark ? '#111516' : '#fffdf9',
           pointBorderWidth: 2,
           pointRadius: 5
         },
@@ -145,7 +145,7 @@ function renderRadarChart(profiles) {
           borderColor: PROFILE_COLORS.b.stroke,
           borderWidth: 2,
           pointBackgroundColor: PROFILE_COLORS.b.stroke,
-          pointBorderColor: isDark ? '#0f090b' : '#ffffff',
+          pointBorderColor: isDark ? '#111516' : '#fffdf9',
           pointBorderWidth: 2,
           pointRadius: 5
         }
@@ -160,12 +160,12 @@ function renderRadarChart(profiles) {
           max: 100,
           ticks: {
             stepSize: 20,
-            color: isDark ? '#9ca3af' : '#475569',
+            color: isDark ? '#beb7b2' : '#5e5558',
             backdropColor: 'transparent',
             font: { size: 10 }
           },
           pointLabels: {
-            color: isDark ? '#f3f4f6' : '#0f172a',
+            color: isDark ? '#f4f1ec' : '#202124',
             font: { size: 11, weight: '500' }
           },
           grid: {
@@ -180,17 +180,17 @@ function renderRadarChart(profiles) {
         legend: {
           position: 'top',
           labels: {
-            color: isDark ? '#f3f4f6' : '#0f172a',
-            font: { size: 13, family: 'Outfit', weight: '600' },
+            color: isDark ? '#f4f1ec' : '#202124',
+            font: { size: 13, family: 'Atkinson Hyperlegible', weight: '700' },
             padding: 16,
             usePointStyle: true,
             pointStyleWidth: 10
           }
         },
         tooltip: {
-          backgroundColor: isDark ? '#111827' : '#ffffff',
-          titleColor: isDark ? '#f3f4f6' : '#0f172a',
-          bodyColor: isDark ? '#9ca3af' : '#475569',
+          backgroundColor: isDark ? '#202725' : '#fffdf9',
+          titleColor: isDark ? '#f4f1ec' : '#202124',
+          bodyColor: isDark ? '#beb7b2' : '#5e5558',
           borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
           borderWidth: 1,
           padding: 10
@@ -218,9 +218,8 @@ function renderComparisonEstratoChart(profiles) {
 
   const estratos = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'NC'];
   const estratoColors = {
-    A1: 'rgba(16, 185, 129, 0.8)', A2: 'rgba(52, 211, 153, 0.8)', A3: 'rgba(6, 182, 212, 0.8)',
-    A4: 'rgba(59, 130, 246, 0.8)', A5: 'rgba(209, 26, 91, 0.8)', A6: 'rgba(251, 191, 36, 0.8)',
-    A7: 'rgba(249, 115, 22, 0.8)', A8: 'rgba(239, 68, 68, 0.8)', NC: 'rgba(100, 116, 139, 0.8)'
+    A1: '#12584b', A2: '#176b5b', A3: '#2e725f', A4: '#4f685c', A5: '#765b50',
+    A6: '#8b4b45', A7: '#913247', A8: '#7a1538', NC: '#5f6261'
   };
 
   const isDark = !document.body.classList.contains('light-theme');
@@ -251,17 +250,17 @@ function renderComparisonEstratoChart(profiles) {
         legend: {
           position: 'right',
           labels: {
-            color: isDark ? '#f3f4f6' : '#0f172a',
-            font: { size: 11, family: 'Outfit' },
+            color: isDark ? '#f4f1ec' : '#202124',
+            font: { size: 11, family: 'Atkinson Hyperlegible' },
             padding: 8,
             usePointStyle: true,
             pointStyleWidth: 8
           }
         },
         tooltip: {
-          backgroundColor: isDark ? '#111827' : '#ffffff',
-          titleColor: isDark ? '#f3f4f6' : '#0f172a',
-          bodyColor: isDark ? '#9ca3af' : '#475569',
+          backgroundColor: isDark ? '#202725' : '#fffdf9',
+          titleColor: isDark ? '#f4f1ec' : '#202124',
+          bodyColor: isDark ? '#beb7b2' : '#5e5558',
           borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
           borderWidth: 1,
           padding: 10
@@ -272,8 +271,8 @@ function renderComparisonEstratoChart(profiles) {
           stacked: true,
           grid: { display: false },
           ticks: {
-            color: isDark ? '#f3f4f6' : '#0f172a',
-            font: { size: 13, weight: '600', family: 'Outfit' }
+            color: isDark ? '#f4f1ec' : '#202124',
+            font: { size: 13, weight: '700', family: 'Atkinson Hyperlegible' }
           }
         },
         y: {
@@ -282,7 +281,7 @@ function renderComparisonEstratoChart(profiles) {
             color: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
           },
           ticks: {
-            color: isDark ? '#9ca3af' : '#475569',
+            color: isDark ? '#beb7b2' : '#5e5558',
             stepSize: 1,
             precision: 0
           }

@@ -61,23 +61,23 @@ function getChartThemeConfig() {
   const isDark = isDarkTheme();
   return {
     isDark,
-    borderColor: isDark ? '#0f090b' : '#ffffff',
+    borderColor: isDark ? '#111516' : '#fffdf9',
     tooltip: {
-      backgroundColor: isDark ? '#111827' : '#ffffff',
-      titleColor: isDark ? '#f3f4f6' : '#0f172a',
-      bodyColor: isDark ? '#9ca3af' : '#475569',
+      backgroundColor: isDark ? '#202725' : '#fffdf9',
+      titleColor: isDark ? '#f4f1ec' : '#202124',
+      bodyColor: isDark ? '#beb7b2' : '#5e5558',
       borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0,0,0,0.1)',
       borderWidth: 1,
       padding: 10
     },
     legendLabels: {
-      color: isDark ? '#f3f4f6' : '#0f172a',
-      font: { family: 'Outfit', size: 12, weight: '500' }
+      color: isDark ? '#f4f1ec' : '#202124',
+      font: { family: 'Atkinson Hyperlegible', size: 12, weight: '700' }
     },
     gridColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-    tickColor: isDark ? '#9ca3af' : '#475569',
-    tickPrimaryColor: isDark ? '#f3f4f6' : '#0f172a',
-    tickFont: { family: 'Outfit', size: 11, weight: '500' }
+    tickColor: isDark ? '#beb7b2' : '#5e5558',
+    tickPrimaryColor: isDark ? '#f4f1ec' : '#202124',
+    tickFont: { family: 'Atkinson Hyperlegible', size: 11, weight: '700' }
   };
 }
 
@@ -88,7 +88,7 @@ function getChartThemeConfig() {
  */
 export function updateAnalytics(items = appState.classifiedItems) {
   if (appState.classifiedItems.length === 0) {
-    dom.emptyState.style.display = 'flex';
+    dom.emptyState.style.display = 'grid';
     dom.analyticsResults.style.display = 'none';
     destroyAllCharts();
     return;
@@ -284,8 +284,8 @@ function renderQualisChart(counts) {
 
   const theme = getChartThemeConfig();
   const colorMapping = {
-    A1: '#10b981', A2: '#34d399', A3: '#06b6d4', A4: '#3b82f6',
-    A5: '#6366f1', A6: '#fbbf24', A7: '#f97316', A8: '#ef4444', NC: '#64748b'
+    A1: '#12584b', A2: '#176b5b', A3: '#2e725f', A4: '#4f685c',
+    A5: '#765b50', A6: '#8b4b45', A7: '#913247', A8: '#7a1538', NC: '#5f6261'
   };
 
   const labels = [];
@@ -342,16 +342,16 @@ function renderIndexersChart(counts) {
 
   const theme = getChartThemeConfig();
   const indexerColors = {
-    'SciELO': { bg: 'rgba(249, 115, 22, 0.85)', hover: '#fb7185' },
-    'Medline': { bg: 'rgba(59, 130, 246, 0.85)', hover: '#3b82f6' },
-    'Scopus': { bg: 'rgba(245, 158, 11, 0.85)', hover: '#f59e0b' },
-    'JCR (WoS)': { bg: 'rgba(209, 26, 91, 0.85)', hover: '#d11a5b' },
-    'Latindex': { bg: 'rgba(16, 185, 129, 0.85)', hover: '#10b981' },
-    'RIC/CUIDEN': { bg: 'rgba(99, 102, 241, 0.85)', hover: '#6366f1' },
-    'LILACS': { bg: 'rgba(6, 182, 212, 0.85)', hover: '#06b6d4' },
-    'BDENF': { bg: 'rgba(20, 184, 166, 0.85)', hover: '#14b8a6' },
-    'CINAHL': { bg: 'rgba(79, 70, 229, 0.85)', hover: '#4f46e5' },
-    'RevEnf': { bg: 'rgba(107, 114, 128, 0.85)', hover: '#6b7280' }
+    'SciELO': { bg: 'rgba(145, 50, 71, 0.88)', hover: '#913247' },
+    'Medline': { bg: 'rgba(76, 111, 101, 0.88)', hover: '#4c6f65' },
+    'Scopus': { bg: 'rgba(197, 139, 42, 0.88)', hover: '#c58b2a' },
+    'JCR (WoS)': { bg: 'rgba(122, 21, 56, 0.88)', hover: '#7a1538' },
+    'Latindex': { bg: 'rgba(23, 107, 91, 0.88)', hover: '#176b5b' },
+    'RIC/CUIDEN': { bg: 'rgba(118, 91, 80, 0.88)', hover: '#765b50' },
+    'LILACS': { bg: 'rgba(111, 195, 174, 0.88)', hover: '#6fc3ae' },
+    'BDENF': { bg: 'rgba(46, 114, 95, 0.88)', hover: '#2e725f' },
+    'CINAHL': { bg: 'rgba(139, 75, 69, 0.88)', hover: '#8b4b45' },
+    'RevEnf': { bg: 'rgba(95, 98, 97, 0.88)', hover: '#5f6261' }
   };
 
   const labels = [];
@@ -416,8 +416,8 @@ function renderPublicationsYearChart(yearEstratoCounts) {
 
   const theme = getChartThemeConfig();
   const colorMapping = {
-    A1: '#10b981', A2: '#34d399', A3: '#06b6d4', A4: '#3b82f6',
-    A5: '#6366f1', A6: '#fbbf24', A7: '#f97316', A8: '#ef4444', NC: '#64748b'
+    A1: '#12584b', A2: '#176b5b', A3: '#2e725f', A4: '#4f685c',
+    A5: '#765b50', A6: '#8b4b45', A7: '#913247', A8: '#7a1538', NC: '#5f6261'
   };
 
   const datasets = [];
@@ -534,7 +534,7 @@ function renderQualisEvolutionChart(scores) {
 
       // Rótulos de texto
       ctx.setLineDash([]);
-      ctx.font = '600 10px Outfit, sans-serif';
+      ctx.font = '700 10px Atkinson Hyperlegible, sans-serif';
       ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)';
       ctx.textAlign = 'right';
       
@@ -548,8 +548,8 @@ function renderQualisEvolutionChart(scores) {
   };
 
   const chartGradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.clientHeight || 200);
-  chartGradient.addColorStop(0, 'rgba(209, 26, 91, 0.35)');
-  chartGradient.addColorStop(1, 'rgba(209, 26, 91, 0.01)');
+  chartGradient.addColorStop(0, 'rgba(122, 21, 56, 0.28)');
+  chartGradient.addColorStop(1, 'rgba(122, 21, 56, 0.01)');
 
   appState.charts.qualisEvolution = new Chart(ctx, {
     type: 'line',
@@ -558,12 +558,12 @@ function renderQualisEvolutionChart(scores) {
       datasets: [{
         label: 'Nota CAPES',
         data,
-        borderColor: '#d11a5b',
+        borderColor: '#7a1538',
         backgroundColor: chartGradient,
         borderWidth: 3,
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: '#d11a5b',
+        pointBackgroundColor: '#7a1538',
         pointBorderColor: theme.borderColor,
         pointBorderWidth: 2,
         pointRadius: 6,
