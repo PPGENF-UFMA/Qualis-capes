@@ -13,6 +13,8 @@ import { renderResultsTable, showTableSkeletons } from './table.js';
 let activeModal = null;
 let lastFocusedElement = null;
 let consultationInitialized = false;
+let tabTransitionToken = 0;
+let activeTabAnimations = [];
 
 function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(
@@ -65,8 +67,15 @@ function closeManagedModal(modal) {
 
 // ─── CENTRAL DE CONSULTA RESPONSIVA ──────────────────────────────
 
-function resizeAllCharts() {
-  Object.values(appState.charts).forEach(chart => {
+function resizeVisibleCharts(tabId) {
+  const chartKeys = tabId === 'analytics'
+    ? ['qualis', 'indexers', 'publicationsYear', 'qualisEvolution']
+    : tabId === 'comparison'
+      ? ['radar', 'comparisonEstrato']
+      : [];
+
+  chartKeys.forEach(key => {
+    const chart = appState.charts[key];
     if (chart && typeof chart.resize === 'function') chart.resize();
   });
 }
@@ -149,70 +158,189 @@ export function initConsultationSidebar() {
   dom.sidebarClose?.addEventListener('click', () => closeConsultationSidebar());
   dom.sidebarBackdrop?.addEventListener('click', () => closeConsultationSidebar());
   document.addEventListener('keydown', handleConsultationKeydown);
-  dom.workspace.addEventListener('transitionend', event => {
-    if (event.propertyName === 'grid-template-columns') resizeAllCharts();
-  });
 
   syncConsultationWithTab('table');
 }
 
 // ─── SISTEMA DE ABAS ──────────────────────────────────────────────
 
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+function getActiveTabId() {
+  if (dom.tabAnalytics?.classList.contains('active')) return 'analytics';
+  if (dom.tabComparison?.classList.contains('active')) return 'comparison';
+  return 'table';
+}
+
+function isDashboardTab(tabId) {
+  return tabId === 'analytics' || tabId === 'comparison';
+}
+
+function cancelTabAnimations() {
+  activeTabAnimations.forEach(animation => animation.cancel());
+  activeTabAnimations = [];
+  [dom.mainContent, dom.consultationPanel, dom.sidebarOpen].forEach(element => {
+    if (!element) return;
+    element.style.removeProperty('opacity');
+    element.style.removeProperty('transform');
+  });
+}
+
+async function playTabAnimation(element, keyframes, options) {
+  if (!element || prefersReducedMotion() || typeof element.animate !== 'function') return;
+  const animation = element.animate(keyframes, { fill: 'both', ...options });
+  activeTabAnimations.push(animation);
+  try {
+    await animation.finished;
+  } catch (_) {
+    // Uma nova troca de aba cancela a animação anterior intencionalmente.
+  } finally {
+    activeTabAnimations = activeTabAnimations.filter(item => item !== animation);
+    animation.cancel();
+  }
+}
+
+function nextLayoutFrame() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function applyTabState(tabId) {
+  [dom.tabTable, dom.tabAnalytics, dom.tabComparison].forEach(tab => {
+    if (!tab) return;
+    tab.classList.remove('active');
+    tab.setAttribute('aria-selected', 'false');
+    tab.setAttribute('tabindex', '-1');
+  });
+  [dom.paneTable, dom.paneAnalytics, dom.paneComparison].forEach(pane => {
+    if (!pane) return;
+    pane.classList.remove('active');
+    pane.setAttribute('hidden', '');
+  });
+
+  const tab = tabId === 'analytics' ? dom.tabAnalytics : tabId === 'comparison' ? dom.tabComparison : dom.tabTable;
+  const pane = tabId === 'analytics' ? dom.paneAnalytics : tabId === 'comparison' ? dom.paneComparison : dom.paneTable;
+  if (!tab || !pane) return;
+  tab.classList.add('active');
+  tab.setAttribute('aria-selected', 'true');
+  tab.setAttribute('tabindex', '0');
+  pane.classList.add('active');
+  pane.removeAttribute('hidden');
+}
+
+async function animateTabOut(element, token) {
+  if (!element) return;
+  if (prefersReducedMotion() || typeof element.animate !== 'function') {
+    element.style.opacity = '0';
+    return;
+  }
+
+  await playTabAnimation(element, [
+    { opacity: 1, transform: 'translateY(0)' },
+    { opacity: 0, transform: 'translateY(-4px)' }
+  ], { duration: 90, easing: 'ease-in' });
+
+  if (token === tabTransitionToken) {
+    element.style.opacity = '0';
+    element.style.transform = 'translateY(-4px)';
+  }
+}
+
+async function animateTabIn(element) {
+  if (!element) return;
+  if (prefersReducedMotion() || typeof element.animate !== 'function') {
+    element.style.removeProperty('opacity');
+    element.style.removeProperty('transform');
+    return;
+  }
+
+  const animation = element.animate([
+    { opacity: 0, transform: 'translateY(5px)' },
+    { opacity: 1, transform: 'translateY(0)' }
+  ], { duration: 140, easing: 'ease-out', fill: 'both' });
+  activeTabAnimations.push(animation);
+  element.style.opacity = '1';
+  element.style.transform = 'none';
+  try {
+    await animation.finished;
+  } catch (_) {
+    // Cancelamento esperado quando o usuário alterna rapidamente.
+  } finally {
+    activeTabAnimations = activeTabAnimations.filter(item => item !== animation);
+    animation.cancel();
+    element.style.removeProperty('opacity');
+    element.style.removeProperty('transform');
+  }
+}
+
 /**
  * Alterna entre as abas de resultados (Tabela / Estatísticas / Comparação).
  * @param {'table'|'analytics'|'comparison'} tabId Identificador da aba
  */
-export function switchTab(tabId) {
-  if (!dom.tabTable || !dom.tabAnalytics || !dom.paneTable || !dom.paneAnalytics) return;
+export async function switchTab(tabId) {
+  if (!dom.tabTable || !dom.tabAnalytics || !dom.paneTable || !dom.paneAnalytics || !dom.mainContent) return;
+  if (!['table', 'analytics', 'comparison'].includes(tabId)) return;
 
-  // Reset all tabs
-  [dom.tabTable, dom.tabAnalytics, dom.tabComparison].forEach(t => {
-    if (t) {
-      t.classList.remove('active');
-      t.setAttribute('aria-selected', 'false');
-      t.setAttribute('tabindex', '-1');
-    }
-  });
-  [dom.paneTable, dom.paneAnalytics, dom.paneComparison].forEach(p => {
-    if (p) {
-      p.classList.remove('active');
-      p.setAttribute('hidden', '');
-    }
-  });
+  const currentTabId = getActiveTabId();
+  const token = ++tabTransitionToken;
+  cancelTabAnimations();
 
-  if (tabId === 'table') {
-    dom.tabTable.classList.add('active');
-    dom.tabTable.setAttribute('aria-selected', 'true');
-    dom.tabTable.setAttribute('tabindex', '0');
-    dom.paneTable.classList.add('active');
-    dom.paneTable.removeAttribute('hidden');
-  } else if (tabId === 'analytics') {
-    dom.tabAnalytics.classList.add('active');
-    dom.tabAnalytics.setAttribute('aria-selected', 'true');
-    dom.tabAnalytics.setAttribute('tabindex', '0');
-    dom.paneAnalytics.classList.add('active');
-    dom.paneAnalytics.removeAttribute('hidden');
-
-    if (appState.charts.qualis) appState.charts.qualis.resize();
-    if (appState.charts.indexers) appState.charts.indexers.resize();
-    if (appState.charts.publicationsYear) appState.charts.publicationsYear.resize();
-    if (appState.charts.qualisEvolution) appState.charts.qualisEvolution.resize();
-  } else if (tabId === 'comparison') {
-    if (dom.tabComparison) {
-      dom.tabComparison.classList.add('active');
-      dom.tabComparison.setAttribute('aria-selected', 'true');
-      dom.tabComparison.setAttribute('tabindex', '0');
-    }
-    if (dom.paneComparison) {
-      dom.paneComparison.classList.add('active');
-      dom.paneComparison.removeAttribute('hidden');
-    }
-
-    if (appState.charts.radar) appState.charts.radar.resize();
-    if (appState.charts.comparisonEstrato) appState.charts.comparisonEstrato.resize();
+  if (currentTabId === tabId) {
+    applyTabState(tabId);
+    syncConsultationWithTab(tabId);
+    await nextLayoutFrame();
+    resizeVisibleCharts(tabId);
+    dom.mainContent.removeAttribute('aria-busy');
+    return;
   }
 
+  if (prefersReducedMotion()) {
+    applyTabState(tabId);
+    syncConsultationWithTab(tabId);
+    await nextLayoutFrame();
+    resizeVisibleCharts(tabId);
+    dom.mainContent.removeAttribute('aria-busy');
+    return;
+  }
+
+  const modeChanges = isDashboardTab(currentTabId) !== isDashboardTab(tabId);
+  const oldSidebarElement = isDashboardTab(currentTabId) ? dom.sidebarOpen : dom.consultationPanel;
+  const newSidebarElement = isDashboardTab(tabId) ? dom.sidebarOpen : dom.consultationPanel;
+  dom.mainContent.setAttribute('aria-busy', 'true');
+
+  await Promise.all([
+    animateTabOut(dom.mainContent, token),
+    modeChanges
+      ? playTabAnimation(oldSidebarElement, [
+        { opacity: 1, transform: 'translateX(0)' },
+        { opacity: 0, transform: 'translateX(-10px)' }
+      ], { duration: 90, easing: 'ease-in' })
+      : Promise.resolve()
+  ]);
+
+  if (token !== tabTransitionToken) return;
+  if (modeChanges && newSidebarElement) newSidebarElement.style.opacity = '0';
+  applyTabState(tabId);
   syncConsultationWithTab(tabId);
+  await nextLayoutFrame();
+  if (token !== tabTransitionToken) return;
+  resizeVisibleCharts(tabId);
+
+  const entranceAnimations = [animateTabIn(dom.mainContent)];
+  if (modeChanges && newSidebarElement) {
+    const sidebarAnimation = playTabAnimation(newSidebarElement, [
+      { opacity: 0, transform: 'translateX(-8px)' },
+      { opacity: 1, transform: 'translateX(0)' }
+    ], { duration: 140, easing: 'ease-out' });
+    newSidebarElement.style.removeProperty('opacity');
+    entranceAnimations.push(sidebarAnimation);
+  }
+  await Promise.all(entranceAnimations);
+
+  if (token === tabTransitionToken) dom.mainContent.removeAttribute('aria-busy');
 }
 
 /**

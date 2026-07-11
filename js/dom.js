@@ -65,6 +65,7 @@ const dom = {
   searchResultsList: document.getElementById('search-results-list'),
 
   // Abas de Resultados
+  mainContent: document.getElementById('main-content'),
   resultsTabs: document.getElementById('results-tabs'),
   tabTable: document.getElementById('tab-table'),
   tabAnalytics: document.getElementById('tab-analytics'),
