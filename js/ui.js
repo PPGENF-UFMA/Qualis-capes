@@ -11,6 +11,31 @@ import { addClassifiedItem } from './state.js';
 import { renderResultsTable, showTableSkeletons } from './table.js';
 
 let activeModal = null;
+const INTRO_VISIT_KEY = 'qualis_intro_seen';
+
+export function syncAdaptiveIntro() {
+  const hasResults = appState.classifiedItems.length > 0 || appState.comparisonProfiles.length >= 2;
+  let returningVisitor = false;
+  try {
+    returningVisitor = localStorage.getItem(INTRO_VISIT_KEY) === 'true';
+  } catch (_) {
+    // A interface continua funcional quando o armazenamento estiver indisponível.
+  }
+
+  document.body.classList.toggle('intro-condensed', returningVisitor || hasResults);
+  document.body.classList.toggle('intro-has-results', hasResults);
+  dom.editorialIntro?.setAttribute('data-intro-state', hasResults ? 'results' : returningVisitor ? 'returning' : 'welcome');
+}
+
+export function initAdaptiveIntro() {
+  syncAdaptiveIntro();
+  requestAnimationFrame(() => document.body.classList.add('intro-ready'));
+  try {
+    localStorage.setItem(INTRO_VISIT_KEY, 'true');
+  } catch (_) {
+    // Sem persistência, a apresentação compacta é exibida novamente na próxima visita.
+  }
+}
 let lastFocusedElement = null;
 let consultationInitialized = false;
 let tabTransitionToken = 0;
@@ -283,6 +308,8 @@ async function animateTabIn(element) {
 export async function switchTab(tabId) {
   if (!dom.tabTable || !dom.tabAnalytics || !dom.paneTable || !dom.paneAnalytics || !dom.mainContent) return;
   if (!['table', 'analytics', 'comparison'].includes(tabId)) return;
+
+  syncAdaptiveIntro();
 
   const currentTabId = getActiveTabId();
   const token = ++tabTransitionToken;

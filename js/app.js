@@ -23,8 +23,9 @@ import {
   addRecentSearch, renderRecentSearches,
   updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal,
   initQuadrienios, initConsultationSidebar,
+  initAdaptiveIntro,
   showClassificationInfoModal, closeClassificationInfoModal
-} from './ui.js';
+} from './ui.js?v=20260711-adaptive-intro';
 
 // ─── Inicialização ───────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   restoreResults();
   restoreComparisonProfiles();
+  initAdaptiveIntro();
   renderRecentSearches();
   await initDatabase();
   await initLattesParser();

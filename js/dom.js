@@ -34,6 +34,7 @@ const dom = {
   printReportDate: document.getElementById('print-report-date'),
 
   themeToggle: document.getElementById('theme-toggle'),
+  editorialIntro: document.querySelector('.editorial-intro'),
 
   // Dashboard
   emptyState: document.getElementById('empty-state'),
