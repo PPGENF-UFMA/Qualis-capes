@@ -94,32 +94,42 @@
               <i data-lucide="panel-left-close" aria-hidden="true"></i>
             </button>
           </div>
-          <!-- Seletor Segmentado Premium -->
-          <div class="input-selector" aria-label="Método de análise">
-            <button type="button" id="selector-single" class="selector-btn active" title="Consulta Individual">
-              <i data-lucide="search"></i>
-              <span>Individual</span>
-            </button>
-            <button type="button" id="selector-batch" class="selector-btn" title="Consulta em Lote">
-              <i data-lucide="layers"></i>
-              <span>Lote</span>
-            </button>
-            <button type="button" id="selector-upload" class="selector-btn" title="Importar CSV">
-              <i data-lucide="file-spreadsheet"></i>
-              <span>Planilha</span>
-            </button>
-            <button type="button" id="selector-lattes" class="selector-btn" title="Análise de Currículo Lattes">
-              <i data-lucide="file-text"></i>
-              <span>Currículo</span>
-            </button>
-            <button type="button" id="selector-orcid" class="selector-btn" title="Analise por ORCID iD">
-              <i data-lucide="fingerprint"></i>
-              <span>ORCID</span>
-            </button>
-            <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
-              <i data-lucide="git-compare"></i>
-              <span>Comparar</span>
-            </button>
+          <!-- Seletor Segmentado Premium — Bloco Periódicos -->
+          <div class="input-selector-group">
+            <span class="input-selector-label"><i data-lucide="book-open"></i> Periódicos</span>
+            <div class="input-selector" aria-label="Análise por periódico">
+              <button type="button" id="selector-single" class="selector-btn active" title="Consulta por Periódico">
+                <i data-lucide="search"></i>
+                <span>Periódico</span>
+              </button>
+              <button type="button" id="selector-batch" class="selector-btn" title="Consulta em Lote">
+                <i data-lucide="layers"></i>
+                <span>Lote</span>
+              </button>
+              <button type="button" id="selector-upload" class="selector-btn" title="Importar CSV">
+                <i data-lucide="file-spreadsheet"></i>
+                <span>Planilha</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Seletor Segmentado Premium — Bloco Pesquisador -->
+          <div class="input-selector-group">
+            <span class="input-selector-label"><i data-lucide="user"></i> Pesquisador</span>
+            <div class="input-selector" aria-label="Análise por pesquisador">
+              <button type="button" id="selector-orcid" class="selector-btn" title="Análise por ORCID iD">
+                <i data-lucide="fingerprint"></i>
+                <span>ORCID</span>
+              </button>
+              <button type="button" id="selector-lattes" class="selector-btn" title="Análise de Currículo Lattes">
+                <i data-lucide="file-text"></i>
+                <span>Currículo</span>
+              </button>
+              <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
+                <i data-lucide="git-compare"></i>
+                <span>Comparar</span>
+              </button>
+            </div>
           </div>
 
           <!-- Painel 1: Consulta Individual -->
