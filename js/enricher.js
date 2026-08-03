@@ -1,5 +1,3 @@
-let dbSummary = null;
-
 export function normalizeISSN(issn) {
   if (typeof issn !== 'string') return '';
   const cleaned = issn.replace(/[^0-9Xx]/g, '').toUpperCase();
@@ -36,24 +34,6 @@ export function normalizeORCID(orcid) {
   return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(12)}`;
 }
 
-export async function loadDatabase() {
-  if (dbSummary !== null) return dbSummary;
-  try {
-    const response = await fetch('/api/v1/db-summary?limit=100000');
-    if (!response.ok) throw new Error(`Erro ao carregar banco: ${response.statusText}`);
-    const data = await response.json();
-    dbSummary = {
-      total: data.total,
-      items: data.items
-    };
-    return dbSummary;
-  } catch (error) {
-    console.error('Falha ao carregar base de dados:', error);
-    dbSummary = {};
-    return dbSummary;
-  }
-}
-
 export async function analyzeOrcid(orcid, yearFrom = null, yearTo = null) {
   const normalized = normalizeORCID(orcid);
   if (!normalized) {
@@ -79,9 +59,19 @@ export async function analyzeOrcid(orcid, yearFrom = null, yearTo = null) {
   return data;
 }
 
-export function setDatabase(data) {
-  dbSummary = { total: 0, items: [] };
-  // Mock function if needed
+export function createTechnicalErrorResult(rawIssn, message = 'Não foi possível concluir a consulta.') {
+  return {
+    issn: normalizeISSN(rawIssn) || rawIssn || 'N/A',
+    title: 'Consulta não concluída',
+    area: 'Outras Áreas',
+    jcr: null,
+    citeScore: null,
+    indexers: [],
+    metrics: { cuiden: null },
+    classification: { estrato: 'NC', justification: `Falha técnica: ${message}`, all_candidates: [] },
+    data_status: 'error',
+    warnings: [{ source: 'Servidor', code: 'error', message }]
+  };
 }
 
 export async function enrichAndClassify(rawIssn) {
@@ -95,26 +85,20 @@ export async function enrichAndClassify(rawIssn) {
       citeScore: null,
       indexers: [],
       metrics: { cuiden: null },
-      classification: { estrato: 'NC', justification: 'ISSN em formato inválido.' }
+      classification: { estrato: 'NC', justification: 'ISSN em formato inválido.', all_candidates: [] },
+      data_status: 'invalid',
+      warnings: []
     };
   }
 
   try {
     const response = await fetch(`/api/v1/classify/${normalized}`);
-    if (!response.ok) throw new Error(`API error: ${response.statusText}`);
-    return await response.json();
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `API error: ${response.statusText}`);
+    return data;
   } catch (error) {
     console.error(`[API] Falha ao classificar ${normalized}:`, error.message);
-    return {
-      issn: normalized,
-      title: 'Erro ao consultar API',
-      area: 'Outras Áreas',
-      jcr: null,
-      citeScore: null,
-      indexers: [],
-      metrics: { cuiden: null },
-      classification: { estrato: 'NC', justification: `Erro ao consultar servidor: ${error.message}` }
-    };
+    return createTechnicalErrorResult(normalized, error.message);
   }
 }
 
@@ -144,53 +128,76 @@ export async function classifyBatch(rawIssns) {
         citeScore: null,
         indexers: [],
         metrics: { cuiden: null },
-        classification: { estrato: 'NC', justification: 'ISSN em formato invalido.' }
+        classification: { estrato: 'NC', justification: 'ISSN em formato inválido.', all_candidates: [] },
+        data_status: 'invalid',
+        warnings: []
       };
     });
 
   if (valid.length === 0) return results;
 
-  try {
-    const BATCH_LIMIT = 500;
-    for (let i = 0; i < valid.length; i += BATCH_LIMIT) {
-      const chunk = valid.slice(i, i + BATCH_LIMIT);
+  const BATCH_LIMIT = 500;
+  for (let i = 0; i < valid.length; i += BATCH_LIMIT) {
+    const chunk = valid.slice(i, i + BATCH_LIMIT);
+    try {
       const response = await fetch('/api/v1/classify/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ issns: chunk.map(entry => entry.normalized) })
       });
-      if (!response.ok) throw new Error(`API error: ${response.statusText}`);
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || `API error: ${response.statusText}`);
       const classified = data.results || [];
       chunk.forEach((entry, j) => {
         results[entry.index] = classified[j] || {
           issn: entry.normalized,
-          title: 'Erro ao consultar API',
+          title: 'Consulta não concluída',
           area: 'Outras Areas',
           jcr: null,
           citeScore: null,
           indexers: [],
           metrics: { cuiden: null },
-          classification: { estrato: 'NC', justification: 'Resposta ausente no lote.' }
+          classification: { estrato: 'NC', justification: 'Resposta ausente no lote.', all_candidates: [] },
+          data_status: 'error',
+          warnings: [{ source: 'Servidor', code: 'error', message: 'Resposta ausente no lote.' }]
         };
       });
+    } catch (error) {
+      console.error('[API] Falha ao classificar bloco do lote:', error.message);
+      const fallback = await Promise.all(chunk.map(entry => enrichAndClassify(entry.normalized)));
+      chunk.forEach((entry, index) => {
+        results[entry.index] = fallback[index];
+      });
     }
-    return results;
-  } catch (error) {
-    console.error('[API] Falha ao classificar lote:', error.message);
-    return Promise.all(rawIssns.map(issn => enrichAndClassify(issn)));
   }
+  return results;
+}
+
+/**
+ * Executa segmentação, extração e matching Lattes no backend autoritativo.
+ */
+export async function matchLattes(text, researcherName = '') {
+  const response = await fetch('/api/v1/match/lattes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, researcher_name: researcherName || null })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || `Erro ao analisar texto Lattes: ${response.statusText}`);
+  }
+  return data.results || [];
 }
 
 export async function searchByName(query) {
   try {
     const response = await fetch(`/api/v1/search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) return [];
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || `Erro na busca: ${response.statusText}`);
     return data.results || [];
   } catch (error) {
     console.error('[API] Erro na busca por nome:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -209,56 +216,6 @@ export async function classifyByName(journalName) {
     return await enrichAndClassify(results[0].issn);
   }
   return null;
-}
-
-/**
- * Busca em lote por nomes de periódicos no backend.
- * @param {string[]} queries Lista de nomes de periódicos
- * @returns {Promise<Object[]>} Lista de resultados (cada posição corresponde à query)
- */
-export async function searchBatch(queries) {
-  try {
-    const response = await fetch('/api/v1/search/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ queries })
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.results || [];
-  } catch (error) {
-    console.error('[API] Erro na busca em lote:', error);
-    return [];
-  }
-}
-
-/**
- * Matching de periódicos por nome — pipeline server-side:
- * alias → exato → containment → Jaccard-IDF + Jaro-Winkler.
- *
- * @param {string[]} queries Lista de nomes de periódicos (1 por artigo).
- * @param {string[]|null} articleTitles Títulos de artigo (opcional, usado
- *        em Fase 2 p/ desambiguação Crossref; hoje ignorado pelo backend).
- * @returns {Promise<Object[]>} Results: {issn, confidence, score, stage, candidates}
- */
-export async function matchBatch(queries, articleTitles = null) {
-  try {
-    const body = { queries };
-    if (articleTitles && articleTitles.length === queries.length) {
-      body.article_titles = articleTitles;
-    }
-    const response = await fetch('/api/v1/match/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) return [];
-    const data = await response.json();
-    return data.results || [];
-  } catch (error) {
-    console.error('[API] Erro no matchBatch:', error);
-    return [];
-  }
 }
 
 /**

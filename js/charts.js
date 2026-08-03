@@ -6,9 +6,10 @@
 
 import dom from './dom.js';
 import appState from './state.js';
+import { isNonConclusiveResult } from './state.js';
 import { escapeHTML } from './utils.js';
 
-// Pesos de Score CAPES recomendados
+// Pesos internos usados exclusivamente no Índice de Perfil de Publicação (IPP).
 const SCORE_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
 
 // ─── UTILITÁRIOS INTERNOS ──────────────────────────────────────────
@@ -40,16 +41,16 @@ function getEstratoFromScore(score) {
 }
 
 /**
- * Mapeia o score 0-100 para a escala de notas CAPES (3-7).
+ * Mapeia o IPP 0-100 para faixas descritivas internas.
  * @param {number} score Score numérico (0-100)
  * @returns {{ note: number, label: string }}
  */
-function mapScoreToCAPESNote(score) {
-  if (score >= 85) return { note: 7, label: 'Excelência Internacional' };
-  if (score >= 70) return { note: 6, label: 'Excelência Nacional' };
-  if (score >= 55) return { note: 5, label: 'Muito Bom' };
-  if (score >= 40) return { note: 4, label: 'Bom' };
-  return { note: 3, label: 'Regular' };
+function mapScoreToProfileBand(score) {
+  if (score >= 85) return { label: 'Perfil de impacto muito alto' };
+  if (score >= 70) return { label: 'Perfil de impacto alto' };
+  if (score >= 55) return { label: 'Perfil consistente' };
+  if (score >= 40) return { label: 'Perfil em consolidação' };
+  return { label: 'Perfil emergente' };
 }
 
 /**
@@ -97,13 +98,17 @@ export function updateAnalytics(items = appState.classifiedItems) {
   dom.emptyState.style.display = 'none';
   dom.analyticsResults.style.display = 'block';
 
+  const pendingCount = items.filter(isNonConclusiveResult).length;
+  if (dom.kpiPendingCount) dom.kpiPendingCount.textContent = pendingCount;
+  items = items.filter(item => !isNonConclusiveResult(item));
+
   if (items.length === 0) {
     // Zerar KPIs
     dom.kpiTotal.textContent = 0;
     dom.kpiQualifiedValue.textContent = 0;
     dom.kpiQualifiedSub.textContent = '0% do total (A1 + A2)';
-    dom.kpiAvgScoreValue.textContent = 'Nota -';
-    dom.kpiAvgScoreSub.textContent = 'Score: 0/100 · Estrato Médio: NC';
+    dom.kpiAvgScoreValue.textContent = '0 / 100';
+    dom.kpiAvgScoreSub.textContent = 'IPP interno · sem itens concluídos';
     dom.kpiNcCount.textContent = 0;
     dom.kpiInternationalCoverage.textContent = '0%';
     if (dom.kpiAreaDistribution) {
@@ -119,7 +124,9 @@ export function updateAnalytics(items = appState.classifiedItems) {
       dom.curriculumInsightsList.innerHTML = `
         <div class="insight-item">
           <div class="insight-icon"><i data-lucide="info"></i></div>
-          <p class="insight-text">Nenhum artigo corresponde aos filtros de ano/quadriênio aplicados.</p>
+          <p class="insight-text">${pendingCount > 0
+            ? `${pendingCount} item(ns) ainda não foram concluídos e, por isso, não entraram nos indicadores.`
+            : 'Nenhum artigo corresponde aos filtros de ano/quadriênio aplicados.'}</p>
         </div>
       `;
       if (typeof lucide !== 'undefined') {
@@ -142,13 +149,13 @@ export function updateAnalytics(items = appState.classifiedItems) {
   dom.kpiQualifiedValue.textContent = qualifiedCount;
   dom.kpiQualifiedSub.textContent = `${qualifiedPercent}% do total (A1 + A2)`;
 
-  // Score CAPES Médio e Estrato Médio
+  // Índice de Perfil de Publicação (IPP) e estrato médio aproximado
   const totalScore = items.reduce((sum, item) => sum + (SCORE_WEIGHTS[item.classification.estrato] || 0), 0);
   const avgScore = total > 0 ? Math.round(totalScore / total) : 0;
   const avgEstrato = getEstratoFromScore(avgScore);
-  const capesNote = mapScoreToCAPESNote(avgScore);
-  dom.kpiAvgScoreValue.textContent = `Nota ${capesNote.note}`;
-  dom.kpiAvgScoreSub.textContent = `${capesNote.label} — Score: ${avgScore}/100 · Estrato Médio: ${avgEstrato}`;
+  const profileBand = mapScoreToProfileBand(avgScore);
+  dom.kpiAvgScoreValue.textContent = `${avgScore} / 100`;
+  dom.kpiAvgScoreSub.textContent = `${profileBand.label} · Estrato médio aproximado: ${avgEstrato}`;
 
   // Não Classificados (NC)
   const ncCount = items.filter(item => item.classification.estrato === 'NC').length;
@@ -184,7 +191,7 @@ export function updateAnalytics(items = appState.classifiedItems) {
   renderPublicationsYearChart(yearEstratoCounts);
   renderQualisEvolutionChart(yearAvgScores);
   renderTopJournals(items);
-  renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent, internationalPercent, ncCount);
+  renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent, internationalPercent, ncCount, pendingCount);
 }
 
 // ─── PROCESSAMENTO DE DADOS ────────────────────────────────────────
@@ -497,21 +504,21 @@ function renderQualisEvolutionChart(scores) {
 
       const isDark = !document.body.classList.contains('light-theme');
       
-      // Cores semitransparentes por nota CAPES
+      // Cores semitransparentes por faixa interna do IPP
       const colorExcellent = isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.05)';
       const colorRegular = isDark ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.03)';
       const colorAttention = isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)';
       
       // Preenche os retângulos de fundo
-      // Nota 7 (85 a 100)
+      // Impacto muito alto (85 a 100)
       ctx.fillStyle = colorExcellent;
       ctx.fillRect(left, y100, right - left, y85 - y100);
       
-      // Nota 4-6 (55 a 85)
+      // Perfil consistente/alto (55 a 85)
       ctx.fillStyle = colorRegular;
       ctx.fillRect(left, y85, right - left, y55 - y85);
       
-      // Nota 3 (0 a 55)
+      // Perfil emergente/em consolidação (0 a 55)
       ctx.fillStyle = colorAttention;
       ctx.fillRect(left, y55, right - left, y0 - y55);
 
@@ -520,13 +527,13 @@ function renderQualisEvolutionChart(scores) {
       ctx.setLineDash([5, 5]);
       ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)';
       
-      // Limite Nota 7 (85)
+      // Limite superior (85)
       ctx.beginPath();
       ctx.moveTo(left, y85);
       ctx.lineTo(right, y85);
       ctx.stroke();
       
-      // Limite Nota 5 (55)
+      // Limite intermediário (55)
       ctx.beginPath();
       ctx.moveTo(left, y55);
       ctx.lineTo(right, y55);
@@ -540,8 +547,8 @@ function renderQualisEvolutionChart(scores) {
       
       const textX = right - 10;
       
-      ctx.fillText('Nota 7 (≥85)', textX, y85 - 6);
-      ctx.fillText('Nota 5 (≥55)', textX, y55 - 6);
+      ctx.fillText('Impacto muito alto (≥85)', textX, y85 - 6);
+      ctx.fillText('Perfil consistente (≥55)', textX, y55 - 6);
       
       ctx.restore();
     }
@@ -556,7 +563,7 @@ function renderQualisEvolutionChart(scores) {
     data: {
       labels: sortedYears,
       datasets: [{
-        label: 'Nota CAPES',
+        label: 'IPP médio',
         data,
         borderColor: '#7a1538',
         backgroundColor: chartGradient,
@@ -581,8 +588,8 @@ function renderQualisEvolutionChart(scores) {
           callbacks: {
             label: function(context) {
               const val = context.raw;
-              const capes = mapScoreToCAPESNote(val);
-              return ` Nota CAPES ${capes.note} · Score ${val}/100 (Médio: Qualis ${getEstratoFromScore(val)})`;
+              const profile = mapScoreToProfileBand(val);
+              return ` IPP ${val}/100 · ${profile.label} · Estrato médio aproximado: ${getEstratoFromScore(val)}`;
             }
           }
         }
@@ -638,7 +645,7 @@ function renderTopJournals(items) {
 }
 
 /** Renderiza a lista de insights do currículo baseado em regras heurísticas. */
-function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent, internationalPercent, ncCount) {
+function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent, internationalPercent, ncCount, pendingCount) {
   const container = dom.curriculumInsightsList;
   if (!container) return;
 
@@ -669,19 +676,19 @@ function renderCurriculumInsights(items, avgScore, avgEstrato, qualifiedPercent,
     insights.push({ icon: 'check-circle-2', text: `<strong>Dados Coerentes:</strong> 100% dos periódicos analisados estão classificados no Qualis CAPES.` });
   }
 
-  // Insight 4: Avaliação do Score de Produção (escala CAPES 3-7)
-  const capesInsight = mapScoreToCAPESNote(avgScore);
-  let scoreText = '';
-  if (capesInsight.note >= 7) scoreText = 'Perfil de altíssimo impacto (Excelência Internacional).';
-  else if (capesInsight.note >= 6) scoreText = 'Perfil de excelência com destaque nacional.';
-  else if (capesInsight.note >= 5) scoreText = 'Produção muito boa e consistente (Muito Bom).';
-  else if (capesInsight.note >= 4) scoreText = 'Produção adequada e qualificada (Bom).';
-  else scoreText = 'Produção em nível regular, com espaço para qualificação.';
-
+  // Insight 4: índice interno, sem equivalência com notas oficiais da CAPES.
+  const profileBand = mapScoreToProfileBand(avgScore);
   insights.push({
     icon: 'activity',
-    text: `<strong>Score de Produção:</strong> Nota CAPES <strong>${capesInsight.note}</strong> (${capesInsight.label}) · ${avgScore}/100 · Estrato Médio: <strong>${avgEstrato}</strong>. ${scoreText}`
+    text: `<strong>Índice de Perfil de Publicação (IPP):</strong> <strong>${avgScore}/100</strong> · ${profileBand.label} · Estrato médio aproximado: <strong>${avgEstrato}</strong>. É um indicador interno de apoio à leitura do conjunto, sem equivalência com nota oficial da CAPES.`
   });
+
+  if (pendingCount > 0) {
+    insights.push({
+      icon: 'cloud-alert',
+      text: `<strong>Consultas pendentes:</strong> <strong>${pendingCount} item(ns)</strong> não entraram nos indicadores porque dependem de uma nova tentativa ou tiveram fontes externas indisponíveis.`
+    });
+  }
 
   // Insight 5: Concentração excessiva em um único periódico (mais de 30% das publicações)
   const journalCounts = {};

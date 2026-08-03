@@ -5,14 +5,13 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchByName, classifyByName, searchBatch, matchBatch, saveServerAlias, sendMatchFeedback, loadDatabase } from './enricher.js';
+import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
 
 import dom from './dom.js';
-import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles } from './state.js';
+import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult } from './state.js';
 import { updateAnalytics } from './charts.js';
-import { renderResultsTable } from './table.js';
-import { initLattesParser, segmentLattesText, parseSingleArticle, parseLattesText, matchJournalToISSN, saveUserAlias } from './lattesParser.js';
+import { renderResultsTable } from './table.js?v=20260801-compact-status';
 import { updateComparisonDashboard } from './compare.js';
 import {
   switchTab, switchInputType,
@@ -24,8 +23,9 @@ import {
   updateLoadingProgress, showLattesPreviewModal, closeLattesPreviewModal,
   initQuadrienios, initConsultationSidebar,
   initAdaptiveIntro,
+  initCustomSelects, syncCustomSelects,
   showClassificationInfoModal, closeClassificationInfoModal
-} from './ui.js?v=20260711-adaptive-intro';
+} from './ui.js?v=20260801-editorial-selects';
 
 // ─── Inicialização ───────────────────────────────────────────────
 
@@ -33,6 +33,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initConsultationSidebar();
   initQuadrienios();
+  initCustomSelects();
   initOrcidYearDefaults();
   setupEventListeners();
   restoreResults();
@@ -40,7 +41,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   initAdaptiveIntro();
   renderRecentSearches();
   await initDatabase();
-  await initLattesParser();
   await checkCiteScoreStatus();
   await checkCircuitsStatus();
 
@@ -99,9 +99,8 @@ function setupEventListeners() {
     newClassified.lattesCandidates = undefined;
     newClassified.year = appState.classifiedItems[idx].year;
 
-    // Persiste alias no servidor (compartilhado) + localStorage (fallback offlline)
+    // Persiste alias no servidor para todos os clientes.
     const journalRaw = appState.classifiedItems[idx].lattesJournalRaw || appState.classifiedItems[idx].title;
-    saveUserAlias(journalRaw, newIssn);
     saveServerAlias(journalRaw, newIssn);
     sendMatchFeedback(journalRaw, oldIssn, newIssn);
 
@@ -128,6 +127,7 @@ function setupEventListeners() {
       hideLoadingState();
       renderResultsTable();
       switchTab('table');
+      notifyProcessingOutcome([classified], 'Consulta concluída.');
     } else {
       await handleSearchByName(query);
     }
@@ -151,6 +151,7 @@ function setupEventListeners() {
     hideLoadingState();
     renderResultsTable();
     switchTab('analytics');
+    notifyProcessingOutcome(results, `${results.length} consulta(s) processada(s).`);
   });
 
   // Upload CSV (Drag & Drop + Click)
@@ -189,6 +190,8 @@ function setupEventListeners() {
   // Limpar e Exportar
   dom.btnClear.addEventListener('click', () => {
     clearClassifiedItems();
+    clearComparisonProfiles();
+    if (dom.tabComparison) dom.tabComparison.style.display = 'none';
     if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
       dom.sessionResearcherTitle.style.display = 'none';
       dom.researcherNameDisplay.textContent = '-';
@@ -199,6 +202,7 @@ function setupEventListeners() {
     if (dom.sortBy) {
       dom.sortBy.value = 'relevance';
     }
+    syncCustomSelects();
     renderResultsTable();
     switchTab('table');
     switchInputType('single');
@@ -503,7 +507,8 @@ function setupEventListeners() {
         hideLoadingState();
         renderResultsTable();
         switchTab('comparison');
-        showToast(`${itemsA.length + itemsB.length} artigos comparados com sucesso!`, 'success');
+        const comparedItems = [...itemsA, ...itemsB];
+        notifyProcessingOutcome(comparedItems, `${comparedItems.length} artigos comparados.`);
       } catch (err) {
         console.error('[Comparação Submit Error]', err);
         try { hideLoadingState(); } catch (e) { /* silencioso */ }
@@ -636,9 +641,7 @@ async function checkCircuitsStatus() {
 
 /**
  * Inicializa a Base de Dados e exibe status na interface.
- * Busca a contagem de periódicos via API de status e carrega a lista
- * completa (issn + título + área) em memória para o matching local
- * do parser Lattes (Jaccard-IDF + aliases).
+ * Busca a contagem de periódicos únicos via API de status.
  */
 async function initDatabase() {
   try {
@@ -651,10 +654,6 @@ async function initDatabase() {
     dbStatusItem.className = 'status-item success';
     dom.dbStatus.textContent = `Base Conectada (${appState.dbSummary.total} revistas)`;
 
-    // Carrega items {issn,title,area} para matching local do Lattes
-    try {
-      await loadDatabase();
-    } catch (_) { /* ignore — fallback server-side mantém fluxo */ }
   } catch (error) {
     const dbStatusItem = dom.dbStatus.parentElement;
     dbStatusItem.className = 'status-item error';
@@ -668,96 +667,30 @@ async function initDatabase() {
 }
 
 /**
- * Parseia texto Lattes — pipeline Fase 1 (backend matching authoritative).
- *
- * Fluxo:
- *   1. Segmentação + parser via lattesParser.js (cliente) — só regex.
- *   2. ISSN extraído literalmente do texto tem precedência (client-side).
- *   3. Restante enviado para `/api/v1/match/batch` (backend) com IDF + índice
- *      invertido + aliases compartilhados server-side.
- *   4. Se servidor falhar (offline, erro 5xx), cai no matcher local
- *      `parseLattesText` (Jaccard-IDF cliente) como fallback offline.
+ * Parseia e resolve o texto Lattes no backend autoritativo.
  *
  * @param {string} text Texto bruto do Lattes
  * @returns {Promise<Object[]>} Artigos parseados com matchedIssn/confidence resolvidos
  */
 async function parseLattesWithServerMatching(text) {
-  // 1. Pipeline local: segmentar + parsear (regex) — sempre no cliente.
-  //    Mesmo fallback, garante estrutura consistente.
-  let dbItems = [];
-  try {
-    const db = await loadDatabase();
-    dbItems = (db && db.items) ? db.items : [];
-  } catch (_) { /* ignore — server-side ainda funcionará */ }
+  return matchLattes(text);
+}
 
-  const segments = segmentLattesText(text);
-  const parsed = segments.map(s => parseSingleArticle(s)).filter(a => a.type !== 'congresso');
-  if (parsed.length === 0) return [];
-
-  // 2. ISSN extraído do texto (client-side) tem precedência absoluta.
-  for (const a of parsed) {
-    if (a.extractedIssn) {
-      a.matchedIssn = a.extractedIssn;
-      a.confidence = 'high';
-      a.matchScore = 1.0;
-      a.matchStage = 'issn-extracted';
-      a.matchCandidates = [];
-    }
+function notifyProcessingOutcome(items, successMessage) {
+  const technicalCount = items.filter(isTechnicalError).length;
+  const invalidCount = items.filter(item => item.data_status === 'invalid').length;
+  const partialCount = items.filter(item => item.data_status === 'partial').length;
+  if (technicalCount > 0) {
+    showToast(`${technicalCount} consulta(s) falharam tecnicamente e podem ser tentadas novamente.`, 'error');
+  } else if (invalidCount > 0 || partialCount > 0) {
+    const details = [
+      invalidCount ? `${invalidCount} ISSN(s) inválido(s)` : '',
+      partialCount ? `${partialCount} resultado(s) com dados parciais` : ''
+    ].filter(Boolean).join(' · ');
+    showToast(`${successMessage} ${details}.`, 'warning');
+  } else {
+    showToast(successMessage, 'success');
   }
-
-  // 3. Restante vai para o backend (matching authoritative com IDF + aliases + Crossref).
-  const needsServer = parsed.filter(a => !a.matchedIssn);
-  if (needsServer.length > 0) {
-    const queries = needsServer.map(a => a.journalRaw || a.journal);
-    const articleTitles = needsServer.map(a => a.title);
-    try {
-      const resolved = await matchBatch(queries, articleTitles);
-      if (resolved.length === needsServer.length) {
-        for (let i = 0; i < needsServer.length; i++) {
-          const m = resolved[i];
-          const a = needsServer[i];
-          if (m && m.issn) {
-            a.matchedIssn = m.issn;
-            a.confidence = m.confidence || 'high';
-            a.matchScore = m.score || 0.95;
-            a.matchStage = m.stage || 'jaccard';
-            a.matchCandidates = m.candidates || [];
-          } else if (m) {
-            // Backend retornou explicitamente "none" com score baixo
-            a.matchedIssn = null;
-            a.confidence = m.confidence || 'none';
-            a.matchScore = m.score || 0;
-            a.matchStage = m.stage || 'none';
-            a.matchCandidates = m.candidates || [];
-          }
-        }
-      }
-    } catch (_) { /* ignore — fallback abaixo */ }
-  }
-
-  // 4. Quem ainda não foi resolvido pelo servidor (offline, erro, ou sem match)
-  //    cai no matcher local Jaccard-IDF como fallback offline.
-  const stillUnresolved = parsed.filter(a => !a.matchedIssn && !a.confidence);
-  if (stillUnresolved.length > 0 && dbItems.length > 0) {
-    for (const a of stillUnresolved) {
-      const local = matchJournalToISSN(a.journal, dbItems);
-      if (local.issn) {
-        a.matchedIssn = local.issn;
-        a.confidence = local.confidence;
-        a.matchScore = local.score;
-        a.matchStage = local.confidence === 'high' ? 'local-jaccard' : 'local-fuzzy';
-        a.matchCandidates = local.candidates || [];
-      } else {
-        a.matchedIssn = null;
-        a.confidence = 'none';
-        a.matchScore = local.score || 0;
-        a.matchStage = 'none';
-        a.matchCandidates = local.candidates || [];
-      }
-    }
-  }
-
-  return parsed;
 }
 
 /**
@@ -765,22 +698,25 @@ async function parseLattesWithServerMatching(text) {
  * Se o artigo tem matchedIssn, classifica diretamente.
  * Se não tem, tenta busca por nome; se encontrar 1 resultado, usa.
  * Caso contrário, marca como não identificado.
- * @param {Object} article Artigo parseado pelo lattesParser
+ * @param {Object} article Artigo parseado pelo backend
  * @returns {Promise<Object>} Item classificado
  */
 async function classifyArticleWithFallback(article) {
   let classified;
-
-  if (article.matchedIssn) {
-    classified = await enrichAndClassify(article.matchedIssn);
-  } else {
-    const fallback = await classifyByName(article.journal);
-    if (fallback) {
-      classified = fallback;
+  try {
+    if (article.matchedIssn) {
+      classified = await enrichAndClassify(article.matchedIssn);
     } else {
-      classified = await enrichAndClassify(article.journal);
-      classified.unmatchedLattes = true;
+      const fallback = await classifyByName(article.journal);
+      if (fallback) {
+        classified = fallback;
+      } else {
+        classified = await enrichAndClassify(article.journal);
+        classified.unmatchedLattes = true;
+      }
     }
+  } catch (error) {
+    classified = createTechnicalErrorResult(article.matchedIssn || article.journal, error.message);
   }
 
   return applyArticleMetadata(classified, article);
@@ -819,16 +755,7 @@ async function classifyArticlesWithFallbackBatch(articles, onProgress) {
 
 function applyArticleMetadata(classified, article) {
   if (!classified) {
-    classified = {
-      issn: article.matchedIssn || article.journal || 'N/A',
-      title: 'Erro ao consultar API',
-      area: 'Outras Áreas',
-      jcr: null,
-      citeScore: null,
-      indexers: [],
-      metrics: { cuiden: null },
-      classification: { estrato: 'NC', justification: 'Resposta ausente no lote.' }
-    };
+    classified = createTechnicalErrorResult(article.matchedIssn || article.journal, 'Resposta ausente no lote.');
   }
 
   if (article.confidence) {
@@ -856,7 +783,7 @@ function applyArticleMetadata(classified, article) {
 
 /**
  * Processa a lista de artigos do Lattes: enriquece, classifica e atualiza a UI.
- * @param {Object[]} parsedArticles Artigos parseados pelo lattesParser
+ * @param {Object[]} parsedArticles Artigos parseados pelo backend
  * @param {string} researcherName Nome do pesquisador
  */
 async function processLattesArticles(parsedArticles, researcherName) {
@@ -865,6 +792,7 @@ async function processLattesArticles(parsedArticles, researcherName) {
   let countNew = 0;
   let unmatchedCount = 0;
   let reviewCount = 0;
+  let nonConclusiveCount = 0;
   updateLoadingProgress(0, parsedArticles.length);
 
   const classifiedArticles = await classifyArticlesWithFallbackBatch(parsedArticles, (current, total) => {
@@ -872,6 +800,7 @@ async function processLattesArticles(parsedArticles, researcherName) {
   });
 
   for (const classified of classifiedArticles) {
+    if (isNonConclusiveResult(classified)) nonConclusiveCount++;
     if (classified.unmatchedLattes) {
       unmatchedCount++;
     } else if (classified.confidence === 'review') {
@@ -893,7 +822,9 @@ async function processLattesArticles(parsedArticles, researcherName) {
   renderResultsTable();
   switchTab('analytics');
 
-  if (unmatchedCount > 0) {
+  if (nonConclusiveCount > 0) {
+    notifyProcessingOutcome(classifiedArticles, `${countNew} artigos do currículo processados.`);
+  } else if (unmatchedCount > 0) {
     showToast(`⚠ ${unmatchedCount} de ${parsedArticles.length} artigos não foram reconhecidos. Verifique a tabela manualmente.`, 'warning');
   } else if (reviewCount > 0) {
     showToast(`✓ ${countNew} artigos processados. ${reviewCount} precisam de revisão (linhas destacadas).`, 'warning');
@@ -907,8 +838,10 @@ function processOrcidResults(payload) {
   let countNew = 0;
   let unmatchedCount = 0;
   let reviewCount = 0;
+  let nonConclusiveCount = 0;
 
   for (const item of results) {
+    if (isNonConclusiveResult(item)) nonConclusiveCount++;
     if (!item.issn || item.issn === 'N/A' || item.confidence === 'none') {
       unmatchedCount++;
     } else if (item.confidence === 'review') {
@@ -933,6 +866,8 @@ function processOrcidResults(payload) {
 
   if (results.length === 0) {
     showToast('Nenhuma obra publica encontrada no ORCID para o intervalo informado.', 'warning');
+  } else if (nonConclusiveCount > 0) {
+    notifyProcessingOutcome(results, `${countNew} obras ORCID processadas.`);
   } else if (unmatchedCount > 0) {
     showToast(`${countNew} obras ORCID processadas. ${unmatchedCount} ficaram sem ISSN identificado.`, 'warning');
   } else if (reviewCount > 0) {
@@ -947,7 +882,16 @@ function processOrcidResults(payload) {
  */
 async function handleUploadedFile(file) {
   const fileName = file.name.toLowerCase();
-  
+  const supported = ['.csv', '.xlsx', '.xls'].some(extension => fileName.endsWith(extension));
+  if (!supported) {
+    showToast('Formato não suportado. Use CSV, XLSX ou XLS.', 'warning');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('O arquivo excede o limite de 10 MB.', 'warning');
+    return;
+  }
+
   showLoadingState('Processando Planilha', 'Importando dados do arquivo e enriquecendo periódicos...', 'file-spreadsheet');
 
   let parsed;
@@ -971,13 +915,18 @@ async function handleUploadedFile(file) {
   }
 
   const records = processCSVData(parsed);
+  if (records.length === 0) {
+    hideLoadingState();
+    showToast('Nenhum ISSN foi identificado no arquivo.', 'warning');
+    return;
+  }
 
   let countNew = 0;
   updateLoadingProgress(0, records.length);
   const classifiedRecords = await classifyBatch(records.map(record => record.issn));
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
-    const classified = classifiedRecords[i];
+    const classified = classifiedRecords[i] || createTechnicalErrorResult(record.issn, 'Resposta ausente no lote.');
 
     if (record.title && record.title !== 'Artigo Importado' && classified.title === 'Periódico Não Identificado na Base') {
       classified.title = record.title;
@@ -993,7 +942,7 @@ async function handleUploadedFile(file) {
   hideLoadingState();
   renderResultsTable();
   switchTab('analytics');
-  showToast(`${countNew} artigos importados e classificados com sucesso!`, 'success');
+  notifyProcessingOutcome(classifiedRecords.filter(Boolean), `${countNew} artigos importados e processados.`);
 }
 
 /**
@@ -1002,7 +951,13 @@ async function handleUploadedFile(file) {
  */
 async function handleSearchByName(nameQuery) {
   hideLoadingState();
-  const results = await searchByName(nameQuery);
+  let results;
+  try {
+    results = await searchByName(nameQuery);
+  } catch (error) {
+    showToast(error.message || 'Não foi possível concluir a busca por nome.', 'error');
+    return;
+  }
 
   if (results.length === 0) {
     showToast('Nenhum periódico encontrado com este nome.', 'warning');
@@ -1018,6 +973,7 @@ async function handleSearchByName(nameQuery) {
     dom.singleIssnInput.value = '';
     hideLoadingState();
     switchTab('table');
+    notifyProcessingOutcome([classified], 'Consulta concluída.');
     return;
   }
 

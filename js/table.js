@@ -5,7 +5,7 @@
 
 import dom from './dom.js';
 import appState from './state.js';
-import { getFilteredItems } from './state.js';
+import { getFilteredItems, isTechnicalError, isProvisionalResult } from './state.js';
 import { escapeHTML } from './utils.js';
 import { updateAnalytics } from './charts.js';
 
@@ -26,6 +26,9 @@ function formatDate(dateStr) {
 }
 
 function formatRelevanceTooltip(item) {
+  if (isTechnicalError(item)) return 'Consulta não concluída por falha técnica';
+  if (item.data_status === 'invalid') return 'ISSN inválido: corrija a entrada e tente novamente';
+  if (isProvisionalResult(item)) return 'Resultado pendente: uma ou mais fontes estavam indisponíveis';
   const estrato = item.classification?.estrato || 'NC';
   const parts = [`Estrato ${estrato}`];
   if (typeof item.jcr === 'number') parts.push(`JCR ${item.jcr.toFixed(2)}`);
@@ -34,6 +37,23 @@ function formatRelevanceTooltip(item) {
   if (idxCount > 0) parts.push(`${idxCount} indexador${idxCount > 1 ? 'es' : ''}`);
   if (item.metrics?.cuiden != null) parts.push(`CUIDEN ${item.metrics.cuiden.toFixed(2)}`);
   return `Relevância: ${parts.join(' · ')}`;
+}
+
+function formatClassificationTooltip(item, displayStatus) {
+  const messages = [item.classification?.justification || 'Critério não informado.'];
+  if (isTechnicalError(item)) {
+    messages.push('Tente novamente em alguns instantes.');
+  } else if (item.data_status === 'invalid') {
+    messages.push('Informe um ISSN válido no formato XXXX-XXXX.');
+  } else if (isProvisionalResult(item)) {
+    messages.push('Resultado não incluído nos indicadores; tente novamente mais tarde.');
+  } else if (displayStatus === 'NC') {
+    messages.push('Confira o ISSN impresso/eletrônico ou pesquise pelo nome completo.');
+  }
+  if (item.data_status === 'partial' && !isProvisionalResult(item)) {
+    messages.push('Classificação calculada com os dados disponíveis.');
+  }
+  return messages.join(' ');
 }
 
 /**
@@ -73,20 +93,24 @@ export function renderResultsTable() {
 
   filtered.forEach((item, index) => {
     const row = document.createElement('tr');
-    row.className = 'animated-row';
+    const technicalError = isTechnicalError(item);
+    const provisional = isProvisionalResult(item);
+    const invalid = item.data_status === 'invalid';
+    row.className = `animated-row${technicalError ? ' row-technical-error' : provisional || invalid ? ' row-pending' : item.data_status === 'partial' ? ' row-partial' : ''}`;
 
     // Sanitizar dados externos para prevenir XSS
-    const safeTitle = escapeHTML(item.title);
-    const safeIssn = escapeHTML(item.issn);
-    const safeArea = escapeHTML(item.area);
-    const safeEstrato = escapeHTML(item.classification.estrato);
-    const safeJustification = escapeHTML(item.classification.justification);
+    const safeTitle = escapeHTML(item.title || 'Periódico sem título');
+    const safeIssn = escapeHTML(item.issn || 'N/A');
+    const safeArea = escapeHTML(item.area || 'Outras Áreas');
+    const actualEstrato = item.classification?.estrato || 'NC';
+    const displayStatus = technicalError ? 'ERRO' : invalid ? 'INVÁLIDO' : provisional ? 'PENDENTE' : actualEstrato;
+    const badgeClass = technicalError ? 'ERRO' : invalid ? 'INVALIDO' : provisional ? 'PENDENTE' : escapeHTML(actualEstrato);
     const relevanceTooltip = escapeHTML(formatRelevanceTooltip(item));
     const rankBadge = showRank
       ? `<span class="relevance-rank" data-tooltip="${relevanceTooltip}">#${index + 1}</span>`
       : '';
 
-    const indexersTags = item.indexers.map(idx => {
+    const indexersTags = (item.indexers || []).map(idx => {
       const safeIdx = escapeHTML(idx);
       const lowerIdx = idx.toLowerCase().replace(/[^a-z0-9_-]/g, '');
       const upperIdx = idx.toUpperCase();
@@ -104,7 +128,7 @@ export function renderResultsTable() {
       
       return `<span class="indexer-tag ${lowerIdx}"${tooltipAttr}>${safeIdx}</span>`;
     }).join('');
-    const cuidenVal = (item.metrics && item.metrics.cuiden) ? item.metrics.cuiden : null;
+    const cuidenVal = (item.metrics && typeof item.metrics.cuiden === 'number') ? item.metrics.cuiden : null;
 
     // Área como badge inline no título (antes era coluna separada)
     const areaBadge = `<span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">${safeArea}</span>`;
@@ -112,30 +136,29 @@ export function renderResultsTable() {
     let titleWarning = '';
     let reviewButton = '';
     if (item.unmatchedLattes) {
-      row.style.background = 'rgba(245, 158, 11, 0.05)';
-      titleWarning = `<span style="color: var(--warning); display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-top: 4px;">
-        <i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i> Não encontrado na base
+      row.classList.add('row-pending');
+      titleWarning = `<span class="table-row-warning warning">
+        <i data-lucide="alert-triangle"></i> Não encontrado na base
       </span>`;
     } else if (item.confidence === 'review') {
-      row.style.background = 'rgba(59, 130, 246, 0.05)';
-      titleWarning = `<span style="color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-top: 4px;">
-        <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Correspondência aproximada — revise
+      row.classList.add('row-review');
+      titleWarning = `<span class="table-row-warning review">
+        <i data-lucide="help-circle"></i> Correspondência aproximada — revise
       </span>`;
       if (item.lattesCandidates && item.lattesCandidates.length > 0) {
-        reviewButton = `<button type="button" class="btn-details btn-review-candidates" style="margin-top: 6px; font-size: 11px; padding: 4px 8px; border-radius: 4px; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color); cursor: pointer;" data-candidates="${escapeHTML(JSON.stringify(item.lattesCandidates))}" data-item-key="${escapeHTML(item.issn + '|' + (item.title || ''))}">Trocar revista</button>`;
+        reviewButton = `<button type="button" class="btn-details btn-review-candidates" data-candidates="${escapeHTML(JSON.stringify(item.lattesCandidates))}" data-item-key="${escapeHTML((item.issn || '') + '|' + (item.title || ''))}">Trocar revista</button>`;
       }
     }
 
-    let finalJustification = safeJustification;
-    if (safeEstrato === 'NC') {
-      finalJustification += ' | Verifique o ISSN impresso vs eletrônico ou busque pelo nome completo. Pode não estar indexado.';
-    }
+    const classificationTooltip = escapeHTML(formatClassificationTooltip(item, displayStatus));
+    const jcrValue = typeof item.jcr === 'number' ? item.jcr.toFixed(2) : null;
+    const citeScoreValue = typeof item.citeScore === 'number' ? item.citeScore.toFixed(2) : null;
 
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
           ${rankBadge}
-          <div style="display: flex; flex-direction: column; align-items: flex-start;">
+          <div class="table-title-stack">
             <span>${safeTitle}</span>
             ${areaBadge}
             ${titleWarning}
@@ -143,19 +166,19 @@ export function renderResultsTable() {
           </div>
         </div>
       </td>
-      <td style="font-family: monospace; font-size: 13px;">${safeIssn}</td>
-      <td>${item.jcr !== null ? item.jcr.toFixed(2) : `
+      <td class="issn-cell">${safeIssn}</td>
+      <td>${jcrValue !== null ? jcrValue : `
         <span class="metric-missing" data-tooltip="Métrica JCR não disponível para este periódico na base de dados.">
           - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
         </span>
       `}</td>
-      <td>${item.citeScore !== null ? item.citeScore.toFixed(2) : `
+      <td>${citeScoreValue !== null ? citeScoreValue : `
         <span class="metric-missing" data-tooltip="Métrica CiteScore não disponível para este periódico na base de dados.">
           - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
         </span>
       `}</td>
       <td>
-        <div style="max-width: 200px;">
+        <div class="indexers-cell">
           ${indexersTags || `
             <span class="metric-missing" data-tooltip="Nenhum indexador ativo registrado para este periódico na base.">
               - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
@@ -165,13 +188,14 @@ export function renderResultsTable() {
         </div>
       </td>
       <td>
-        <div class="estrato-badge-container" data-tooltip="${finalJustification}">
-          <span class="estrato-badge ${safeEstrato}">
-            ${safeEstrato}
-          </span>
-          <i data-lucide="info" class="info-icon"></i>
+        <div class="classification-cell">
+          <div class="estrato-badge-container" data-tooltip="${classificationTooltip}" tabindex="0"
+            aria-label="${escapeHTML(displayStatus)}. ${classificationTooltip}">
+            <span class="estrato-badge ${badgeClass}">${escapeHTML(displayStatus)}</span>
+            <i data-lucide="info" class="info-icon" aria-hidden="true"></i>
+          </div>
+          ${item.data_status === 'partial' && !provisional ? '<span class="partial-label">dados parciais</span>' : ''}
         </div>
-
       </td>
     `;
 
@@ -253,21 +277,7 @@ function showLattesCandidatesModal(btn) {
     tr.querySelector('button').addEventListener('click', () => {
       const newIssn = c.issn;
       const newTitle = c.title;
-      // Persistir alias aprendido — local + servidor + feedback
-      try {
-        const journalRaw = itemKeyRaw ? itemKeyRaw.split('|').slice(1).join('|') : '';
-        if (journalRaw && newIssn) {
-          import('/js/lattesParser.js').then(({ saveUserAlias }) => {
-            saveUserAlias(journalRaw, newIssn);  // localStorage fallback offline
-          });
-          import('/js/enricher.js').then(({ saveServerAlias, sendMatchFeedback }) => {
-            saveServerAlias(journalRaw, newIssn);  // compartilhado no servidor
-            const oldIssn = (itemKeyRaw || '').split('|')[0];
-            sendMatchFeedback(journalRaw, oldIssn || null, newIssn);  // auditoria
-          });
-        }
-      } catch (_) {}
-      // Disparar evento para reclassificar
+      // O orquestrador reclassifica e persiste o alias usando o nome cru do Lattes.
       window.dispatchEvent(new CustomEvent('lattes-reclassify', {
         detail: { oldIssn: itemKeyRaw ? itemKeyRaw.split('|')[0] : null, newIssn, newTitle }
       }));

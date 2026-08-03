@@ -5,6 +5,18 @@
 
 const ESTRATO_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
 
+export function isTechnicalError(item) {
+  return item?.data_status === 'error';
+}
+
+export function isProvisionalResult(item) {
+  return item?.data_status === 'partial' && item?.classification?.estrato === 'NC';
+}
+
+export function isNonConclusiveResult(item) {
+  return isTechnicalError(item) || isProvisionalResult(item) || item?.data_status === 'invalid';
+}
+
 const appState = {
   classifiedItems: [],
   comparisonProfiles: [],
@@ -108,19 +120,20 @@ export function clearClassifiedItems() {
 export function getFilteredItems(searchVal = '', filterVal = 'ALL', filterYearVal = 'ALL', sortVal = 'recent') {
   const search = searchVal.toLowerCase().trim();
   const filtered = appState.classifiedItems.filter(item => {
-    const matchesSearch = item.issn.toLowerCase().includes(search) ||
-      item.title.toLowerCase().includes(search);
-    const matchesFilter = filterVal === 'ALL' || item.classification.estrato === filterVal;
+    const matchesSearch = String(item.issn || '').toLowerCase().includes(search) ||
+      String(item.title || '').toLowerCase().includes(search);
+    const matchesFilter = filterVal === 'ALL'
+      || (filterVal === 'PENDING' && isNonConclusiveResult(item))
+      || (filterVal !== 'PENDING' && !isNonConclusiveResult(item) && item.classification?.estrato === filterVal);
     
     let matchesYear = true;
     if (filterYearVal !== 'ALL') {
       const year = parseInt(item.year, 10);
-      if (filterYearVal === '2025-2028') {
-        matchesYear = year >= 2025 && year <= 2028;
-      } else if (filterYearVal === '2021-2024') {
-        matchesYear = year >= 2021 && year <= 2024;
-      } else if (filterYearVal === '2017-2020') {
-        matchesYear = year >= 2017 && year <= 2020;
+      const periodMatch = /^(\d{4})-(\d{4})$/.exec(filterYearVal);
+      if (periodMatch) {
+        const start = Number(periodMatch[1]);
+        const end = Number(periodMatch[2]);
+        matchesYear = Number.isInteger(year) && year >= start && year <= end;
       } else {
         matchesYear = year === parseInt(filterYearVal, 10);
       }

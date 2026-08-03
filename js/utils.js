@@ -12,52 +12,49 @@ import { normalizeISSN } from './enricher.js';
  */
 export function parseCSV(text) {
   if (!text || typeof text !== 'string') return [];
-  
-  const lines = text.split(/\r?\n/);
-  if (lines.length === 0) return [];
 
-  // Detecta o delimitador na primeira linha não vazia
-  let headerLine = '';
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim()) {
-      headerLine = lines[i];
-      break;
-    }
+  const firstRecord = text.split(/\r?\n/).find(line => line.trim() && !line.trim().startsWith('#')) || '';
+  let commaCount = 0;
+  let semicolonCount = 0;
+  let quoted = false;
+  for (let i = 0; i < firstRecord.length; i++) {
+    if (firstRecord[i] === '"') quoted = !quoted;
+    if (!quoted && firstRecord[i] === ',') commaCount++;
+    if (!quoted && firstRecord[i] === ';') semicolonCount++;
   }
-  
-  const commaCount = (headerLine.match(/,/g) || []).length;
-  const semicolonCount = (headerLine.match(/;/g) || []).length;
   const delimiter = semicolonCount > commaCount ? ';' : ',';
-
   const results = [];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    
-    const row = [];
-    let insideQuotes = false;
-    let entry = '';
-    
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j];
-      
-      if (char === '"') {
-        insideQuotes = !insideQuotes;
-      } else if (char === delimiter && !insideQuotes) {
-        row.push(entry.trim());
-        entry = '';
-      } else {
-        entry += char;
-      }
-    }
+  let row = [];
+  let entry = '';
+  let insideQuotes = false;
+
+  const finishRow = () => {
     row.push(entry.trim());
-    
-    if (row.length > 0 && row.some(cell => cell !== '')) {
-      results.push(row);
+    if (row.some(cell => cell !== '')) results.push(row);
+    row = [];
+    entry = '';
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (insideQuotes && text[i + 1] === '"') {
+        entry += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === delimiter && !insideQuotes) {
+      row.push(entry.trim());
+      entry = '';
+    } else if ((char === '\n' || char === '\r') && !insideQuotes) {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      finishRow();
+    } else {
+      entry += char;
     }
   }
-  
+  if (entry !== '' || row.length > 0) finishRow();
   return results;
 }
 
@@ -98,8 +95,11 @@ export function parseXLSX(file) {
  */
 export function processCSVData(parsedCSV) {
   if (parsedCSV.length === 0) return [];
-  
-  const headers = parsedCSV[0].map(h => h.toLowerCase().trim());
+
+  const dataRows = parsedCSV.filter(row => !String(row[0] || '').trim().startsWith('#'));
+  if (dataRows.length === 0) return [];
+  const headers = dataRows[0].map(h => h.toLowerCase().trim());
+  const hasHeader = headers.some(h => /^(e-?issn|p-?issn|issn(?:\s+eletr[oô]nico|\s+impresso)?|t[ií]tulo(?:\s+do\s+artigo)?|title|artigo|journal|revista|nome(?:\s+do\s+peri[oó]dico)?)$/.test(h));
   
   // Tenta encontrar o índice da coluna de ISSN
   let issnIndex = headers.findIndex(h => h.includes('issn'));
@@ -108,11 +108,11 @@ export function processCSVData(parsedCSV) {
   let titleIndex = headers.findIndex(h => h.includes('titulo') || h.includes('título') || h.includes('title') || h.includes('artigo') || h.includes('nome'));
 
   // Se não encontrou coluna de ISSN pelo nome, tenta inspecionar as primeiras linhas para achar algo formatado como ISSN
-  if (issnIndex === -1 && parsedCSV.length > 1) {
-    const sampleRow = parsedCSV[1];
-    for (let colIdx = 0; colIdx < sampleRow.length; colIdx++) {
-      const cell = sampleRow[colIdx];
-      if (normalizeISSN(cell).length === 9) { // Ex: 1234-5678 tem 9 chars
+  if (issnIndex === -1) {
+    const sampleRows = dataRows.slice(hasHeader ? 1 : 0, (hasHeader ? 1 : 0) + 10);
+    const maxColumns = Math.max(0, ...sampleRows.map(row => row.length));
+    for (let colIdx = 0; colIdx < maxColumns; colIdx++) {
+      if (sampleRows.some(row => normalizeISSN(String(row[colIdx] || '')))) {
         issnIndex = colIdx;
         break;
       }
@@ -131,9 +131,9 @@ export function processCSVData(parsedCSV) {
 
   const records = [];
   
-  // Começa a partir do índice 1 (ignorando o cabeçalho)
-  for (let i = 1; i < parsedCSV.length; i++) {
-    const row = parsedCSV[i];
+  const firstDataRow = hasHeader ? 1 : 0;
+  for (let i = firstDataRow; i < dataRows.length; i++) {
+    const row = dataRows[i];
     if (row.length <= issnIndex) continue;
     
     const rawIssn = row[issnIndex] || '';
@@ -192,6 +192,7 @@ export function generateCSV(classifiedItems, meta = {}) {
   const headers = [
     'Título do Artigo',
     'ISSN',
+    'Status da Consulta',
     'Área CAPES',
     'JCR',
     'CiteScore',
@@ -210,6 +211,7 @@ export function generateCSV(classifiedItems, meta = {}) {
     const row = [
       item.title,
       item.issn,
+      item.data_status === 'error' ? 'ERRO TÉCNICO' : item.data_status === 'invalid' ? 'ISSN INVÁLIDO' : item.data_status === 'partial' ? 'DADOS PARCIAIS' : 'CONCLUÍDA',
       item.area,
       item.jcr !== null ? item.jcr.toString().replace('.', ',') : '', // Formato brasileiro de decimais
       item.citeScore !== null ? item.citeScore.toString().replace('.', ',') : '',
@@ -251,6 +253,7 @@ export function downloadFile(content, fileName, mimeType) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /**

@@ -18,7 +18,7 @@ LATINDEX_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "latindex_cache.json")
 DISCOVERIES_PATH = os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json")
 CITESCORE_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "citescore_cache.json")
 
-_cache_lock = threading.Lock()
+_cache_lock = threading.RLock()
 
 
 def validate_issn(issn: str) -> bool:
@@ -50,6 +50,10 @@ def save_json_cache(path: str, data: dict):
 def check_cache_validity(cache_dict: dict, key: str, ttl_days: int = 30) -> dict | None:
     entry = cache_dict.get(key)
     if not entry:
+        return None
+    # Falha de rede/servidor nunca é evidência negativa sobre indexação.
+    # Entradas antigas com status=error são ignoradas e reconsultadas.
+    if entry.get("status") == "error":
         return None
     updated_at_str = entry.get("updated_at")
     if not updated_at_str:
@@ -89,23 +93,27 @@ def get_citescore_cache() -> dict:
 
 
 def save_scielo_cache(cache: dict):
-    _scielo_cache.update(cache)
-    save_json_cache(SCI_ELO_CACHE_PATH, _scielo_cache)
+    with _cache_lock:
+        _scielo_cache.update(cache)
+        save_json_cache(SCI_ELO_CACHE_PATH, _scielo_cache)
 
 
 def save_lilacs_cache(cache: dict):
-    _lilacs_cache.update(cache)
-    save_json_cache(LILACS_CACHE_PATH, _lilacs_cache)
+    with _cache_lock:
+        _lilacs_cache.update(cache)
+        save_json_cache(LILACS_CACHE_PATH, _lilacs_cache)
 
 
 def save_latindex_cache(cache: dict):
-    _latindex_cache.update(cache)
-    save_json_cache(LATINDEX_CACHE_PATH, _latindex_cache)
+    with _cache_lock:
+        _latindex_cache.update(cache)
+        save_json_cache(LATINDEX_CACHE_PATH, _latindex_cache)
 
 
 def save_citescore_cache(cache: dict):
-    _citescore_cache.update(cache)
-    save_json_cache(CITESCORE_CACHE_PATH, _citescore_cache)
+    with _cache_lock:
+        _citescore_cache.update(cache)
+        save_json_cache(CITESCORE_CACHE_PATH, _citescore_cache)
 
 
 # ─── Descobertas de Runtime ────────────────────────────────────────
@@ -115,9 +123,10 @@ def get_discoveries() -> dict:
 
 
 def save_discovery(issn: str, record: dict):
-    record["discovered_at"] = datetime.now().strftime("%Y-%m-%d")
-    _discoveries_cache[issn] = record
-    save_json_cache(DISCOVERIES_PATH, _discoveries_cache)
+    with _cache_lock:
+        record["discovered_at"] = datetime.now().strftime("%Y-%m-%d")
+        _discoveries_cache[issn] = record
+        save_json_cache(DISCOVERIES_PATH, _discoveries_cache)
 
 
 # ─── Circuit Breaker ──────────────────────────────────────────────

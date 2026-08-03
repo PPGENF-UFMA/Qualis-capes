@@ -7,8 +7,8 @@
   <title>Classificador Qualis CAPES - Enfermagem</title>
   <meta name="description"
     content="Ferramenta automatizada para enriquecimento de métricas e classificação de periódicos científicos de acordo com as regras da CAPES para Enfermagem e Outras Áreas.">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/editorial.css?v=20260711-adaptive-intro-b">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/styles.css?v=20260801-editorial-selects">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
     integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4"
     crossorigin="anonymous"></script>
@@ -315,7 +315,7 @@
               <h2 class="results-title" style="display: flex; align-items: center; gap: 8px;"><i
                   data-lucide="pie-chart"></i> Visão Geral & Estatísticas Consolidadas</h2>
               <p style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;">Distribuição de periódicos por
-                extratos CAPES, bases de indexação ativas e indicadores gerais de fator de impacto.</p>
+                estratos CAPES, bases de indexação ativas e indicadores gerais de fator de impacto.</p>
             </div>
             <!-- Cards de Métricas de Resumo (KPIs) -->
             <div class="kpi-container">
@@ -330,14 +330,19 @@
                 <span class="kpi-sub" id="kpi-qualified-sub">0% do total (A1 + A2)</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-title">Nota CAPES</span>
+                <span class="kpi-title">Índice de Perfil de Publicação</span>
                 <span class="kpi-value" id="kpi-avg-score-value">0 / 100</span>
-                <span class="kpi-sub" id="kpi-avg-score-sub">Estrato Médio: -</span>
+                <span class="kpi-sub" id="kpi-avg-score-sub">Indicador interno (IPP) · não oficial</span>
               </div>
               <div class="kpi-card">
                 <span class="kpi-title">Não Classificados</span>
                 <span class="kpi-value" id="kpi-nc-count">0</span>
                 <span class="kpi-sub">Itens com estrato NC</span>
+              </div>
+              <div class="kpi-card">
+                <span class="kpi-title">Consultas Pendentes</span>
+                <span class="kpi-value" id="kpi-pending-count">0</span>
+                <span class="kpi-sub">Erro, entrada inválida ou resultado parcial</span>
               </div>
               <div class="kpi-card">
                 <span class="kpi-title">Cobertura Internacional</span>
@@ -371,7 +376,7 @@
                 </div>
               </div>
               <div class="card chart-card">
-                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução da Nota CAPES</h2>
+                <h2 class="card-title"><i data-lucide="trending-up"></i> Evolução do IPP</h2>
                 <div class="chart-wrapper">
                   <canvas id="qualis-evolution-chart"></canvas>
                 </div>
@@ -482,6 +487,7 @@
                   <option value="A7">Qualis A7</option>
                   <option value="A8">Qualis A8</option>
                   <option value="NC">Não Classificado (NC)</option>
+                  <option value="PENDING">Pendentes, inválidos ou com erro</option>
                 </select>
                 <label for="filter-year" class="sr-only">Filtrar por ano/quadriênio</label>
                 <select id="filter-year" class="select-filter" aria-label="Filtrar por ano/quadriênio">
@@ -532,6 +538,7 @@
     <div class="footer-copy">
       <p>Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
       <span>Ferramenta de apoio à análise da produção científica</span>
+      <span class="method-disclaimer">Classificações estimadas para apoio técnico. O IPP é um indicador interno e não representa nota oficial da CAPES.</span>
     </div>
     <details class="system-health">
       <summary class="system-health-summary">
@@ -667,6 +674,11 @@
             correspondente a A2, recebe A2 — o sistema sempre escolhe o estrato mais vantajoso.</p>
         </section>
 
+        <section class="info-section info-section-highlight">
+          <h4><i data-lucide="bar-chart-3" style="width: 16px; height: 16px;"></i> Índice de Perfil de Publicação (IPP)</h4>
+          <p>O IPP resume o conjunto analisado em uma escala interna de 0 a 100, usando pesos decrescentes de A1 a A8 e peso zero para NC. Ele serve apenas para comparar a composição das publicações dentro desta ferramenta. <strong>Não é uma nota, conceito ou indicador oficial da CAPES.</strong></p>
+        </section>
+
         <!-- SEÇÃO 2: Tabela de Estratos — Enfermagem -->
         <section class="info-section">
           <h4><i data-lucide="award" style="width: 16px; height: 16px;"></i> Classificação para Enfermagem</h4>
@@ -745,7 +757,7 @@
           <p>Periódicos n&atilde;o classificados como Enfermagem seguem crit&eacute;rios diferenciados, com thresholds
             mais altos para JCR e CiteScore. Por exemplo: A1 exige JCR &ge; 5.0 ou CiteScore &ge; 5.0; A6 exige
             indexa&ccedil;&atilde;o no SciELO; A7 exige LILACS. A regra exata aplicada a cada periódico aparece na
-            justificativa exibida na tabela de resultados (clique em "Ver detalhes").</p>
+            justificativa resumida disponível no indicador de estrato da tabela de resultados.</p>
         </section>
 
         <!-- SEÇÃO 4: Como a área é determinada -->
@@ -757,7 +769,7 @@
           <ol>
             <li>Est&aacute; listado como Enfermagem na plataforma Sucupira (CAPES); <strong>E</strong></li>
             <li>Aparece no JCR da categoria Nursing <strong>OU</strong> no Scopus na categoria Nursing
-              <strong>OU</strong> est&aacute; no CUIDEN <strong>OU</strong> possui palavras-chave de enfermagem no
+              <strong>OU</strong> est&aacute; no CUIDEN, BDENF ou RevEnf <strong>OU</strong> possui palavras-chave de enfermagem no
               t&iacute;tulo (ex: "enferm", "nursin", "cuidado", "enfermer").</li>
           </ol>
           <p>Caso n&atilde;o atenda a esses crit&eacute;rios, o periódico &eacute; classificado como "Outras
@@ -870,7 +882,7 @@
   </div>
 
   <!-- Scripts -->
-  <script type="module" src="js/app.js?v=20260711-adaptive-intro"></script>
+  <script type="module" src="js/app.js?v=20260801-editorial-selects"></script>
 </body>
 
 </html>

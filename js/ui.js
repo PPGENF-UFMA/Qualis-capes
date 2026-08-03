@@ -40,6 +40,8 @@ let lastFocusedElement = null;
 let consultationInitialized = false;
 let tabTransitionToken = 0;
 let activeTabAnimations = [];
+const customSelectRegistry = new Map();
+let customSelectOutsideHandlerBound = false;
 
 function getFocusableElements(container) {
   return Array.from(container.querySelectorAll(
@@ -88,6 +90,179 @@ function closeManagedModal(modal) {
     lastFocusedElement.focus();
   }
   lastFocusedElement = null;
+}
+
+// ─── SELECTS EDITORIAIS ──────────────────────────────────────────
+
+function closeCustomSelect(entry, restoreFocus = false) {
+  if (!entry || !entry.wrapper.classList.contains('is-open')) return;
+  entry.wrapper.classList.remove('is-open', 'align-right');
+  entry.menu.hidden = true;
+  entry.button.setAttribute('aria-expanded', 'false');
+  entry.button.removeAttribute('aria-activedescendant');
+  if (restoreFocus) entry.button.focus();
+}
+
+function closeOtherCustomSelects(currentSelect = null) {
+  customSelectRegistry.forEach((entry, select) => {
+    if (select !== currentSelect) closeCustomSelect(entry);
+  });
+}
+
+function setCustomSelectActiveOption(entry, index) {
+  const optionElements = Array.from(entry.menu.querySelectorAll('[role="option"]'));
+  if (optionElements.length === 0) return;
+  const nextIndex = Math.max(0, Math.min(index, optionElements.length - 1));
+  optionElements.forEach((option, optionIndex) => {
+    option.classList.toggle('is-active', optionIndex === nextIndex);
+  });
+  entry.activeIndex = nextIndex;
+  entry.button.setAttribute('aria-activedescendant', optionElements[nextIndex].id);
+  optionElements[nextIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function syncCustomSelect(select) {
+  const entry = customSelectRegistry.get(select);
+  if (!entry) return;
+  const selectedOption = select.options[select.selectedIndex] || select.options[0];
+  if (!selectedOption) return;
+
+  entry.value.textContent = selectedOption.textContent;
+  entry.button.setAttribute('aria-label', `${select.getAttribute('aria-label') || 'Selecionar'}: ${selectedOption.textContent}`);
+  Array.from(entry.menu.querySelectorAll('[role="option"]')).forEach((option, index) => {
+    const selected = index === select.selectedIndex;
+    option.classList.toggle('is-selected', selected);
+    option.setAttribute('aria-selected', String(selected));
+  });
+  entry.activeIndex = select.selectedIndex;
+}
+
+function selectCustomOption(select, index) {
+  const entry = customSelectRegistry.get(select);
+  if (!entry || !select.options[index]) return;
+  const previousValue = select.value;
+  select.selectedIndex = index;
+  syncCustomSelect(select);
+  closeCustomSelect(entry, true);
+  if (select.value !== previousValue) {
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+}
+
+function openCustomSelect(select) {
+  const entry = customSelectRegistry.get(select);
+  if (!entry) return;
+  closeOtherCustomSelects(select);
+  entry.menu.hidden = false;
+  entry.wrapper.classList.add('is-open');
+  entry.button.setAttribute('aria-expanded', 'true');
+  setCustomSelectActiveOption(entry, Math.max(0, select.selectedIndex));
+
+  const menuRect = entry.menu.getBoundingClientRect();
+  if (menuRect.right > window.innerWidth - 16) {
+    entry.wrapper.classList.add('align-right');
+  }
+}
+
+function enhanceSelect(select) {
+  if (!select || customSelectRegistry.has(select)) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = `custom-select custom-select-${select.id}`;
+  select.parentNode.insertBefore(wrapper, select);
+  wrapper.appendChild(select);
+
+  select.classList.add('custom-select-native');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'custom-select-trigger';
+  button.setAttribute('role', 'combobox');
+  button.setAttribute('aria-haspopup', 'listbox');
+  button.setAttribute('aria-expanded', 'false');
+
+  const value = document.createElement('span');
+  value.className = 'custom-select-value';
+  const arrow = document.createElement('span');
+  arrow.className = 'custom-select-arrow';
+  arrow.setAttribute('aria-hidden', 'true');
+  button.append(value, arrow);
+
+  const menu = document.createElement('div');
+  menu.id = `${select.id}-menu`;
+  menu.className = 'custom-select-menu';
+  menu.setAttribute('role', 'listbox');
+  menu.setAttribute('aria-label', select.getAttribute('aria-label') || 'Opções');
+  menu.hidden = true;
+  button.setAttribute('aria-controls', menu.id);
+
+  Array.from(select.options).forEach((nativeOption, index) => {
+    const option = document.createElement('div');
+    option.id = `${select.id}-option-${index}`;
+    option.className = 'custom-select-option';
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
+    option.textContent = nativeOption.textContent;
+    option.addEventListener('pointermove', () => setCustomSelectActiveOption(customSelectRegistry.get(select), index));
+    option.addEventListener('click', () => selectCustomOption(select, index));
+    menu.appendChild(option);
+  });
+
+  wrapper.append(button, menu);
+  customSelectRegistry.set(select, { wrapper, button, value, menu, activeIndex: select.selectedIndex });
+  syncCustomSelect(select);
+
+  button.addEventListener('click', () => {
+    if (wrapper.classList.contains('is-open')) closeCustomSelect(customSelectRegistry.get(select));
+    else openCustomSelect(select);
+  });
+
+  button.addEventListener('keydown', (event) => {
+    const entry = customSelectRegistry.get(select);
+    const isOpen = wrapper.classList.contains('is-open');
+    if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      closeCustomSelect(entry, true);
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (isOpen) selectCustomOption(select, entry.activeIndex);
+      else openCustomSelect(select);
+      return;
+    }
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault();
+      if (!isOpen) openCustomSelect(select);
+      const optionCount = select.options.length;
+      let nextIndex = entry.activeIndex;
+      if (event.key === 'ArrowDown') nextIndex = Math.min(optionCount - 1, nextIndex + 1);
+      if (event.key === 'ArrowUp') nextIndex = Math.max(0, nextIndex - 1);
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = optionCount - 1;
+      setCustomSelectActiveOption(entry, nextIndex);
+    }
+  });
+
+  select.addEventListener('change', () => syncCustomSelect(select));
+}
+
+export function initCustomSelects() {
+  [dom.filterEstrato, dom.filterYear, dom.sortBy].forEach(enhanceSelect);
+  if (!customSelectOutsideHandlerBound) {
+    document.addEventListener('pointerdown', event => {
+      customSelectRegistry.forEach(entry => {
+        if (!entry.wrapper.contains(event.target)) closeCustomSelect(entry);
+      });
+    });
+    customSelectOutsideHandlerBound = true;
+  }
+}
+
+export function syncCustomSelects() {
+  customSelectRegistry.forEach((_entry, select) => syncCustomSelect(select));
 }
 
 // ─── CENTRAL DE CONSULTA RESPONSIVA ──────────────────────────────
@@ -854,10 +1029,10 @@ export function initQuadrienios() {
   if (!dom.filterYear) return;
   const currentYear = new Date().getFullYear();
   const periods = [];
-  
-  // Quadriênios começam em 2013, 2017, 2021, 2025... até o próximo ciclo
-  for (let start = 2013; start <= currentYear + 4; start += 4) {
-    periods.unshift(`${start}-${start + 3}`); // do mais recente para o mais antigo
+
+  const currentPeriodStart = 2013 + Math.floor((currentYear - 2013) / 4) * 4;
+  for (let start = currentPeriodStart; start >= 2013; start -= 4) {
+    periods.push(`${start}-${start + 3}`);
   }
   
   // A opção "ALL" já está no HTML

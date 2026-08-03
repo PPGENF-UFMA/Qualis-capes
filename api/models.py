@@ -1,10 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ClassificationResult(BaseModel):
     estrato: str
     justification: str
-    all_candidates: list[dict] = []
+    all_candidates: list[dict] = Field(default_factory=list)
 
 
 class ClassifyResponse(BaseModel):
@@ -13,9 +13,11 @@ class ClassifyResponse(BaseModel):
     area: str
     jcr: float | None = None
     citeScore: float | None = None
-    indexers: list[str] = []
-    metrics: dict = {}
+    indexers: list[str] = Field(default_factory=list)
+    metrics: dict = Field(default_factory=dict)
     classification: ClassificationResult
+    data_status: str = "complete"
+    warnings: list[dict] = Field(default_factory=list)
     scieloUpdatedAt: str | None = None
     lilacsUpdatedAt: str | None = None
     latindexUpdatedAt: str | None = None
@@ -55,7 +57,7 @@ class MatchResult(BaseModel):
     confidence: str  # "high" | "review" | "none"
     score: float
     stage: str  # "alias" | "exact" | "issn-extracted" | "containment" | "jaccard" | "none"
-    candidates: list[MatchCandidate] = []
+    candidates: list[MatchCandidate] = Field(default_factory=list)
 
 
 class MatchBatchRequest(BaseModel):

@@ -27,6 +27,8 @@ def get_api_key() -> str:
     return os.environ.get("ELSEVIER_API_KEY", "")
 
 _journals_db: dict[str, dict] | None = None
+_issn_index: dict[str, str] = {}
+_database_meta: dict = {}
 _title_index: dict[str, list[str]] = {}
 _idf_weights: dict[str, float] = {}
 _db_summary_cache: list[dict] | None = None
@@ -34,6 +36,8 @@ _server_aliases: dict[str, str] = {}
 _user_aliases: dict[str, str] = {}
 _match_stats: dict[str, int] = defaultdict(int)  # fase 3a/3e
 _crossref_cache: dict[str, dict] = {}
+_alias_lock = threading.Lock()
+_crossref_lock = threading.Lock()
 
 import unicodedata
 
@@ -229,17 +233,16 @@ def save_user_alias(journal_name: str, issn: str):
     norm_key = _normalize_text(journal_name)
     if not norm_key or not issn:
         return
-    _server_aliases[norm_key] = issn
-    _user_aliases[norm_key] = issn
     try:
-        # Append-only: carrega existente, mescla, salva
-        existing = {}
-        if os.path.exists(USER_ALIASES_PATH):
-            with open(USER_ALIASES_PATH, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-        existing[journal_name] = issn
-        with open(USER_ALIASES_PATH, "w", encoding="utf-8") as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
+        with _alias_lock:
+            _server_aliases[norm_key] = issn
+            _user_aliases[norm_key] = issn
+            existing = {}
+            if os.path.exists(USER_ALIASES_PATH):
+                with open(USER_ALIASES_PATH, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+            existing[journal_name] = issn
+            cache.save_json_cache(USER_ALIASES_PATH, existing)
     except Exception as e:
         logger.warning(f"Falha ao salvar user alias: {e}")
 
@@ -306,6 +309,15 @@ def _merge_records(r1: dict, r2: dict) -> dict:
             "cuiden": r1.get("metrics", {}).get("cuiden") or r2.get("metrics", {}).get("cuiden")
         }
     }
+
+    variants = set(r1.get("_variants_raw") or [])
+    variants.update(r2.get("_variants_raw") or [])
+    if t1 and t1 != title:
+        variants.add(t1)
+    if t2 and t2 != title:
+        variants.add(t2)
+    if variants:
+        merged["_variants_raw"] = sorted(variants)
     
     for k in ["scieloUpdatedAt", "lilacsUpdatedAt", "latindexUpdatedAt"]:
         if k in r1 or k in r2:
@@ -314,7 +326,7 @@ def _merge_records(r1: dict, r2: dict) -> dict:
     return merged
 
 def load_database() -> dict[str, dict]:
-    global _journals_db, _database_meta, _db_summary_cache
+    global _journals_db, _issn_index, _database_meta, _db_summary_cache
     
     # Fast path if already loaded
     if _journals_db is not None:
@@ -337,30 +349,73 @@ def load_database() -> dict[str, dict]:
             _database_meta = raw.pop("_meta", {})
             eissn_idx = _database_meta.get("eissn_index", {})
 
-            temp_db = {}
-            for raw_issn, record in raw.items():
+            temp_records = {}
+            key_order = {}
+            for position, (raw_issn, record) in enumerate(raw.items()):
                 norm = normalize_issn(raw_issn)
                 if norm:
-                    if norm in temp_db:
-                        temp_db[norm] = _merge_records(temp_db[norm], record)
+                    key_order.setdefault(norm, position)
+                    if norm in temp_records:
+                        temp_records[norm] = _merge_records(temp_records[norm], record)
                     else:
-                        temp_db[norm] = record
+                        temp_records[norm] = record
 
-            # Aliases Consolidation to prevent split records
-            for issn, alt_issn in eissn_idx.items():
-                if issn in temp_db and alt_issn in temp_db and temp_db[issn] is not temp_db[alt_issn]:
-                    merged = _merge_records(temp_db[issn], temp_db[alt_issn])
-                    temp_db[issn] = merged
-                    temp_db[alt_issn] = merged
-                elif issn in temp_db and alt_issn not in temp_db:
-                    temp_db[alt_issn] = temp_db[issn]
-                elif alt_issn in temp_db and issn not in temp_db:
-                    temp_db[issn] = temp_db[alt_issn]
+            # Consolida ISSN impresso/e-ISSN sem duplicar o periódico no dicionário
+            # principal. Todos os identificadores ficam no índice de aliases e
+            # apontam para uma única chave canônica.
+            parent: dict[str, str] = {}
+
+            def find(value: str) -> str:
+                parent.setdefault(value, value)
+                if parent[value] != value:
+                    parent[value] = find(parent[value])
+                return parent[value]
+
+            def union(left: str, right: str):
+                root_left = find(left)
+                root_right = find(right)
+                if root_left != root_right:
+                    parent[root_right] = root_left
+
+            for issn in temp_records:
+                find(issn)
+            for raw_issn, raw_alt in eissn_idx.items():
+                issn = normalize_issn(raw_issn)
+                alt_issn = normalize_issn(raw_alt)
+                if issn and alt_issn:
+                    union(issn, alt_issn)
+
+            groups: dict[str, set[str]] = defaultdict(set)
+            for issn in list(parent):
+                groups[find(issn)].add(issn)
+
+            temp_db: dict[str, dict] = {}
+            _issn_index = {}
+            for members in groups.values():
+                present = [issn for issn in members if issn in temp_records]
+                if not present:
+                    continue
+                canonical = min(present, key=lambda value: key_order.get(value, len(key_order)))
+                merged_record = {}
+                for member in sorted(present, key=lambda value: key_order.get(value, len(key_order))):
+                    merged_record = _merge_records(merged_record, temp_records[member])
+                temp_db[canonical] = merged_record
+                for member in members:
+                    _issn_index[member] = canonical
+
+            # Registros sem relação ISSN/e-ISSN permanecem canônicos.
+            for issn, record in temp_records.items():
+                if issn not in _issn_index:
+                    temp_db[issn] = record
+                    _issn_index[issn] = issn
 
             # Discoveries processing with TTL and Safe Merge
             discoveries = cache.get_discoveries()
             now = datetime.now()
-            for issn, record in discoveries.items():
+            for raw_issn, record in discoveries.items():
+                issn = normalize_issn(raw_issn)
+                if not issn:
+                    continue
                 disc_date = record.get("discovered_at")
                 if disc_date:
                     try:
@@ -370,10 +425,12 @@ def load_database() -> dict[str, dict]:
                     except ValueError:
                         pass
                 
-                if issn not in temp_db:
-                    temp_db[issn] = record
+                canonical = _issn_index.get(issn, issn)
+                if canonical not in temp_db:
+                    temp_db[canonical] = record
+                    _issn_index[issn] = canonical
                 else:
-                    db_rec = temp_db[issn]
+                    db_rec = temp_db[canonical]
                     new_idx = set(db_rec.get("indexers", []))
                     new_idx.update(record.get("indexers", []))
                     db_rec["indexers"] = list(new_idx)
@@ -397,6 +454,27 @@ def get_database_meta() -> dict | None:
     """Retorna metadados de compilação do journals.json (compiled_at, sources, etc.)."""
     load_database()  # Garante que a base está carregada
     return _database_meta
+
+
+def resolve_issn(issn: str) -> str:
+    """Retorna a chave canônica de um ISSN impresso ou eletrônico."""
+    normalized = normalize_issn(issn)
+    if not normalized:
+        return ""
+    load_database()
+    return _issn_index.get(normalized, normalized)
+
+
+def get_identifier_count() -> int:
+    """Quantidade de ISSNs aceitos, incluindo identificadores alternativos."""
+    load_database()
+    return len(_issn_index)
+
+
+def find_journal(issn: str) -> dict | None:
+    """Busca um periódico por ISSN/e-ISSN sem duplicar registros no banco."""
+    canonical = resolve_issn(issn)
+    return load_database().get(canonical) if canonical else None
 
 
 def build_summary_cache(db: dict[str, dict]) -> list[dict]:
@@ -451,13 +529,14 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
 
     cb = cache.circuit_scielo
     if not cb.allow_request():
-        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
+        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "status": "error", "error": "SciELO temporariamente indisponível", "circuit": "open"}
 
     url = f"https://articlemeta.scielo.org/api/v1/journal/?issn={issn}"
     headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
 
     try:
         response = await http_client.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         data = response.json()
 
         scielo = len(data) > 0
@@ -482,16 +561,14 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
         cache.save_scielo_cache({issn: result})
         cb.record_success()
         return result
-    except httpx.HTTPStatusError as e:
+    except Exception as exc:
         cb.record_failure()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        cache.save_scielo_cache({issn: {"scielo": False, "revenf": False, "title": None, "updated_at": today_str, "status": "error"}})
-        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": f"SciELO API error: {e.response.status_code}"}
-    except (httpx.RequestError, httpx.TimeoutException):
-        cb.record_failure()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        cache.save_scielo_cache({issn: {"scielo": False, "revenf": False, "title": None, "updated_at": today_str, "status": "error"}})
-        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "error": "Timeout"}
+        logger.warning("Falha ao consultar SciELO para %s: %s", issn, exc)
+        return {
+            "scielo": False, "revenf": False, "title": None,
+            "updated_at": None, "status": "error",
+            "error": "SciELO temporariamente indisponível",
+        }
 
 
 LILACS_PRIMARY_URL = "https://fi-admin-api.bvsalud.org/api/title/search/"
@@ -541,7 +618,7 @@ async def fetch_lilacs(issn: str, http_client: httpx.AsyncClient) -> dict:
 
     cb = cache.circuit_lilacs
     if not cb.allow_request():
-        return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
+        return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "status": "error", "error": "LILACS temporariamente indisponível", "circuit": "open"}
 
     result = await _try_fetch_lilacs(LILACS_PRIMARY_URL, issn, http_client)
 
@@ -557,9 +634,11 @@ async def fetch_lilacs(issn: str, http_client: httpx.AsyncClient) -> dict:
         return result
 
     cb.record_failure()
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    cache.save_lilacs_cache({issn: {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": today_str, "status": "error"}})
-    return {"lilacs": False, "bdenf": False, "title": None, "issn": None, "updated_at": None, "error": "LILACS API error (primary + fallback)"}
+    return {
+        "lilacs": False, "bdenf": False, "title": None, "issn": None,
+        "updated_at": None, "status": "error",
+        "error": "LILACS temporariamente indisponível",
+    }
 
 
 async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
@@ -569,7 +648,7 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
 
     cb = cache.circuit_latindex
     if not cb.allow_request():
-        return {"latindex": False, "title": None, "updated_at": None, "error": "Circuit open", "circuit": "open"}
+        return {"latindex": False, "title": None, "updated_at": None, "status": "error", "error": "Latindex temporariamente indisponível", "circuit": "open"}
 
     url = f"https://www.latindex.org/latindex/bAvanzada/resultado?idMod=0&send=Buscar&issn={issn}"
     headers = {
@@ -579,6 +658,7 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
 
     try:
         response = await http_client.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
         result_text = soup.find(string=re.compile(r"Resultado:\s*.*\s*Revistas?"))
@@ -602,31 +682,34 @@ async def fetch_latindex(issn: str, http_client: httpx.AsyncClient) -> dict:
         cache.save_latindex_cache({issn: result})
         cb.record_success()
         return result
-    except httpx.HTTPStatusError as e:
+    except Exception as exc:
         cb.record_failure()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        cache.save_latindex_cache({issn: {"latindex": False, "title": None, "updated_at": today_str, "status": "error"}})
-        return {"latindex": False, "title": None, "updated_at": None, "error": f"Latindex error: {e.response.status_code}"}
-    except (httpx.RequestError, httpx.TimeoutException):
-        cb.record_failure()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        cache.save_latindex_cache({issn: {"latindex": False, "title": None, "updated_at": today_str, "status": "error"}})
-        return {"latindex": False, "title": None, "updated_at": None, "error": "Timeout"}
+        logger.warning("Falha ao consultar Latindex para %s: %s", issn, exc)
+        return {
+            "latindex": False, "title": None, "updated_at": None,
+            "status": "error", "error": "Latindex temporariamente indisponível",
+        }
 
 
-async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | None:
+async def fetch_citescore_result(issn: str, http_client: httpx.AsyncClient) -> dict:
     citescore_cache = cache.get_citescore_cache()
     cached = cache.check_cache_validity(citescore_cache, issn, ttl_days=7)
     if cached:
-        return cached.get("citeScore")
+        return cached
 
     api_key = get_api_key()
     if not api_key:
-        return None
+        return {
+            "citeScore": None, "status": "unavailable",
+            "error": "CiteScore não avaliado: chave Elsevier ausente",
+        }
 
     cb = cache.circuit_elsevier
     if not cb.allow_request():
-        return None
+        return {
+            "citeScore": None, "status": "error",
+            "error": "Elsevier temporariamente indisponível",
+        }
 
     url = f"{ELSEVIER_BASE}/{issn}?view=CITESCORE"
     headers = {
@@ -636,6 +719,13 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
 
     try:
         response = await http_client.get(url, headers=headers, timeout=10)
+        if response.status_code == 404:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            result = {"citeScore": None, "source": "api", "status": "not_found", "updated_at": today_str}
+            cache.save_citescore_cache({issn: result})
+            cb.record_success()
+            return result
+        response.raise_for_status()
         data = response.json()
 
         entries = data.get("serial-metadata-response", {}).get("entry", [])
@@ -655,19 +745,30 @@ async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | 
         
         cache.save_citescore_cache({issn: result})
         cb.record_success()
-        return cite_score
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            result = {"citeScore": None, "source": "api", "status": "not_found", "updated_at": today_str}
-            cache.save_citescore_cache({issn: result})
-            cb.record_success()
-            return None
+        return result
+    except Exception as exc:
         cb.record_failure()
+        logger.warning("Falha ao consultar Elsevier para %s: %s", issn, exc)
+        return {
+            "citeScore": None, "status": "error",
+            "error": "Elsevier temporariamente indisponível",
+        }
+
+
+async def fetch_citescore(issn: str, http_client: httpx.AsyncClient) -> float | None:
+    """Compatibilidade: retorna apenas o valor numérico do CiteScore."""
+    result = await fetch_citescore_result(issn, http_client)
+    return result.get("citeScore")
+
+
+def _service_warning(source: str, result: dict) -> dict | None:
+    if result.get("status") not in {"error", "unavailable"} and not result.get("error"):
         return None
-    except (httpx.RequestError, httpx.TimeoutException):
-        cb.record_failure()
-        return None
+    return {
+        "source": source,
+        "code": result.get("status", "error"),
+        "message": result.get("error") or f"{source} temporariamente indisponível",
+    }
 
 
 async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict:
@@ -683,24 +784,45 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
             "indexers": [],
             "metrics": {"cuiden": None},
             "classification": {"estrato": "NC", "justification": "ISSN em formato inválido."},
+            "data_status": "invalid",
+            "warnings": [],
             "scieloUpdatedAt": None,
             "lilacsUpdatedAt": None,
             "latindexUpdatedAt": None,
         }
 
-    db_record = db.get(normalized)
+    canonical = resolve_issn(normalized)
+    db_record = db.get(canonical)
+    warnings: list[dict] = []
+    checked_sources: set[str] = set()
+    citescore_result: dict | None = None
 
     if not db_record:
-        scielo_data, lilacs_data, latindex_data = await _fetch_all_indexers(
-            normalized, http_client
+        scielo_data, lilacs_data, latindex_data, citescore_result = await _gather(
+            fetch_scielo(normalized, http_client),
+            fetch_lilacs(normalized, http_client),
+            fetch_latindex(normalized, http_client),
+            fetch_citescore_result(normalized, http_client),
         )
+        checked_sources.update({"scielo", "lilacs", "latindex", "elsevier"})
+        for source, result in (
+            ("SciELO", scielo_data), ("LILACS", lilacs_data),
+            ("Latindex", latindex_data), ("Elsevier", citescore_result),
+        ):
+            warning = _service_warning(source, result)
+            if warning:
+                warnings.append(warning)
 
-        if scielo_data.get("scielo") or lilacs_data.get("lilacs") or lilacs_data.get("bdenf") or latindex_data.get("latindex"):
+        if (
+            scielo_data.get("scielo") or lilacs_data.get("lilacs")
+            or lilacs_data.get("bdenf") or latindex_data.get("latindex")
+            or citescore_result.get("citeScore") is not None
+        ):
             db_record = {
-                "title": scielo_data.get("title") or lilacs_data.get("title") or latindex_data.get("title") or "Periódico da Rede BVS/SciELO/Latindex",
+                "title": scielo_data.get("title") or lilacs_data.get("title") or latindex_data.get("title") or "Periódico identificado pela Elsevier",
                 "area": "Enfermagem" if (scielo_data.get("revenf") or lilacs_data.get("bdenf")) else "Outras Áreas",
                 "jcr": None,
-                "citeScore": None,
+                "citeScore": citescore_result.get("citeScore"),
                 "indexers": [],
                 "metrics": {"cuiden": None},
             }
@@ -719,15 +841,26 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
             if latindex_data.get("latindex"):
                 db_record["indexers"].append("LATINDEX")
                 db_record["latindexUpdatedAt"] = latindex_data.get("updated_at")
+            if citescore_result.get("citeScore") is not None:
+                db_record["indexers"].append("SCOPUS")
 
             with _db_lock:
-                db[normalized] = db_record
-            cache.save_discovery(normalized, db_record)
+                db[canonical] = db_record
+                _issn_index[normalized] = canonical
+            cache.save_discovery(canonical, db_record)
 
     if not db_record:
+        unavailable_count = len(warnings)
+        data_status = "error" if unavailable_count == 4 else "partial" if unavailable_count else "complete"
+        if data_status == "error":
+            justification = "Não foi possível concluir a consulta porque as fontes externas estão indisponíveis. Tente novamente mais tarde."
+        elif data_status == "partial":
+            justification = "ISSN não localizado nas fontes disponíveis; uma ou mais bases não puderam ser consultadas."
+        else:
+            justification = "ISSN não encontrado na base local nem nas fontes externas consultadas."
         return {
             "issn": normalized,
-            "title": "Periódico Não Identificado na Base",
+            "title": "Consulta não concluída" if data_status == "error" else "Periódico Não Identificado na Base",
             "area": "Outras Áreas",
             "jcr": None,
             "citeScore": None,
@@ -735,17 +868,19 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
             "metrics": {"cuiden": None},
             "classification": {
                 "estrato": "NC",
-                "justification": "ISSN não encontrado na base de dados de referência local nem no SciELO/LILACS/Latindex.",
+                "justification": justification,
             },
+            "data_status": data_status,
+            "warnings": warnings,
             "scieloUpdatedAt": None,
             "lilacsUpdatedAt": None,
             "latindexUpdatedAt": None,
         }
 
     local_indexers = [idx.upper() for idx in (db_record.get("indexers") or [])]
-    need_scielo = "SCIELO" not in local_indexers and "REVENF" not in local_indexers
-    need_lilacs = "LILACS" not in local_indexers and "BDENF" not in local_indexers
-    need_latindex = "LATINDEX" not in local_indexers
+    need_scielo = "scielo" not in checked_sources and "SCIELO" not in local_indexers and "REVENF" not in local_indexers
+    need_lilacs = "lilacs" not in checked_sources and "LILACS" not in local_indexers and "BDENF" not in local_indexers
+    need_latindex = "latindex" not in checked_sources and "LATINDEX" not in local_indexers
 
     if need_scielo or need_lilacs or need_latindex:
         tasks = []
@@ -760,13 +895,20 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
             results = await _gather(*tasks)
             with _db_lock:
                 for res in results:
-                    _merge_indexer_result(db_record, normalized, res)
+                    data = res.get("data", {})
+                    warning = _service_warning(res.get("type", "Fonte externa").title(), data)
+                    if warning:
+                        warnings.append(warning)
+                    _merge_indexer_result(db_record, canonical, res)
 
     # Buscar CiteScore fora do lock (I/O), aplicar mutação dentro do lock
-    api_cs = None
     need_citescore = db_record.get("citeScore") is None
-    if need_citescore:
-        api_cs = await fetch_citescore(normalized, http_client)
+    if need_citescore and citescore_result is None:
+        citescore_result = await fetch_citescore_result(normalized, http_client)
+        warning = _service_warning("Elsevier", citescore_result)
+        if warning:
+            warnings.append(warning)
+    api_cs = citescore_result.get("citeScore") if citescore_result else None
 
     with _db_lock:
         if need_citescore and api_cs is not None:
@@ -781,10 +923,10 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
 
         # Persistir CiteScore no cache de discoveries para sobreviver a restarts
         discoveries = cache.get_discoveries()
-        if normalized in discoveries:
-            discoveries[normalized]["citeScore"] = db_record.get("citeScore")
-            discoveries[normalized]["jcr"] = db_record.get("jcr")
-            discoveries[normalized]["indexers"] = list(db_record.get("indexers") or [])
+        if canonical in discoveries:
+            discoveries[canonical]["citeScore"] = db_record.get("citeScore")
+            discoveries[canonical]["jcr"] = db_record.get("jcr")
+            discoveries[canonical]["indexers"] = list(db_record.get("indexers") or [])
             cache.save_json_cache(
                 os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json"),
                 discoveries
@@ -805,6 +947,8 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
         "indexers": indexers,
         "metrics": db_record.get("metrics") or {"cuiden": None},
         "classification": classification,
+        "data_status": "partial" if warnings else "complete",
+        "warnings": warnings,
         "scieloUpdatedAt": db_record.get("scieloUpdatedAt"),
         "lilacsUpdatedAt": db_record.get("lilacsUpdatedAt"),
         "latindexUpdatedAt": db_record.get("latindexUpdatedAt"),
@@ -910,6 +1054,7 @@ def search_by_name(query: str) -> list[dict]:
                     "area": record.get("area", "Outras Áreas"),
                     "source": "local",
                 })
+        results.sort(key=lambda item: (_normalize_text(item["title"]), item["issn"]))
         return results[:50]
 
     matched_issns = None
@@ -944,6 +1089,12 @@ def search_by_name(query: str) -> list[dict]:
             "source": "local",
         })
 
+    results.sort(key=lambda item: (
+        0 if _normalize_text(item["title"]) == query_norm else 1,
+        abs(len(_normalize_text(item["title"])) - len(query_norm)),
+        _normalize_text(item["title"]),
+        item["issn"],
+    ))
     limited = results[:50]
     if len(limited) < 3:
         fuzzy = _fuzzy_match_name(query_norm, get_db_summary())
@@ -1198,11 +1349,11 @@ def _load_crossref_cache():
 
 def _save_crossref_cache():
     try:
-        for entry in _crossref_cache.values():
-            if "_ts" not in entry:
-                entry["_ts"] = datetime.now().strftime("%Y-%m-%d")
-        with open(CROSSREF_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump(_crossref_cache, f, ensure_ascii=False, indent=2)
+        with _crossref_lock:
+            for entry in _crossref_cache.values():
+                if "_ts" not in entry:
+                    entry["_ts"] = datetime.now().strftime("%Y-%m-%d")
+            cache.save_json_cache(CROSSREF_CACHE_PATH, _crossref_cache)
     except Exception:
         pass
 
@@ -1394,7 +1545,10 @@ def parse_lattes_text(text: str) -> list[dict]:
                 "score": 1.0, "stage": "issn-extracted", "candidates": [],
             }
         else:
-            match_result = match_journal(parsed["journal"])
+            match_result = match_journal(
+                parsed["journalRaw"] or parsed["journal"],
+                article_title=parsed.get("title"),
+            )
         results.append({
             **parsed,
             "matchedIssn": match_result["issn"],

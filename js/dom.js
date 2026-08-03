@@ -45,6 +45,7 @@ const dom = {
   kpiAvgScoreValue: document.getElementById('kpi-avg-score-value'),
   kpiAvgScoreSub: document.getElementById('kpi-avg-score-sub'),
   kpiNcCount: document.getElementById('kpi-nc-count'),
+  kpiPendingCount: document.getElementById('kpi-pending-count'),
   kpiInternationalCoverage: document.getElementById('kpi-international-coverage'),
   kpiAreaDistribution: document.getElementById('kpi-area-distribution'),
   qualisChart: document.getElementById('qualis-chart'),

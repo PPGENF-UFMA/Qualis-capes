@@ -4,7 +4,7 @@
  */
 
 import dom from './dom.js';
-import appState from './state.js';
+import appState, { isNonConclusiveResult } from './state.js';
 
 const SCORE_WEIGHTS = { A1: 100, A2: 85, A3: 70, A4: 55, A5: 40, A6: 25, A7: 10, A8: 5, NC: 0 };
 const PROFILE_COLORS = {
@@ -15,18 +15,20 @@ const PROFILE_COLORS = {
 // ─── COMPUTAÇÃO DE KPIs ──────────────────────────────────────────
 
 function computeProfileMetrics(items) {
-  const total = items.length;
-  if (total === 0) return { total: 0, a1a2: 0, a1a2Pct: 0, avgScore: 0, internationalPct: 0, enfPct: 0, ncCount: 0 };
+  const pendingCount = items.filter(isNonConclusiveResult).length;
+  const completedItems = items.filter(item => !isNonConclusiveResult(item));
+  const total = completedItems.length;
+  if (total === 0) return { total: 0, a1a2: 0, a1a2Pct: 0, avgScore: 0, internationalPct: 0, enfPct: 0, ncCount: 0, pendingCount };
 
-  const a1a2 = items.filter(i => i.classification.estrato === 'A1' || i.classification.estrato === 'A2').length;
-  const totalScore = items.reduce((sum, i) => sum + (SCORE_WEIGHTS[i.classification.estrato] || 0), 0);
+  const a1a2 = completedItems.filter(i => i.classification.estrato === 'A1' || i.classification.estrato === 'A2').length;
+  const totalScore = completedItems.reduce((sum, i) => sum + (SCORE_WEIGHTS[i.classification.estrato] || 0), 0);
   const avgScore = Math.round(totalScore / total);
-  const international = items.filter(i => {
+  const international = completedItems.filter(i => {
     const idx = (i.indexers || []).map(x => x.toUpperCase());
     return idx.includes('MEDLINE') || idx.includes('SCOPUS') || (i.jcr !== null && i.jcr > 0);
   }).length;
-  const enf = items.filter(i => i.area === 'Enfermagem').length;
-  const nc = items.filter(i => i.classification.estrato === 'NC').length;
+  const enf = completedItems.filter(i => i.area === 'Enfermagem').length;
+  const nc = completedItems.filter(i => i.classification.estrato === 'NC').length;
 
   return {
     total,
@@ -35,7 +37,8 @@ function computeProfileMetrics(items) {
     avgScore,
     internationalPct: Math.round((international / total) * 100),
     enfPct: Math.round((enf / total) * 100),
-    ncCount: nc
+    ncCount: nc,
+    pendingCount
   };
 }
 
@@ -67,12 +70,13 @@ function renderComparisonKPIs(profiles) {
   if (colsB) colsB.textContent = profiles[1].name || 'Perfil B';
 
   const rows = [
-    { label: 'Produção Intelectual', keyA: mA.total, keyB: mB.total, suffix: ' artigos', higherIsBetter: true },
+    { label: 'Itens concluídos', keyA: mA.total, keyB: mB.total, suffix: ' artigos', higherIsBetter: true },
     { label: 'Produção Qualificada (A1+A2)', keyA: mA.a1a2Pct, keyB: mB.a1a2Pct, suffix: '%', higherIsBetter: true },
-    { label: 'Nota CAPES (Score)', keyA: mA.avgScore, keyB: mB.avgScore, suffix: '/100', higherIsBetter: true },
+    { label: 'Índice de Perfil (IPP)', keyA: mA.avgScore, keyB: mB.avgScore, suffix: '/100', higherIsBetter: true },
     { label: 'Cobertura Internacional', keyA: mA.internationalPct, keyB: mB.internationalPct, suffix: '%', higherIsBetter: true },
     { label: 'Área Enfermagem', keyA: mA.enfPct, keyB: mB.enfPct, suffix: '%', higherIsBetter: false },
-    { label: 'Não Classificados (NC)', keyA: mA.ncCount, keyB: mB.ncCount, suffix: '', higherIsBetter: false }
+    { label: 'Não Classificados (NC)', keyA: mA.ncCount, keyB: mB.ncCount, suffix: '', higherIsBetter: false },
+    { label: 'Consultas pendentes', keyA: mA.pendingCount, keyB: mB.pendingCount, suffix: '', higherIsBetter: false }
   ];
 
   tbody.innerHTML = rows.map((row, idx) => {
@@ -125,7 +129,7 @@ function renderRadarChart(profiles) {
   appState.charts.radar = new Chart(ctx, {
     type: 'radar',
     data: {
-      labels: ['Produção Intelectual', 'Qualificada (A1+A2)', 'Nota CAPES', 'Cobertura Internacional', 'Área Enfermagem'],
+      labels: ['Produção Intelectual', 'Qualificada (A1+A2)', 'IPP interno', 'Cobertura Internacional', 'Área Enfermagem'],
       datasets: [
         {
           label: nameA,

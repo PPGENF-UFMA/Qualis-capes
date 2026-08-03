@@ -279,6 +279,8 @@ def _unclassified_work(work: dict, reason: str) -> dict:
         "indexers": [],
         "metrics": {"cuiden": None},
         "classification": {"estrato": "NC", "justification": reason, "all_candidates": []},
+        "data_status": "complete",
+        "warnings": [],
         "year": work.get("year"),
         "doi": work.get("doi"),
         "orcidPutCode": work.get("put_code"),

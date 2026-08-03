@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Response, APIRouter
+from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
@@ -98,8 +98,10 @@ def _cleanup_rate_limits():
     """Remove chaves expiradas para evitar memory leak."""
     evicted = 0
     stale: list[str] = []
+    now = time.time()
     for key, ts_list in _rate_limits.items():
-        if not ts_list:
+        _rate_limits[key] = [timestamp for timestamp in ts_list if now - timestamp < 60]
+        if not _rate_limits[key]:
             stale.append(key)
             evicted += 1
     for key in stale:
@@ -154,6 +156,25 @@ def get_http_client() -> httpx.AsyncClient:
     return _http_client
 
 
+def _technical_result(issn: str, message: str) -> dict:
+    return {
+        "issn": issn,
+        "title": "Consulta não concluída",
+        "area": "Outras Áreas",
+        "jcr": None,
+        "citeScore": None,
+        "indexers": [],
+        "metrics": {"cuiden": None},
+        "classification": {
+            "estrato": "NC",
+            "justification": message,
+            "all_candidates": [],
+        },
+        "data_status": "error",
+        "warnings": [{"source": "Servidor", "code": "error", "message": message}],
+    }
+
+
 @app.get("/", include_in_schema=False)
 async def root():
     return RedirectResponse(url="/index.html")
@@ -167,6 +188,7 @@ async def api_health():
         "status": "healthy" if len(db) > 0 else "degraded",
         "db_loaded": len(db) > 0,
         "db_size": len(db),
+        "identifier_count": enricher.get_identifier_count(),
         "compiled_at": meta.get("compiled_at", "")
     }
 
@@ -183,6 +205,7 @@ async def api_status():
         "status": "ok",
         "version": "2.0.0",
         "database_size": total,
+        "identifier_count": enricher.get_identifier_count(),
         "elsevier_api_key": has_key,
         "citeScoreAvailable": has_key,
         "citeScoreCoverage": {"count": with_cs, "total": total, "percent": pct},
@@ -192,7 +215,12 @@ async def api_status():
 
 
 @router_v1.get("/db-summary")
-async def api_db_summary(response: Response, page: int = 1, limit: int = 100, q: str = ""):
+async def api_db_summary(
+    response: Response,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=160),
+):
     items = enricher.get_db_summary()
     if q:
         q_lower = q.lower()
@@ -234,7 +262,18 @@ async def api_classify_batch(body: BatchClassifyRequest, request: Request):
             return await enricher.enrich_and_classify(issn, client)
 
     tasks = [classify_one(issn) for issn in body.issns]
-    results = await asyncio.gather(*tasks)
+    raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+    results = []
+    for issn, result in zip(body.issns, raw_results):
+        if isinstance(result, Exception):
+            logger.error(
+                "Falha inesperada na classificação em lote de %s",
+                issn,
+                exc_info=(type(result), result, result.__traceback__),
+            )
+            results.append(_technical_result(issn, "Falha interna ao processar este ISSN. Tente novamente."))
+        else:
+            results.append(result)
     return {"results": results, "count": len(results)}
 
 
