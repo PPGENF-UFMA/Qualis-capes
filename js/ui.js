@@ -602,7 +602,7 @@ function setSubmitButtonsDisabled(disabled) {
 export function showLoadingState(title = 'Processando Periódico', subtitle = 'Consultando bases oficiais e aplicando critérios CAPES...', iconName = 'search', useSkeleton = false) {
   document.body.style.cursor = 'wait';
   setSubmitButtonsDisabled(true);
-  
+
   if (useSkeleton) {
     showTableSkeletons(1);
     switchTab('table');
@@ -654,9 +654,9 @@ export function hideLoadingState() {
 export function updateLoadingProgress(current, total) {
   if (dom.loadingProgressContainer) {
     dom.loadingProgressContainer.style.display = 'block';
-    
+
     const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-    
+
     if (dom.loadingProgressBar) dom.loadingProgressBar.style.width = `${percent}%`;
     if (dom.loadingProgressText) dom.loadingProgressText.textContent = `Processando ${current} de ${total}...`;
     if (dom.loadingProgressPercent) dom.loadingProgressPercent.textContent = `${percent}%`;
@@ -678,13 +678,13 @@ export function showLattesPreviewModal(articles, onConfirm) {
   }
 
   openManagedModal(dom.lattesPreviewModal, dom.btnConfirmLattes);
-  
+
   if (dom.lattesPreviewCountText) {
     dom.lattesPreviewCountText.textContent = `Foram detectados ${articles.length} artigos no texto fornecido. Confirme a lista abaixo para iniciar a classificacao.`;
   }
   if (dom.lattesPreviewList) {
     dom.lattesPreviewList.innerHTML = '';
-    
+
     articles.forEach((article, index) => {
       const itemEl = document.createElement('div');
       itemEl.className = 'search-result-item';
@@ -692,10 +692,10 @@ export function showLattesPreviewModal(articles, onConfirm) {
       itemEl.style.display = 'flex';
       itemEl.style.justifyContent = 'space-between';
       itemEl.style.alignItems = 'center';
-      
+
       const safeTitle = escapeHTML(article.title || article.journal || 'Artigo sem titulo');
       const safeYear = escapeHTML(article.year || '-');
-      
+
       itemEl.innerHTML = `
         <div class="search-result-info" style="flex: 1; overflow: hidden;">
           <div class="search-result-title" title="${safeTitle}" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px;">${index + 1}. ${safeTitle}</div>
@@ -708,17 +708,17 @@ export function showLattesPreviewModal(articles, onConfirm) {
       dom.lattesPreviewList.appendChild(itemEl);
     });
   }
-  
+
   // Clean up previous listeners
   if (confirmLattesHandler && dom.btnConfirmLattes) {
     dom.btnConfirmLattes.removeEventListener('click', confirmLattesHandler);
   }
-  
+
   confirmLattesHandler = () => {
     closeLattesPreviewModal();
     if (onConfirm) onConfirm();
   };
-  
+
   if (dom.btnConfirmLattes) {
     dom.btnConfirmLattes.addEventListener('click', confirmLattesHandler);
   }
@@ -967,18 +967,18 @@ export function addRecentSearch(issn, title) {
   try {
     const saved = localStorage.getItem('qualis_recent_searches');
     let history = saved ? JSON.parse(saved) : [];
-    
+
     // Remover duplicados
     history = history.filter(item => item.issn !== issn);
-    
+
     // Adicionar no topo
     history.unshift({ issn, title });
-    
+
     // Limitar a 4 itens
     if (history.length > 4) {
       history = history.slice(0, 4);
     }
-    
+
     localStorage.setItem('qualis_recent_searches', JSON.stringify(history));
     renderRecentSearches();
   } catch (e) {
@@ -993,11 +993,11 @@ export function addRecentSearch(issn, title) {
 export function renderRecentSearches() {
   const container = dom.recentSearchesList;
   if (!container) return;
-  
+
   try {
     const saved = localStorage.getItem('qualis_recent_searches');
     const history = saved ? JSON.parse(saved) : [];
-    
+
     if (history.length === 0) {
       container.innerHTML = '';
       if (dom.sidebarHistoryCard) dom.sidebarHistoryCard.hidden = true;
@@ -1005,7 +1005,7 @@ export function renderRecentSearches() {
     }
 
     if (dom.sidebarHistoryCard) dom.sidebarHistoryCard.hidden = false;
-    
+
     container.innerHTML = history.map(item => {
       const safeTitle = escapeHTML(item.title);
       const safeIssn = escapeHTML(item.issn);
@@ -1034,7 +1034,7 @@ export function initQuadrienios() {
   for (let start = currentPeriodStart; start >= 2013; start -= 4) {
     periods.push(`${start}-${start + 3}`);
   }
-  
+
   // A opção "ALL" já está no HTML
   periods.forEach(p => {
     const opt = document.createElement('option');

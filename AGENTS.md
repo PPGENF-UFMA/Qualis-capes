@@ -110,7 +110,7 @@ Otherwise it's `Outras Áreas`.
 
 ## Standalone test scripts (Node.js)
 
-`test_parser.js` and `test_replace.js` are debugging scripts for the Lattes parser. Run with `node test_parser.js`. Not part of the web app.
+`test_parser.js` is the regression test script for the Lattes parser. Run with `node test_parser.js`. Not part of the web app.
 
 ## .gitignore notes
 
