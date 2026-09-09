@@ -518,13 +518,16 @@ app.include_router(router_v1)
 # ─── Static Files (SEGURANÇA: servir apenas diretórios seguros) ────
 # NÃO servir PROJECT_ROOT inteiro — exporia .env, data/, api/, __pycache__/
 
-# Servir CSS e JS como subdiretórios
+# Servir CSS, JS e Assets como subdiretórios
 _css_dir = os.path.join(PROJECT_ROOT, "css")
 _js_dir = os.path.join(PROJECT_ROOT, "js")
+_assets_dir = os.path.join(PROJECT_ROOT, "assets")
 if os.path.isdir(_css_dir):
     app.mount("/css", StaticFiles(directory=_css_dir), name="css")
 if os.path.isdir(_js_dir):
     app.mount("/js", StaticFiles(directory=_js_dir), name="js")
+if os.path.isdir(_assets_dir):
+    app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
 
 # Servir logo.svg e index.html como arquivos individuais
 from starlette.responses import FileResponse
@@ -538,3 +541,8 @@ async def serve_index():
 @app.get("/logo.svg", include_in_schema=False)
 async def serve_logo():
     return FileResponse(os.path.join(PROJECT_ROOT, "logo.svg"), media_type="image/svg+xml")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def serve_favicon():
+    return FileResponse(os.path.join(PROJECT_ROOT, "favicon.ico"), media_type="image/x-icon")

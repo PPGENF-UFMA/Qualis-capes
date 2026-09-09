@@ -7,7 +7,12 @@
   <title>Classificador Qualis CAPES - Enfermagem</title>
   <meta name="description"
     content="Ferramenta automatizada para enriquecimento de métricas e classificação de periódicos científicos de acordo com as regras da CAPES para Enfermagem e Outras Áreas.">
-  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon-32x32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css?v=20260801-editorial-selects">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
     integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4"
@@ -32,23 +37,31 @@
 
   <div class="container">
 
-    <!-- Cabeçalho Principal -->
-    <header class="site-header">
+    <!-- Cabeçalho Principal (Opção B) -->
+    <header class="site-header site-header-option-b">
       <div class="logo-container">
-        <img src="logo.svg" alt="Logo Qualis CAPES" class="logo-image">
-        <div class="header-divider"></div>
-        <div class="brand-copy">
-          <span class="institution-kicker">UFMA · PPGENF</span>
-          <p class="header-subtitle">Mestrado em Enfermagem</p>
-        </div>
+        <a href="#" class="brand-link" title="CPI · Classificador de Produção Intelectual">
+          <img src="logo.svg" alt="Logo CPI - Classificador de Produção Intelectual" class="logo-image">
+          <div class="brand-copy">
+            <span class="brand-title-main">CLASSIFICADOR</span>
+            <span class="brand-title-sub">DE PRODUÇÃO INTELECTUAL</span>
+          </div>
+        </a>
       </div>
-      <div class="header-actions">
-        <button id="btn-classification-info" class="header-info-btn" title="Entenda como funciona a classificação"
-          aria-label="Entenda como funciona a classificação">
-          <i data-lucide="help-circle"></i> <span>Como funciona</span>
-        </button>
-        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Alternar entre modo claro e escuro"><i
-            data-lucide="moon"></i> <span>Modo Escuro</span></button>
+      <div class="header-right-group">
+        <div class="institutional-chancela" title="Chancela Institucional: PPGENF · UFMA">
+          <img src="assets/ppgenf_clean.png" alt="Logo PPGENF" class="inst-logo inst-logo-ppgenf"
+            title="Programa de Pós-Graduação em Enfermagem">
+          <img src="assets/ufma_solo_clean.png" alt="Logo UFMA" class="inst-logo inst-logo-ufma"
+            title="Universidade Federal do Maranhão">
+        </div>
+        <div class="header-divider header-divider-right" aria-hidden="true"></div>
+        <div class="header-actions">
+          <button id="theme-toggle" class="theme-toggle-btn icon-only" aria-label="Alternar entre modo claro e escuro"
+            title="Alternar entre modo claro e escuro">
+            <i data-lucide="moon"></i>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -64,6 +77,11 @@
         <p><span>Área de avaliação</span><strong>Enfermagem</strong></p>
         <p><span>Programa</span><strong>PPGENF · UFMA</strong></p>
         <p><span>Fontes</span><strong>CAPES + bases indexadoras</strong></p>
+        <button id="btn-classification-info" class="aside-guide-btn" title="Entenda como funciona a classificação"
+          aria-label="Como funciona a classificação">
+          <span>Classificação</span>
+          <strong><i data-lucide="book-open"></i> Guia</strong>
+        </button>
       </div>
     </section>
 
@@ -72,170 +90,172 @@
 
       <!-- Coluna da Esquerda: Barra Lateral de Ferramentas -->
       <aside id="consultation-sidebar" class="sidebar">
-        <button id="sidebar-open" class="sidebar-rail-toggle" type="button"
-          aria-controls="consultation-panel" aria-expanded="true" aria-label="Abrir Central de Consulta"
-          title="Abrir Central de Consulta">
+        <button id="sidebar-open" class="sidebar-rail-toggle" type="button" aria-controls="consultation-panel"
+          aria-expanded="true" aria-label="Abrir Central de Consulta" title="Abrir Central de Consulta">
           <i data-lucide="panel-left-open" aria-hidden="true"></i>
           <span>Consulta</span>
         </button>
 
         <div id="consultation-panel" class="consultation-panel">
 
-        <!-- Card Unificado de Entrada de Dados -->
-        <div class="card sidebar-input-card">
-          <div class="tool-heading">
-            <span class="section-index">02</span>
-            <div>
-              <p class="section-eyebrow">Central de consulta</p>
-              <h2>Como deseja analisar?</h2>
-            </div>
-            <button id="sidebar-close" class="sidebar-close-btn" type="button"
-              aria-label="Fechar Central de Consulta" title="Fechar Central de Consulta">
-              <i data-lucide="panel-left-close" aria-hidden="true"></i>
-            </button>
-          </div>
-          <!-- Seletor Segmentado Premium — Bloco Periódicos -->
-          <div class="input-selector-group">
-            <span class="input-selector-label"><i data-lucide="book-open"></i> Periódicos</span>
-            <div class="input-selector" aria-label="Análise por periódico">
-              <button type="button" id="selector-single" class="selector-btn active" title="Consulta por Periódico">
-                <i data-lucide="search"></i>
-                <span>Periódico</span>
-              </button>
-              <button type="button" id="selector-batch" class="selector-btn" title="Consulta em Lote">
-                <i data-lucide="layers"></i>
-                <span>Lote</span>
-              </button>
-              <button type="button" id="selector-upload" class="selector-btn" title="Importar CSV">
-                <i data-lucide="file-spreadsheet"></i>
-                <span>Planilha</span>
+          <!-- Card Unificado de Entrada de Dados -->
+          <div class="card sidebar-input-card">
+            <div class="tool-heading">
+              <span class="section-index">02</span>
+              <div>
+                <p class="section-eyebrow">Central de consulta</p>
+                <h2>Como deseja analisar?</h2>
+              </div>
+              <button id="sidebar-close" class="sidebar-close-btn" type="button" aria-label="Fechar Central de Consulta"
+                title="Fechar Central de Consulta">
+                <i data-lucide="panel-left-close" aria-hidden="true"></i>
               </button>
             </div>
-          </div>
-
-          <!-- Seletor Segmentado Premium — Bloco Pesquisador -->
-          <div class="input-selector-group">
-            <span class="input-selector-label"><i data-lucide="user"></i> Pesquisador</span>
-            <div class="input-selector" aria-label="Análise por pesquisador">
-              <button type="button" id="selector-orcid" class="selector-btn" title="Análise por ORCID iD">
-                <i data-lucide="fingerprint"></i>
-                <span>ORCID</span>
-              </button>
-              <button type="button" id="selector-lattes" class="selector-btn" title="Análise de Currículo Lattes">
-                <i data-lucide="file-text"></i>
-                <span>Currículo</span>
-              </button>
-              <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
-                <i data-lucide="git-compare"></i>
-                <span>Comparar</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Painel 1: Consulta Individual -->
-          <div id="input-pane-single" class="input-pane active">
-            <form id="single-issn-form">
-              <div class="form-group">
-                <label for="single-issn-input">Digite o ISSN ou Nome do Periódico:</label>
-                <input type="text" id="single-issn-input" class="text-input"
-                  placeholder="Ex: 0104-1169 ou Revista Latino-Americana de Enfermagem" required>
-              </div>
-              <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar
-                Periódico</button>
-            </form>
-            <section id="sidebar-history-card" class="recent-searches-section" aria-labelledby="recent-searches-title"
-              hidden>
-              <h3 id="recent-searches-title" class="recent-searches-heading">
-                <i data-lucide="history"></i> Consultas recentes
-              </h3>
-              <div id="recent-searches-list" class="recent-searches-list"></div>
-            </section>
-          </div>
-
-          <!-- Painel 2: Entrada em Lote -->
-          <div id="input-pane-batch" class="input-pane">
-            <form id="batch-issn-form">
-              <div class="form-group">
-                <label for="batch-issn-input">Insira uma lista de ISSNs (um por linha):</label>
-                <textarea id="batch-issn-input" class="text-input"
-                  placeholder="Ex:&#10;0104-1169&#10;0034-7167&#10;0021-9746" required></textarea>
-              </div>
-              <button type="submit" id="btn-submit-batch" class="btn btn-secondary" style="width: 100%;">Classificar
-                Lote</button>
-            </form>
-          </div>
-
-          <!-- Painel 3: Upload de CSV -->
-          <div id="input-pane-upload" class="input-pane">
-            <div class="form-group">
-              <label>Arraste e solte seu arquivo CSV:</label>
-              <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Selecionar arquivo CSV ou Excel">
-                <div class="dropzone-icon"><i data-lucide="file-spreadsheet"></i></div>
-                <p>Arraste seu arquivo <strong>CSV ou Excel</strong> aqui ou <span class="highlight">clique para
-                    selecionar</span></p>
-                <p style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Recomendado conter uma coluna
-                  chamada 'ISSN' (delimitador , ou ;)</p>
-                <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+            <!-- Seletor Segmentado Premium — Bloco Periódicos -->
+            <div class="input-selector-group">
+              <span class="input-selector-label"><i data-lucide="book-open"></i> Periódicos</span>
+              <div class="input-selector" aria-label="Análise por periódico">
+                <button type="button" id="selector-single" class="selector-btn active" title="Consulta por Periódico">
+                  <i data-lucide="search"></i>
+                  <span>Periódico</span>
+                </button>
+                <button type="button" id="selector-batch" class="selector-btn" title="Consulta em Lote">
+                  <i data-lucide="layers"></i>
+                  <span>Lote</span>
+                </button>
+                <button type="button" id="selector-upload" class="selector-btn" title="Importar CSV">
+                  <i data-lucide="file-spreadsheet"></i>
+                  <span>Planilha</span>
+                </button>
               </div>
             </div>
-          </div>
 
-          <!-- Painel 4: Importação Currículo Lattes -->
-          <div id="input-pane-lattes" class="input-pane">
-            <form id="lattes-form">
-              <div class="form-group">
-                <label for="lattes-researcher-name">Nome do Pesquisador:</label>
-                <input type="text" id="lattes-researcher-name" class="text-input"
-                  placeholder="Ex: Carlos Leonardo F. Cunha" required>
+            <!-- Seletor Segmentado Premium — Bloco Pesquisador -->
+            <div class="input-selector-group">
+              <span class="input-selector-label"><i data-lucide="user"></i> Pesquisador</span>
+              <div class="input-selector" aria-label="Análise por pesquisador">
+                <button type="button" id="selector-orcid" class="selector-btn" title="Análise por ORCID iD">
+                  <i data-lucide="fingerprint"></i>
+                  <span>ORCID</span>
+                </button>
+                <button type="button" id="selector-lattes" class="selector-btn" title="Análise de Currículo Lattes">
+                  <i data-lucide="file-text"></i>
+                  <span>Currículo</span>
+                </button>
+                <button type="button" id="selector-comparison" class="selector-btn" title="Comparar Currículos">
+                  <i data-lucide="git-compare"></i>
+                  <span>Comparar</span>
+                </button>
               </div>
-              <div class="form-group">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <label for="lattes-text-input" style="margin-bottom: 0;">Cole a lista de artigos do Lattes:</label>
-                  <button type="button" id="btn-lattes-help" class="btn-text-small"
-                    style="background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Como copiar?
-                  </button>
-                </div>
-                <div id="lattes-help-content" class="lattes-help-content"
-                  style="display: none; background: rgba(209, 26, 91, 0.05); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">
-                  <ol style="margin-left: 20px; margin-top: 5px;">
-                    <li style="margin-bottom: 4px;">Abra o Currículo Lattes.</li>
-                    <li style="margin-bottom: 4px;">Vá até <strong>"Produções" &gt; "Artigos completos publicados em
-                        periódicos"</strong>.</li>
-                    <li>Selecione <strong>todo o texto</strong> dos artigos e cole abaixo.</li>
-                  </ol>
-                </div>
-                <textarea id="lattes-text-input" class="text-input"
-                  placeholder="Cole aqui a seção de artigos do Lattes..." required
-                  style="min-height: 120px;"></textarea>
-              </div>
-              <button type="submit" id="btn-submit-lattes" class="btn" style="width: 100%;">Analisar Currículo</button>
-            </form>
-          </div>
+            </div>
 
-          <!-- Painel 5: Analise por ORCID publico -->
-          <div id="input-pane-orcid" class="input-pane">
-            <form id="orcid-form">
-              <div class="form-group">
-                <label for="orcid-input">ORCID iD:</label>
-                <input type="text" id="orcid-input" class="text-input"
-                  placeholder="Ex: 0000-0002-1825-0097" autocomplete="off" required>
-              </div>
-              <div class="orcid-year-grid">
+            <!-- Painel 1: Consulta Individual -->
+            <div id="input-pane-single" class="input-pane active">
+              <form id="single-issn-form">
                 <div class="form-group">
-                  <label for="orcid-year-from">Ano inicial:</label>
-                  <input type="number" id="orcid-year-from" class="text-input" min="1900" max="2100" step="1">
+                  <label for="single-issn-input">Digite o ISSN ou Nome do Periódico:</label>
+                  <input type="text" id="single-issn-input" class="text-input"
+                    placeholder="Ex: 0104-1169 ou Revista Latino-Americana de Enfermagem" required>
+                </div>
+                <button type="submit" id="btn-submit-single" class="btn" style="width: 100%;">Classificar
+                  Periódico</button>
+              </form>
+              <section id="sidebar-history-card" class="recent-searches-section" aria-labelledby="recent-searches-title"
+                hidden>
+                <h3 id="recent-searches-title" class="recent-searches-heading">
+                  <i data-lucide="history"></i> Consultas recentes
+                </h3>
+                <div id="recent-searches-list" class="recent-searches-list"></div>
+              </section>
+            </div>
+
+            <!-- Painel 2: Entrada em Lote -->
+            <div id="input-pane-batch" class="input-pane">
+              <form id="batch-issn-form">
+                <div class="form-group">
+                  <label for="batch-issn-input">Insira uma lista de ISSNs (um por linha):</label>
+                  <textarea id="batch-issn-input" class="text-input"
+                    placeholder="Ex:&#10;0104-1169&#10;0034-7167&#10;0021-9746" required></textarea>
+                </div>
+                <button type="submit" id="btn-submit-batch" class="btn btn-secondary" style="width: 100%;">Classificar
+                  Lote</button>
+              </form>
+            </div>
+
+            <!-- Painel 3: Upload de CSV -->
+            <div id="input-pane-upload" class="input-pane">
+              <div class="form-group">
+                <label>Arraste e solte seu arquivo CSV:</label>
+                <div id="dropzone" class="dropzone" role="button" tabindex="0"
+                  aria-label="Selecionar arquivo CSV ou Excel">
+                  <div class="dropzone-icon"><i data-lucide="file-spreadsheet"></i></div>
+                  <p>Arraste seu arquivo <strong>CSV ou Excel</strong> aqui ou <span class="highlight">clique para
+                      selecionar</span></p>
+                  <p style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Recomendado conter uma coluna
+                    chamada 'ISSN' (delimitador , ou ;)</p>
+                  <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+                </div>
+              </div>
+            </div>
+
+            <!-- Painel 4: Importação Currículo Lattes -->
+            <div id="input-pane-lattes" class="input-pane">
+              <form id="lattes-form">
+                <div class="form-group">
+                  <label for="lattes-researcher-name">Nome do Pesquisador:</label>
+                  <input type="text" id="lattes-researcher-name" class="text-input"
+                    placeholder="Ex: Carlos Leonardo F. Cunha" required>
                 </div>
                 <div class="form-group">
-                  <label for="orcid-year-to">Ano final:</label>
-                  <input type="number" id="orcid-year-to" class="text-input" min="1900" max="2100" step="1">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label for="lattes-text-input" style="margin-bottom: 0;">Cole a lista de artigos do Lattes:</label>
+                    <button type="button" id="btn-lattes-help" class="btn-text-small"
+                      style="background: none; border: none; color: var(--primary-color); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                      <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Como copiar?
+                    </button>
+                  </div>
+                  <div id="lattes-help-content" class="lattes-help-content"
+                    style="display: none; background: rgba(209, 26, 91, 0.05); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">
+                    <ol style="margin-left: 20px; margin-top: 5px;">
+                      <li style="margin-bottom: 4px;">Abra o Currículo Lattes.</li>
+                      <li style="margin-bottom: 4px;">Vá até <strong>"Produções" &gt; "Artigos completos publicados em
+                          periódicos"</strong>.</li>
+                      <li>Selecione <strong>todo o texto</strong> dos artigos e cole abaixo.</li>
+                    </ol>
+                  </div>
+                  <textarea id="lattes-text-input" class="text-input"
+                    placeholder="Cole aqui a seção de artigos do Lattes..." required
+                    style="min-height: 120px;"></textarea>
                 </div>
-              </div>
-              <p class="input-hint">Usa obras publicas do ORCID. Quando faltar ISSN, tenta DOI/Crossref e matching por nome do periodico.</p>
-              <button type="submit" id="btn-submit-orcid" class="btn" style="width: 100%;">Analisar ORCID</button>
-            </form>
+                <button type="submit" id="btn-submit-lattes" class="btn" style="width: 100%;">Analisar
+                  Currículo</button>
+              </form>
+            </div>
+
+            <!-- Painel 5: Analise por ORCID publico -->
+            <div id="input-pane-orcid" class="input-pane">
+              <form id="orcid-form">
+                <div class="form-group">
+                  <label for="orcid-input">ORCID iD:</label>
+                  <input type="text" id="orcid-input" class="text-input" placeholder="Ex: 0000-0002-1825-0097"
+                    autocomplete="off" required>
+                </div>
+                <div class="orcid-year-grid">
+                  <div class="form-group">
+                    <label for="orcid-year-from">Ano inicial:</label>
+                    <input type="number" id="orcid-year-from" class="text-input" min="1900" max="2100" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label for="orcid-year-to">Ano final:</label>
+                    <input type="number" id="orcid-year-to" class="text-input" min="1900" max="2100" step="1">
+                  </div>
+                </div>
+                <p class="input-hint">Usa obras publicas do ORCID. Quando faltar ISSN, tenta DOI/Crossref e matching por
+                  nome do periodico.</p>
+                <button type="submit" id="btn-submit-orcid" class="btn" style="width: 100%;">Analisar ORCID</button>
+              </form>
+            </div>
           </div>
-        </div>
 
         </div>
 
@@ -302,10 +322,16 @@
           </div>
 
           <!-- Navegação por Abas Premium -->
-          <div id="results-tabs" class="tab-navigation" role="tablist" aria-label="Resultados" style="margin-bottom: 20px;">
-            <button id="tab-table" class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-content-table"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
-            <button id="tab-analytics" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-content-analytics" tabindex="-1"><i data-lucide="pie-chart"></i> Estatísticas & Dashboard</button>
-            <button id="tab-comparison" class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-content-comparison" tabindex="-1" style="display: none;"><i data-lucide="git-compare"></i>
+          <div id="results-tabs" class="tab-navigation" role="tablist" aria-label="Resultados"
+            style="margin-bottom: 20px;">
+            <button id="tab-table" class="tab-btn active" role="tab" aria-selected="true"
+              aria-controls="tab-content-table"><i data-lucide="clipboard-list"></i> Tabela Detalhada</button>
+            <button id="tab-analytics" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="tab-content-analytics" tabindex="-1"><i data-lucide="pie-chart"></i> Estatísticas &
+              Dashboard</button>
+            <button id="tab-comparison" class="tab-btn" role="tab" aria-selected="false"
+              aria-controls="tab-content-comparison" tabindex="-1" style="display: none;"><i
+                data-lucide="git-compare"></i>
               Comparação</button>
           </div>
 
@@ -535,10 +561,22 @@
   </div>
 
   <footer class="site-footer">
-    <div class="footer-copy">
-      <p>Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
-      <span>Ferramenta de apoio à análise da produção científica</span>
-      <span class="method-disclaimer">Classificações estimadas para apoio técnico. O IPP é um indicador interno e não representa nota oficial da CAPES.</span>
+    <div class="footer-institutional">
+      <div class="footer-logos">
+        <img src="logo.svg" alt="Logo CPI" class="footer-logo-cpi" title="CPI · Classificador de Produção Intelectual">
+        <div class="footer-logo-divider" aria-hidden="true"></div>
+        <img src="assets/ppgenf_clean.png" alt="Logo PPGENF" class="footer-logo footer-logo-ppgenf"
+          title="PPGENF · Programa de Pós-Graduação em Enfermagem">
+        <img src="assets/ufma_clean.png" alt="Logo UFMA" class="footer-logo footer-logo-ufma"
+          title="UFMA · Universidade Federal do Maranhão">
+      </div>
+      <div class="footer-copy">
+        <p class="footer-program">Programa de Pós-Graduação em Enfermagem · Universidade Federal do Maranhão</p>
+        <span class="footer-desc">Ferramenta de apoio à análise e classificação da produção científica (CAPES
+          Enfermagem)</span>
+        <span class="method-disclaimer">Classificações estimadas para apoio técnico. O IPP é um indicador interno e não
+          representa nota oficial da CAPES.</span>
+      </div>
     </div>
     <details class="system-health">
       <summary class="system-health-summary">
@@ -675,8 +713,11 @@
         </section>
 
         <section class="info-section info-section-highlight">
-          <h4><i data-lucide="bar-chart-3" style="width: 16px; height: 16px;"></i> Índice de Perfil de Publicação (IPP)</h4>
-          <p>O IPP resume o conjunto analisado em uma escala interna de 0 a 100, usando pesos decrescentes de A1 a A8 e peso zero para NC. Ele serve apenas para comparar a composição das publicações dentro desta ferramenta. <strong>Não é uma nota, conceito ou indicador oficial da CAPES.</strong></p>
+          <h4><i data-lucide="bar-chart-3" style="width: 16px; height: 16px;"></i> Índice de Perfil de Publicação (IPP)
+          </h4>
+          <p>O IPP resume o conjunto analisado em uma escala interna de 0 a 100, usando pesos decrescentes de A1 a A8 e
+            peso zero para NC. Ele serve apenas para comparar a composição das publicações dentro desta ferramenta.
+            <strong>Não é uma nota, conceito ou indicador oficial da CAPES.</strong></p>
         </section>
 
         <!-- SEÇÃO 2: Tabela de Estratos — Enfermagem -->
@@ -764,13 +805,16 @@
         <section class="info-section">
           <h4><i data-lucide="search-check" style="width: 16px; height: 16px;"></i> Como a &Aacute;rea de Enfermagem
             &eacute; Identificada</h4>
-          <p>Um periódico &eacute; classificado como Enfermagem quando atendidos <strong>todos</strong> os crit&eacute;rios
+          <p>Um periódico &eacute; classificado como Enfermagem quando atendidos <strong>todos</strong> os
+            crit&eacute;rios
             abaixo:</p>
           <ol>
             <li>Est&aacute; listado como Enfermagem na plataforma Sucupira (CAPES); <strong>E</strong></li>
             <li>Aparece no JCR da categoria Nursing <strong>OU</strong> no Scopus na categoria Nursing
-              <strong>OU</strong> est&aacute; no CUIDEN, BDENF ou RevEnf <strong>OU</strong> possui palavras-chave de enfermagem no
-              t&iacute;tulo (ex: "enferm", "nursin", "cuidado", "enfermer").</li>
+              <strong>OU</strong> est&aacute; no CUIDEN, BDENF ou RevEnf <strong>OU</strong> possui palavras-chave de
+              enfermagem no
+              t&iacute;tulo (ex: "enferm", "nursin", "cuidado", "enfermer").
+            </li>
           </ol>
           <p>Caso n&atilde;o atenda a esses crit&eacute;rios, o periódico &eacute; classificado como "Outras
             &Aacute;reas" e submetido aos thresholds do Cen&aacute;rio B.</p>

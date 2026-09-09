@@ -887,9 +887,11 @@ export function toggleTheme() {
 function updateThemeButtonLabel() {
   const isLight = document.body.classList.contains('light-theme');
   dom.themeToggle.innerHTML = isLight
-    ? '<i data-lucide="moon"></i> <span>Usar tema escuro</span>'
-    : '<i data-lucide="sun"></i> <span>Usar tema claro</span>';
-  dom.themeToggle.setAttribute('aria-label', isLight ? 'Usar tema escuro' : 'Usar tema claro');
+    ? '<i data-lucide="moon"></i>'
+    : '<i data-lucide="sun"></i>';
+  const label = isLight ? 'Alternar para modo escuro' : 'Alternar para modo claro';
+  dom.themeToggle.setAttribute('aria-label', label);
+  dom.themeToggle.setAttribute('title', label);
 
   if (typeof lucide !== 'undefined') {
     lucide.createIcons({ node: dom.themeToggle });
