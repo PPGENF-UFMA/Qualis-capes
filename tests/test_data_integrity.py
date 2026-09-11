@@ -70,3 +70,32 @@ def test_all_external_failures_produce_technical_error(monkeypatch):
     assert result["data_status"] == "error"
     assert result["title"] == "Consulta não concluída"
     assert len(result["warnings"]) == 4
+
+
+def test_reme_both_issns_classify_as_a4():
+    """Garante que REME tanto impresso quanto online sejam classificados como A4."""
+    for issn in ["1415-2762", "2316-9389"]:
+        res = asyncio.run(enricher.enrich_and_classify(issn, None))
+        assert res["classification"]["estrato"] == "A4", f"Falha para REME {issn}: {res['classification']}"
+        assert "RevEnf" in res["indexers"] or "REVENF" in [idx.upper() for idx in res["indexers"]]
+        assert res["area"] == "Enfermagem"
+
+
+def test_saude_em_debate_both_issns_classify_as_a6(monkeypatch):
+    """Garante que Saúde em Debate tanto impresso quanto online sejam classificados como A6."""
+    async def mock_scielo(issn, _client):
+        return {
+            "scielo": True,
+            "revenf": False,
+            "title": "Saúde em Debate",
+            "updated_at": "2026-09-11",
+            "status": "ok",
+        }
+
+    monkeypatch.setattr(enricher, "fetch_scielo", mock_scielo)
+
+    for issn in ["0103-1104", "2358-2898"]:
+        res = asyncio.run(enricher.enrich_and_classify(issn, None))
+        assert res["classification"]["estrato"] == "A6", f"Falha para Saúde em Debate {issn}: {res['classification']}"
+        assert "SCIELO" in [idx.upper() for idx in res["indexers"]]
+        assert res["area"] == "Outras Áreas"

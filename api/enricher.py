@@ -438,6 +438,43 @@ def load_database() -> dict[str, dict]:
                         if k in record:
                             db_rec[k] = record[k]
 
+            # Injeta indexadores RevEnf e BDENF das listas locais existentes
+            revenf_file = os.path.join(PROJECT_ROOT, "data", "revenf_issns.json")
+            if os.path.exists(revenf_file):
+                try:
+                    with open(revenf_file, "r", encoding="utf-8") as f:
+                        for raw_issn in json.load(f):
+                            norm = normalize_issn(raw_issn)
+                            if not norm:
+                                continue
+                            can = _issn_index.get(norm, norm)
+                            if can in temp_db:
+                                rec = temp_db[can]
+                                rec.setdefault("indexers", [])
+                                if "RevEnf" not in rec["indexers"]:
+                                    rec["indexers"].append("RevEnf")
+                                rec["area"] = "Enfermagem"
+                except Exception as e:
+                    logger.warning(f"Erro ao aplicar revenf_issns: {e}")
+
+            bdenf_file = os.path.join(PROJECT_ROOT, "data", "bdenf_issns.json")
+            if os.path.exists(bdenf_file):
+                try:
+                    with open(bdenf_file, "r", encoding="utf-8") as f:
+                        for raw_issn in json.load(f):
+                            norm = normalize_issn(raw_issn)
+                            if not norm:
+                                continue
+                            can = _issn_index.get(norm, norm)
+                            if can in temp_db:
+                                rec = temp_db[can]
+                                rec.setdefault("indexers", [])
+                                if "BDENF" not in rec["indexers"]:
+                                    rec["indexers"].append("BDENF")
+                                rec["area"] = "Enfermagem"
+                except Exception as e:
+                    logger.warning(f"Erro ao aplicar bdenf_issns: {e}")
+
             _journals_db = temp_db
             _build_title_index()
             _load_server_aliases()
@@ -522,33 +559,85 @@ async def run_latindex_canary(http_client: httpx.AsyncClient):
         )
 
 
+async def _resolve_alt_issn(issn: str, http_client: httpx.AsyncClient) -> str | None:
+    """Busca o ISSN alternativo (p-ISSN ou ISSN-L) para resolver e-ISSNs da SciELO.
+
+    1. Consulta o índice local de aliases em memória (0ms).
+    2. Fallback: consulta a API pública OpenAlex (filtro por ISSN, < 500ms).
+    """
+    # 1. Índice local
+    if issn in _issn_index and _issn_index[issn] != issn:
+        return _issn_index[issn]
+
+    # 2. OpenAlex API
+    if http_client:
+        try:
+            url = f"https://api.openalex.org/sources?filter=issn:{issn}"
+            resp = await http_client.get(url, timeout=3.5)
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                if results:
+                    source = results[0]
+                    issn_l = normalize_issn(source.get("issn_l"))
+                    all_issns = [normalize_issn(x) for x in source.get("issn", [])]
+                    for candidate in [issn_l] + all_issns:
+                        if candidate and candidate != issn:
+                            with _db_lock:
+                                _issn_index[issn] = candidate
+                            return candidate
+        except Exception as e:
+            logger.debug("Falha ao resolver alt_issn via OpenAlex para %s: %s", issn, e)
+
+    return None
+
+
 async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
-    cached = cache.check_cache_validity(cache.get_scielo_cache(), issn)
+    norm_issn = normalize_issn(issn) or issn
+
+    # 1. Consulta cache em disco
+    cached = cache.check_cache_validity(cache.get_scielo_cache(), norm_issn)
     if cached:
         return cached
 
     cb = cache.circuit_scielo
     if not cb.allow_request():
-        return {"scielo": False, "revenf": False, "title": None, "updated_at": None, "status": "error", "error": "SciELO temporariamente indisponível", "circuit": "open"}
+        return {
+            "scielo": False, "revenf": False, "title": None,
+            "updated_at": None, "status": "error",
+            "error": "SciELO temporariamente indisponível", "circuit": "open"
+        }
 
-    url = f"https://articlemeta.scielo.org/api/v1/journal/?issn={issn}"
     headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.5"}
 
-    try:
-        response = await http_client.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        scielo = len(data) > 0
-        revenf = any(
+    async def _query_scielo_endpoint(query_issn: str) -> tuple[bool, bool, str | None]:
+        url = f"https://articlemeta.scielo.org/api/v1/journal/?issn={query_issn}"
+        resp = await http_client.get(url, headers=headers, timeout=8.0)
+        resp.raise_for_status()
+        data = resp.json()
+        scielo_found = len(data) > 0 if isinstance(data, list) else False
+        revenf_found = any(
             item.get("collection") == "rve"
             for item in (data if isinstance(data, list) else [])
         )
-        title = None
-        if scielo and isinstance(data, list):
+        t = None
+        if scielo_found and isinstance(data, list):
             v100 = data[0].get("v100")
             if v100 and isinstance(v100, list) and len(v100) > 0:
-                title = v100[0].get("_")
+                t = v100[0].get("_")
+        return scielo_found, revenf_found, t
+
+    try:
+        scielo, revenf, title = await _query_scielo_endpoint(norm_issn)
+
+        # Se não encontrou pelo ISSN consultado, pode ser um e-ISSN. Tenta resolver pelo p-ISSN / ISSN-L
+        alt_issn = None
+        if not scielo:
+            alt_issn = await _resolve_alt_issn(norm_issn, http_client)
+            if alt_issn:
+                try:
+                    scielo, revenf, title = await _query_scielo_endpoint(alt_issn)
+                except Exception:
+                    pass
 
         today_str = datetime.now().strftime("%Y-%m-%d")
         result = {
@@ -558,12 +647,18 @@ async def fetch_scielo(issn: str, http_client: httpx.AsyncClient) -> dict:
             "updated_at": today_str,
             "status": "ok",
         }
-        cache.save_scielo_cache({issn: result})
+
+        # Salva em cache para o ISSN consultado
+        cache.save_scielo_cache({norm_issn: result})
+        # Se houve resolução por ISSN alternativo, salva para ele também
+        if alt_issn and scielo:
+            cache.save_scielo_cache({alt_issn: result})
+
         cb.record_success()
         return result
     except Exception as exc:
         cb.record_failure()
-        logger.warning("Falha ao consultar SciELO para %s: %s", issn, exc)
+        logger.warning("Falha ao consultar SciELO para %s: %s", norm_issn, exc)
         return {
             "scielo": False, "revenf": False, "title": None,
             "updated_at": None, "status": "error",

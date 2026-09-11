@@ -399,6 +399,10 @@ def compile_database():
                         journals[issn]["indexers"].append("RIC/CUIDEN")
                     if issn in scopus_nursing_issns:
                         journals[issn]["indexers"].append("SCOPUS")
+                    if issn in revenf_issns:
+                        journals[issn]["indexers"].append("RevEnf")
+                    if issn in bdenf_issns:
+                        journals[issn]["indexers"].append("BDENF")
                 else:
                     # Se já existe, promove para Enfermagem se qualificando pelas regras
                     if is_real_nursing:
@@ -412,6 +416,12 @@ def compile_database():
                     # Atualiza indexador Scopus
                     if issn in scopus_nursing_issns and "SCOPUS" not in journals[issn]["indexers"]:
                         journals[issn]["indexers"].append("SCOPUS")
+                    # Atualiza indexador RevEnf
+                    if issn in revenf_issns and "RevEnf" not in journals[issn]["indexers"]:
+                        journals[issn]["indexers"].append("RevEnf")
+                    # Atualiza indexador BDENF
+                    if issn in bdenf_issns and "BDENF" not in journals[issn]["indexers"]:
+                        journals[issn]["indexers"].append("BDENF")
                     # Atualiza CUIDEN se disponível
                     if issn in cuiden_data:
                         if "RIC/CUIDEN" not in journals[issn]["indexers"]:
