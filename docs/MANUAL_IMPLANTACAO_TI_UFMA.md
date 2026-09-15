@@ -4,9 +4,9 @@
 
 **Destinatário:** Equipe de Tecnologia da Informação — STI / UFMA
 **Projeto:** Qualis CAPES Classifier — Programa de Pós-Graduação em Enfermagem (PPGENF)
-**Versão do Documento:** 2.0.0
-**Data:** Agosto / 2026
-**Repositório:** `https://github.com/matheus2049alves/Qualis-capes`
+**Versão do Documento:** 2.1.0
+**Data:** Setembro / 2026
+**Repositório:** `https://github.com/PPGENF-UFMA/Qualis-capes`
 
 ---
 
@@ -75,7 +75,7 @@ O **Qualis CAPES Classifier** é uma aplicação web que automatiza a classifica
 └──────────────────────────┬─────────────────────────────┘
                            │
 ┌──────────────────────────▼─────────────────────────────┐
-│  Base Local: data/journals.json (~9 MB, ~40k revistas) │
+│  Base Local: data/journals.json (~13,8 MB, 57k revistas) │
 │  Caches:  scielo_cache / lilacs_cache / latindex_cache  │
 │  APIs Externas: Elsevier, SciELO, LILACS, Latindex,    │
 │                 ORCID, CrossRef                         │
@@ -164,7 +164,7 @@ O servidor precisa acessar os seguintes endpoints **de saída** (outbound). Se a
 ```bash
 # Clone o repositório no diretório de aplicações
 cd /var/www
-git clone https://github.com/matheus2049alves/Qualis-capes.git qualis-capes
+git clone https://github.com/PPGENF-UFMA/Qualis-capes.git qualis-capes
 cd qualis-capes
 ```
 
@@ -264,14 +264,15 @@ Se ambos os testes retornarem JSON válido, a instalação está correta. Pressi
 
 ### 4.1 Visão Geral
 
-O sistema utiliza uma base unificada de periódicos em `data/journals.json` (~9 MB, ~40.000 periódicos). Este arquivo é **pré-compilado** e já está incluído no repositório — não é necessário compilar na primeira instalação.
+O sistema utiliza uma base unificada de periódicos em `data/journals.json` (~13,8 MB, 57.731 periódicos cadastrados e 38.631 com Fator de Impacto JCR 2025 da Clarivate Analytics). Este arquivo é **pré-compilado** e já está incluído no repositório — não é necessário compilar na primeira instalação.
 
 **Fontes de dados que alimentam o `journals.json`:**
 
 | Fonte | Arquivo | Descrição |
 |:---|:---|:---|
 | Qualis Sucupira | `data/classificacao.xlsx` | Lista oficial da CAPES com ISSNs e áreas |
-| JCR (Clarivate) | `data/jcr_*.csv` | Fatores de impacto JCR por categoria |
+| JCR Completo (Clarivate) | `data/jcr_all_2025.csv` | Base oficial JCR 2025 completa (22.643 periódicos) |
+| JCR Categorias | `data/jcr_*.csv` | Fatores de impacto JCR por categorias específicas |
 | Scopus (Elsevier) | `data/journals_scopus.xlsx` | Base Scopus com CiteScores |
 | CUIDEN | `data/cuiden_citacion_2022.csv` | Índices CUIDEN da área de Enfermagem |
 | BDENF | `data/bdenf_issns.json` | ISSNs indexados na BDENF |
@@ -340,7 +341,7 @@ Crie o arquivo `/etc/systemd/system/qualis-backend.service`:
 ```ini
 [Unit]
 Description=Qualis CAPES Classifier — Backend FastAPI
-Documentation=https://github.com/matheus2049alves/Qualis-capes
+Documentation=https://github.com/PPGENF-UFMA/Qualis-capes
 After=network.target
 StartLimitIntervalSec=300
 StartLimitBurst=5
@@ -808,18 +809,27 @@ qualis-capes/
 ├── api/                          # Backend Python (FastAPI)
 │   ├── __init__.py               # Marca o diretório como pacote Python
 │   ├── main.py                   # App FastAPI: rotas REST, rate limiting, CORS,
-│   │                             #   serving de arquivos estáticos (index.html, css, js)
+│   │                             #   serving de estáticos (index.html, assets, css, js)
 │   ├── engine.py                 # Motor de regras CAPES (função pura classify_journal)
 │   │                             #   Enfermagem: A1-A8 baseado em JCR/CiteScore/indexadores
 │   │                             #   Outras Áreas: A1-A8 com thresholds diferentes
 │   ├── enricher.py               # Enriquecedor de dados: carrega journals.json,
 │   │                             #   consulta APIs externas (SciELO, LILACS, Latindex,
-│   │                             #   Elsevier), matching inteligente de nomes de periódicos
+│   │                             #   Elsevier, OpenAlex), matching inteligente
 │   ├── cache.py                  # Cache JSON em disco com TTL de 30 dias,
 │   │                             #   Circuit Breakers para APIs externas
 │   ├── models.py                 # Schemas Pydantic para validação de request/response
 │   ├── orcid_client.py           # Cliente da API pública ORCID + resolução CrossRef
 │   └── test_engine.py            # Testes unitários do motor de classificação
+│
+├── assets/                       # Identidade Visual e Chancelas Institucionais
+│   ├── ppgenf_clean.png          # Brasão do Programa de Pós-Graduação em Enfermagem
+│   ├── ufma_clean.png            # Brasão oficial da Universidade Federal do Maranhão
+│   ├── ufma_solo_clean.png       # Brasão UFMA versão compacta
+│   ├── favicon.ico               # Favicon multi-resolução
+│   ├── favicon-32x32.png         # Favicon PNG 32x32
+│   ├── favicon.svg               # Favicon vetorial SVG
+│   └── apple-touch-icon.png      # Ícone para dispositivos móveis Apple
 │
 ├── js/                           # Frontend — Vanilla JS (ES Modules)
 │   ├── app.js                    # Orquestrador: event listeners, inicialização
@@ -838,8 +848,10 @@ qualis-capes/
 │   └── styles.css                # Design system completo (dark/light themes)
 │
 ├── data/                         # Dados e scripts de compilação
-│   ├── journals.json             # ⭐ Base principal (~9 MB, ~40k periódicos)
+│   ├── journals.json             # ⭐ Base principal (~13,8 MB, 57.731 periódicos, 38k JCRs)
+│   ├── jcr_all_2025.csv          # Base completa oficial JCR 2025 (22.643 periódicos)
 │   ├── compile_database.py       # Script de compilação (Excel/CSV → JSON)
+│   ├── fetch_all_jcr.py          # Script de automação para download do JCR
 │   ├── fetch_citescore.py        # Fetch de CiteScore via API Elsevier
 │   ├── fetch_bdenf_revenf.py     # Fetch de ISSNs BDENF/RevEnf
 │   ├── classificacao.xlsx        # Planilha Sucupira oficial
@@ -855,8 +867,9 @@ qualis-capes/
 ├── docs/                         # Documentação técnica
 ├── tests/                        # Testes automatizados
 │
-├── index.html                    # Entry point da aplicação web
-├── logo.svg                      # Logo do sistema
+├── index.html                    # Entry point da aplicação web (marca CPI)
+├── favicon.ico                   # Favicon raiz da aplicação
+├── logo.svg                      # Logo oficial CPI (vetorial)
 ├── server.ps1                    # Script PowerShell para gerenciar o servidor (Windows)
 ├── requirements.txt              # Dependências Python
 ├── .env.example                  # Template de variáveis de ambiente
@@ -1020,7 +1033,7 @@ cd /var/www/qualis-capes
 sudo systemctl stop qualis-backend
 
 # Atualizar código
-git pull origin main
+git pull origin master
 
 # Atualizar dependências Python
 source venv/bin/activate
@@ -1058,6 +1071,70 @@ python data/fetch_citescore.py --apply
 sudo systemctl restart qualis-backend
 ```
 
+### 14.3 Procedimento Específico de Atualização — Versão 2.1.0 (Setembro / 2026)
+
+> [!IMPORTANT]
+> A equipe do STI / UFMA que já possui a versão inicial implantada deve seguir o roteiro abaixo para aplicar os 3 commits de atualização mais recentes (`88be449`, `661d7ed` e `0e687ba`).
+
+#### O que mudou nesta versão:
+1. **Identidade Visual Oficial (CPI):** Transição de marca para **CPI (Classificador de Produção Intelectual)**, inclusão de nova pasta estática `assets/` contendo os brasões oficiais do **PPGENF** e da **UFMA** no cabeçalho e rodapé, além de conjunto completo de favicons.
+2. **Correção de Indexação SciELO e RevEnf:** Resolução dinâmica de e-ISSNs para p-ISSNs via fallback transparente, corrigindo a classificação de periódicos como *REME* (A4) e *Saúde em Debate* (A6).
+3. **Expansão Completa da Base JCR 2025:** Incorporação da base oficial completa da Clarivate Analytics (`data/jcr_all_2025.csv` com 22.643 periódicos), elevando a cobertura de Fatores de Impacto de ~2.000 para **38.631 periódicos com JCR no banco compilado**.
+
+#### Roteiro de Atualização em Produção (Linux / systemd):
+
+```bash
+# 1. Acessar o diretório da aplicação
+cd /var/www/qualis-capes
+
+# 2. Puxar as atualizações da branch master
+git pull origin master
+
+# 3. Atualizar dependências no ambiente virtual (se houver novidades)
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 4. Limpar caches de API anteriores para forçar uso da base enriquecida
+rm -f data/*_cache.json
+
+# 5. Reiniciar o serviço backend
+sudo systemctl restart qualis-backend
+
+# 6. Recarregar o Nginx (caso tenha regra de cache estático)
+sudo systemctl reload nginx
+```
+
+*(Se a infraestrutura da UFMA utilizar contêineres Docker, execute simplesmente: `git pull origin master && docker compose down && docker compose up -d --build`).*
+
+#### Validação Pós-Atualização (Health Check pelo STI):
+
+Execute os comandos de teste abaixo no terminal do servidor:
+
+```bash
+# Teste 1: Verificar se a base expandida foi carregada com sucesso
+curl -s http://127.0.0.1:8080/api/v1/status | python3 -c "import sys, json; d=json.load(sys.stdin); print('Status:', d.get('status'), '| Base:', d.get('database_size'), 'periódicos')"
+# Resposta esperada: Status: ok | Base: 39933 periódicos (57.731 identificadores mapeados)
+
+# Teste 2: Testar se o JCR 2025 de um periódico internacional está ativo
+curl -s http://127.0.0.1:8080/api/v1/classify/0140-6736 | python3 -c "import sys, json; d=json.load(sys.stdin); print('The Lancet JCR:', d.get('jcr'), '| Estrato:', d.get('classification', {}).get('estrato'))"
+# Resposta esperada: The Lancet JCR: 109.0 | Estrato: A1
+
+# Teste 3: Testar a resolução de e-ISSN e indexação RevEnf
+curl -s http://127.0.0.1:8080/api/v1/classify/2316-9389 | python3 -c "import sys, json; d=json.load(sys.stdin); print('REME Estrato:', d.get('classification', {}).get('estrato'), '| Indexadores:', d.get('indexers'))"
+# Resposta esperada: REME Estrato: A4 | Indexadores: ['RIC/CUIDEN', 'RevEnf', 'BDENF', 'LATINDEX']
+
+# Teste 4: No navegador, acerte a URL pública (https://qualis.ppgenf.ufma.br)
+# - Verifique no topo da página o novo logotipo CPI e os brasões da UFMA e PPGENF.
+```
+
+#### Plano de Rollback (Contingência):
+Caso a equipe do STI precise retornar à versão anterior por qualquer motivo imprevisto:
+```bash
+cd /var/www/qualis-capes
+git checkout 76bb52a
+sudo systemctl restart qualis-backend
+```
+
 ---
 
 ## 15. Segurança
@@ -1082,8 +1159,10 @@ sudo systemctl restart qualis-backend
 
 O FastAPI serve **apenas** os seguintes caminhos estáticos:
 
-- `/index.html` — Página principal
-- `/logo.svg` — Logo da aplicação
+- `/index.html` — Página principal da aplicação
+- `/logo.svg` — Logotipo oficial CPI (vetorial)
+- `/favicon.ico` — Favicon principal da aplicação
+- `/assets/*` — Brasões institucionais (UFMA, PPGENF) e favicons em múltiplas resoluções
 - `/css/*` — Folhas de estilo
 - `/js/*` — Scripts JavaScript
 - `/api/*` — Endpoints REST
@@ -1264,7 +1343,7 @@ pytest api/test_engine.py -v
 | Canal | Informação |
 |:---|:---|
 | **Desenvolvimento / Manutenção** | Equipe de Pesquisa PPGENF / UFMA |
-| **Repositório do Código** | https://github.com/matheus2049alves/Qualis-capes |
+| **Repositório do Código** | https://github.com/PPGENF-UFMA/Qualis-capes |
 | **Suporte Institucional** | Programa de Pós-Graduação em Enfermagem (PPGENF / UFMA) |
 
 ---
