@@ -68,7 +68,7 @@ def process_jcr_csv(filepath):
         values = {}
         eissn_map = {}
         titles = {}
-        is_nursing = False
+        nursing_issns = set()
         
         for row in reader:
             if len(row) < max(issn_idx, jif_idx) + 1:
@@ -79,11 +79,12 @@ def process_jcr_csv(filepath):
             raw_jif = row[jif_idx] if len(row) > jif_idx else None
             raw_title = row[title_idx] if title_idx is not None and len(row) > title_idx else None
             
-            # Detectar nursing pelo conteúdo da coluna Category
+            # Detectar nursing pelo conteúdo da coluna Category da própria linha
+            row_is_nursing = False
             if category_idx is not None and len(row) > category_idx:
                 cat = row[category_idx].strip().upper()
                 if 'NURSING' in cat:
-                    is_nursing = True
+                    row_is_nursing = True
             
             jcr_val = parse_float(raw_jif)
             title_val = raw_title.strip() if raw_title else None
@@ -94,6 +95,8 @@ def process_jcr_csv(filepath):
             for target in [issn_norm, eissn_norm]:
                 if target:
                     issns.add(target)
+                    if row_is_nursing:
+                        nursing_issns.add(target)
                     if jcr_val is not None:
                         if target not in values or jcr_val > values[target]:
                             values[target] = jcr_val
@@ -104,7 +107,14 @@ def process_jcr_csv(filepath):
                 eissn_map[issn_norm] = eissn_norm
                 eissn_map[eissn_norm] = issn_norm
         
-        return {'issns': issns, 'values': values, 'is_nursing': is_nursing, 'eissn_map': eissn_map, 'titles': titles}
+        return {
+            'issns': issns,
+            'nursing_issns': nursing_issns,
+            'values': values,
+            'is_nursing': len(nursing_issns) > 0,
+            'eissn_map': eissn_map,
+            'titles': titles
+        }
 
 def process_cuiden_csv(filepath):
     """
@@ -290,11 +300,12 @@ def compile_database():
             global_eissn_map.update(result.get('eissn_map', {}))
             
             # Nursing → conjunto especial para classificação de área
-            if result['is_nursing']:
-                jcr_nursing_issns.update(result['issns'])
-                logger.info(f"    → {issn_count} ISSNs (NURSING) | {val_count} com JIF")
+            nursing_count = len(result.get('nursing_issns', set()))
+            jcr_nursing_issns.update(result.get('nursing_issns', set()))
+            jcr_all_issns.update(result['issns'])
+            if nursing_count > 0:
+                logger.info(f"    → {issn_count} ISSNs ({nursing_count} NURSING) | {val_count} com JIF")
             else:
-                jcr_all_issns.update(result['issns'])
                 logger.info(f"    → {issn_count} ISSNs | {val_count} com JIF")
         except Exception as e:
             logger.error(f"    [ERRO] ao processar {basename}: {e}")
