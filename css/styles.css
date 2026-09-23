@@ -1154,6 +1154,132 @@ body.light-theme .kpi-value {
   color: var(--text-muted);
 }
 
+/* --- TOOLTIP IPP (ícone ⓘ) --- */
+.kpi-info-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.kpi-info-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.kpi-info-trigger:hover .kpi-info-icon,
+.kpi-info-trigger:focus .kpi-info-icon,
+.kpi-info-trigger.active .kpi-info-icon {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.kpi-info-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  width: 310px;
+  padding: 16px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-primary);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s ease;
+}
+
+/* Seta do tooltip */
+.kpi-info-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: var(--panel-border);
+}
+
+.kpi-info-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--panel-bg);
+  z-index: 1;
+}
+
+/* Mostrar no hover, focus, e click (mobile) */
+.kpi-info-trigger:hover .kpi-info-tooltip,
+.kpi-info-trigger:focus .kpi-info-tooltip,
+.kpi-info-trigger.active .kpi-info-tooltip {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Tabela de pesos inline */
+.kpi-info-weights {
+  display: inline-block;
+  background: rgba(122, 21, 56, 0.08);
+  border: 1px solid rgba(122, 21, 56, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-title);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+body.light-theme .kpi-info-weights {
+  background: rgba(122, 21, 56, 0.05);
+  border-color: rgba(122, 21, 56, 0.12);
+}
+
+/* Responsivo: no mobile, posicionar tooltip à esquerda para não sair da tela */
+@media (max-width: 640px) {
+  .kpi-info-tooltip {
+    left: auto;
+    right: -8px;
+    transform: translateX(0) translateY(6px);
+    width: 280px;
+  }
+
+  .kpi-info-trigger:hover .kpi-info-tooltip,
+  .kpi-info-trigger:focus .kpi-info-tooltip,
+  .kpi-info-trigger.active .kpi-info-tooltip {
+    transform: translateX(0) translateY(0);
+  }
+
+  .kpi-info-tooltip::after,
+  .kpi-info-tooltip::before {
+    left: auto;
+    right: 12px;
+    transform: none;
+  }
+}
+
 /* --- GRADE DE ANALITICA (GRAFICOS) --- */
 .analytics-grid {
   display: grid;

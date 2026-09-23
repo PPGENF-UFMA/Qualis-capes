@@ -356,7 +356,28 @@
                 <span class="kpi-sub" id="kpi-qualified-sub">0% do total (A1 + A2)</span>
               </div>
               <div class="kpi-card">
-                <span class="kpi-title">Índice de Perfil de Publicação</span>
+                <span class="kpi-title">
+                  Índice de Perfil de Publicação
+                  <span class="kpi-info-trigger" id="ipp-info-trigger" tabindex="0" role="button" aria-label="Saiba mais sobre o IPP">
+                    <i data-lucide="info" class="kpi-info-icon"></i>
+                    <span class="kpi-info-tooltip" id="ipp-info-tooltip">
+                      <strong>O que é o IPP?</strong><br>
+                      É um indicador interno que resume o perfil de publicação do pesquisador em uma escala de 0 a 100. <strong>Não é uma nota oficial da CAPES.</strong><br><br>
+                      <strong>Como é calculado?</strong><br>
+                      Cada artigo recebe um peso pelo seu estrato Qualis. O IPP é a <strong>média ponderada</strong> desses pesos:<br><br>
+                      <span class="kpi-info-weights">
+                        A1 = 100 · A2 = 85 · A3 = 70 · A4 = 55<br>
+                        A5 = 40 · A6 = 25 · A7 = 10 · A8 = 5 · NC = 0
+                      </span><br><br>
+                      <strong>Faixas de perfil:</strong><br>
+                      ≥ 85 → Impacto muito alto<br>
+                      ≥ 70 → Impacto alto<br>
+                      ≥ 55 → Perfil consistente<br>
+                      ≥ 40 → Em consolidação<br>
+                      &lt; 40 → Perfil emergente
+                    </span>
+                  </span>
+                </span>
                 <span class="kpi-value" id="kpi-avg-score-value">0 / 100</span>
                 <span class="kpi-sub" id="kpi-avg-score-sub">Indicador interno (IPP) · não oficial</span>
               </div>

@@ -382,6 +382,20 @@ function setupEventListeners() {
   if (dom.selectorOrcid) dom.selectorOrcid.addEventListener('click', () => switchInputType('orcid'));
   if (dom.selectorComparison) dom.selectorComparison.addEventListener('click', () => showComparisonModal());
 
+  // Tooltip IPP — toggle no click (suporte mobile)
+  const ippInfoTrigger = document.getElementById('ipp-info-trigger');
+  if (ippInfoTrigger) {
+    ippInfoTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ippInfoTrigger.classList.toggle('active');
+    });
+    document.addEventListener('click', (e) => {
+      if (!ippInfoTrigger.contains(e.target)) {
+        ippInfoTrigger.classList.remove('active');
+      }
+    });
+  }
+
   // Ajuda do Lattes
   if (dom.btnLattesHelp && dom.lattesHelpContent) {
     dom.btnLattesHelp.addEventListener('click', () => {

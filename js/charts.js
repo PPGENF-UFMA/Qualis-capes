@@ -301,13 +301,44 @@ function renderQualisChart(counts) {
 
   Object.entries(counts).forEach(([key, val]) => {
     if (val > 0) {
-      labels.push(`Qualis ${key}`);
+      labels.push(`Qualis ${key} (${val})`);
       data.push(val);
       colors.push(colorMapping[key]);
     }
   });
 
   if (data.length === 0) return;
+
+  const totalPublications = data.reduce((a, b) => a + b, 0);
+
+  // Plugin para exibir o total de publicações no centro do doughnut
+  const centerTextPlugin = {
+    id: 'qualisCenterText',
+    afterDraw(chart) {
+      const { ctx: drawCtx, chartArea } = chart;
+      if (!chartArea) return;
+
+      const centerX = (chartArea.left + chartArea.right) / 2;
+      const centerY = (chartArea.top + chartArea.bottom) / 2;
+      const isDark = isDarkTheme();
+
+      drawCtx.save();
+
+      // Número total
+      drawCtx.font = '700 28px Atkinson Hyperlegible, sans-serif';
+      drawCtx.fillStyle = isDark ? '#f4f1ec' : '#202124';
+      drawCtx.textAlign = 'center';
+      drawCtx.textBaseline = 'middle';
+      drawCtx.fillText(totalPublications, centerX, centerY - 10);
+
+      // Label "publicações"
+      drawCtx.font = '400 12px Atkinson Hyperlegible, sans-serif';
+      drawCtx.fillStyle = isDark ? '#beb7b2' : '#5e5558';
+      drawCtx.fillText(totalPublications === 1 ? 'publicação' : 'publicações', centerX, centerY + 12);
+
+      drawCtx.restore();
+    }
+  };
 
   appState.charts.qualis = new Chart(ctx, {
     type: 'doughnut',
@@ -320,6 +351,7 @@ function renderQualisChart(counts) {
         borderColor: theme.borderColor
       }]
     },
+    plugins: [centerTextPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,
