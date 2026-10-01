@@ -199,7 +199,8 @@ export function generateCSV(classifiedItems, meta = {}) {
     'Indexadores Ativos',
     'CUIDEN (Índice)',
     'Estrato Final (Qualis)',
-    'Justificativa da Regra'
+    'Justificativa da Regra',
+    'Link de Validação Principal'
   ];
 
   rows.push(headers.map(escapeCSV).join(delimiter));
@@ -207,7 +208,35 @@ export function generateCSV(classifiedItems, meta = {}) {
   for (const item of classifiedItems) {
     const indexersStr = Array.isArray(item.indexers) ? item.indexers.join(', ') : '';
     const cuidenVal = (item.metrics && item.metrics.cuiden) ? item.metrics.cuiden : '';
+    const justUpper = (item.classification?.justification || '').toUpperCase();
+    const safeIssn = encodeURIComponent(item.issn || '');
     
+    let validationLink = '';
+    if (item.issn) {
+      if (justUpper.includes('JCR')) {
+        validationLink = `https://mjl.clarivate.com/search-results?issn=${safeIssn}`;
+      } else if (justUpper.includes('CITESCORE') || justUpper.includes('SCOPUS')) {
+        validationLink = `https://www.scopus.com/sources.uri?sortField=citeScore&sortDirection=desc&searchTerms=${safeIssn}&searchType=issn`;
+      } else if (justUpper.includes('SCIELO')) {
+        const cleanTitle = (item.title || '')
+          .replace(/\s*\((?:online|impresso|print|eletr[ôo]nico)\)\s*/gi, '')
+          .replace(/\s*-\s*(?:online|impresso|print|eletr[ôo]nico)\s*/gi, '')
+          .trim();
+        const scieloQuery = cleanTitle ? `(ta:("${cleanTitle}"))` : safeIssn;
+        validationLink = `https://search.scielo.org/?q=${encodeURIComponent(scieloQuery)}&lang=pt`;
+      } else if (justUpper.includes('MEDLINE')) {
+        validationLink = `https://www.ncbi.nlm.nih.gov/nlmcatalog/?term=${safeIssn}`;
+      } else if (justUpper.includes('LILACS') || justUpper.includes('BDENF')) {
+        validationLink = `https://portal.revistas.bvs.br/pt/journals/?q=${safeIssn}`;
+      } else if (justUpper.includes('REVENF')) {
+        validationLink = `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${safeIssn}&lng=pt&nrm=iso`;
+      } else if (justUpper.includes('LATINDEX')) {
+        validationLink = `https://latindex.org/latindex/bAvanzada/resultado?idMod=0&send=Buscar&issn=${safeIssn}`;
+      } else if (justUpper.includes('CUIDEN')) {
+        validationLink = 'http://www.index-f.com/cuiden/';
+      }
+    }
+
     const row = [
       item.title,
       item.issn,
@@ -218,7 +247,8 @@ export function generateCSV(classifiedItems, meta = {}) {
       indexersStr,
       cuidenVal !== '' ? cuidenVal.toString().replace('.', ',') : '',
       item.classification.estrato,
-      item.classification.justification
+      item.classification.justification,
+      validationLink
     ];
 
     rows.push(row.map(escapeCSV).join(delimiter));

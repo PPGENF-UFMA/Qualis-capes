@@ -39,6 +39,118 @@ function formatRelevanceTooltip(item) {
   return `Relevância: ${parts.join(' · ')}`;
 }
 
+/**
+ * Retorna as informações de validação oficial para um indexador específico.
+ * @param {string} rawIndexer Nome do indexador (ex: 'SCIELO', 'MEDLINE', etc.)
+ * @param {string} issn ISSN do periódico (XXXX-XXXX)
+ * @param {object} item Objeto completo do periódico
+ * @returns {{ url: string|null, tooltip: string, label: string }}
+ */
+function getIndexerValidationInfo(rawIndexer, issn, item) {
+  const upper = (rawIndexer || '').toUpperCase().trim();
+  const safeIssn = encodeURIComponent(issn || '');
+  const hasValidIssn = Boolean(issn && /^\d{4}-\d{3}[\dX]$/i.test(issn.trim()));
+
+  if (upper === 'SCIELO') {
+    const cleanTitle = (item?.title || '')
+      .replace(/\s*\((?:online|impresso|print|eletr[ôo]nico)\)\s*/gi, '')
+      .replace(/\s*-\s*(?:online|impresso|print|eletr[ôo]nico)\s*/gi, '')
+      .trim();
+    const dateStr = item?.scieloUpdatedAt ? ` (verificado em ${formatDate(item.scieloUpdatedAt)})` : '';
+    
+    // O motor de busca do SciELO (search.scielo.org) indexa revistas pelo campo ta:(TÍTULO)
+    const queryStr = cleanTitle ? `(ta:("${cleanTitle}"))` : (hasValidIssn ? issn : '');
+    const url = queryStr
+      ? `https://search.scielo.org/?q=${encodeURIComponent(queryStr)}&lang=pt`
+      : 'https://search.scielo.org/';
+
+    return {
+      url,
+      tooltip: `Indexado no SciELO${dateStr}. Clique para validar acervo na base oficial SciELO ↗`,
+      label: 'SciELO'
+    };
+  }
+
+  if (upper === 'MEDLINE') {
+    return {
+      url: hasValidIssn ? `https://www.ncbi.nlm.nih.gov/nlmcatalog/?term=${safeIssn}` : 'https://www.ncbi.nlm.nih.gov/nlmcatalog/',
+      tooltip: 'Indexado no MEDLINE. Clique para validar no NLM Catalog (PubMed) ↗',
+      label: 'MEDLINE'
+    };
+  }
+
+  if (upper === 'LILACS') {
+    const dateStr = item?.lilacsUpdatedAt ? ` (verificado em ${formatDate(item.lilacsUpdatedAt)})` : '';
+    return {
+      url: hasValidIssn ? `https://portal.revistas.bvs.br/pt/journals/?q=${safeIssn}` : 'https://portal.revistas.bvs.br/pt/journals/',
+      tooltip: `Indexado no LILACS${dateStr}. Clique para validar no Portal de Revistas da BVS ↗`,
+      label: 'LILACS'
+    };
+  }
+
+  if (upper === 'BDENF') {
+    const dateStr = item?.lilacsUpdatedAt ? ` (verificado em ${formatDate(item.lilacsUpdatedAt)})` : '';
+    return {
+      url: hasValidIssn ? `https://portal.revistas.bvs.br/pt/journals/?q=${safeIssn}` : 'https://portal.revistas.bvs.br/pt/journals/',
+      tooltip: `Indexado na BDENF (Base de Dados em Enfermagem${dateStr}). Clique para validar no Portal de Revistas da BVS ↗`,
+      label: 'BDENF'
+    };
+  }
+
+  if (upper === 'REVENF') {
+    return {
+      url: hasValidIssn
+        ? `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${safeIssn}&lng=pt&nrm=iso`
+        : 'https://www.revenf.bvs.br/scielo.php?script=sci_alphabetic&lng=pt&nrm=iso',
+      tooltip: 'Indexado no Portal de Revistas de Enfermagem (Rev@Enf / SciELO). Clique para validar na coleção oficial ↗',
+      label: 'RevEnf'
+    };
+  }
+
+  if (upper === 'SCOPUS') {
+    return {
+      url: hasValidIssn
+        ? `https://www.scopus.com/sources.uri?sortField=citeScore&sortDirection=desc&searchTerms=${safeIssn}&searchType=issn`
+        : 'https://www.scopus.com/sources.uri',
+      tooltip: 'Indexado no Scopus. Clique para validar fontes e métricas no Scopus Preview (Elsevier) ↗',
+      label: 'Scopus'
+    };
+  }
+
+  if (upper === 'LATINDEX') {
+    const dateStr = item?.latindexUpdatedAt ? ` (verificado em ${formatDate(item.latindexUpdatedAt)})` : '';
+    return {
+      url: hasValidIssn
+        ? `https://latindex.org/latindex/bAvanzada/resultado?idMod=0&send=Buscar&issn=${safeIssn}`
+        : 'https://latindex.org/',
+      tooltip: `Indexado no Latindex (Catálogo 2.0 / Diretório${dateStr}). Clique para validar no Latindex ↗`,
+      label: 'Latindex'
+    };
+  }
+
+  if (upper === 'CUIDEN' || upper === 'RIC/CUIDEN') {
+    return {
+      url: 'http://www.index-f.com/cuiden/',
+      tooltip: 'Indexado no RIC/CUIDEN (Fundación Index). Clique para consultar na base CUIDEN ↗',
+      label: rawIndexer
+    };
+  }
+
+  if (upper === 'CINAHL') {
+    return {
+      url: 'https://www.ebsco.com/products/research-databases/cinahl-database',
+      tooltip: 'Indexado no CINAHL (EBSCO). Clique para consultar informações da base ↗',
+      label: 'CINAHL'
+    };
+  }
+
+  return {
+    url: null,
+    tooltip: `Indexador: ${rawIndexer}`,
+    label: rawIndexer
+  };
+}
+
 function formatClassificationTooltip(item, displayStatus) {
   const messages = [item.classification?.justification || 'Critério não informado.'];
   if (isTechnicalError(item)) {
@@ -113,22 +225,18 @@ export function renderResultsTable() {
     const indexersTags = (item.indexers || []).map(idx => {
       const safeIdx = escapeHTML(idx);
       const lowerIdx = idx.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-      const upperIdx = idx.toUpperCase();
+      const info = getIndexerValidationInfo(idx, item.issn, item);
       
-      let tooltipAttr = '';
-      if (upperIdx === 'SCIELO' && item.scieloUpdatedAt) {
-        tooltipAttr = ` data-tooltip="Dado obtido de SciELO em ${escapeHTML(formatDate(item.scieloUpdatedAt))}"`;
-      } else if (upperIdx === 'LILACS' && item.lilacsUpdatedAt) {
-        tooltipAttr = ` data-tooltip="Dado obtido de LILACS em ${escapeHTML(formatDate(item.lilacsUpdatedAt))}"`;
-      } else if (upperIdx === 'BDENF' && item.lilacsUpdatedAt) {
-        tooltipAttr = ` data-tooltip="Dado obtido de BDENF em ${escapeHTML(formatDate(item.lilacsUpdatedAt))}"`;
-      } else if (upperIdx === 'LATINDEX' && item.latindexUpdatedAt) {
-        tooltipAttr = ` data-tooltip="Dado obtido de Latindex em ${escapeHTML(formatDate(item.latindexUpdatedAt))}"`;
+      if (info.url) {
+        return `<a href="${escapeHTML(info.url)}" target="_blank" rel="noopener noreferrer" class="indexer-tag ${lowerIdx} indexer-link" data-tooltip="${escapeHTML(info.tooltip)}" aria-label="${escapeHTML(info.label)} - validação externa">${safeIdx} <i data-lucide="external-link" class="indexer-icon" aria-hidden="true"></i></a>`;
       }
-      
-      return `<span class="indexer-tag ${lowerIdx}"${tooltipAttr}>${safeIdx}</span>`;
+      return `<span class="indexer-tag ${lowerIdx}" data-tooltip="${escapeHTML(info.tooltip)}">${safeIdx}</span>`;
     }).join('');
+
     const cuidenVal = (item.metrics && typeof item.metrics.cuiden === 'number') ? item.metrics.cuiden : null;
+    const cuidenTag = cuidenVal !== null
+      ? `<br><a href="http://www.index-f.com/cuiden/" target="_blank" rel="noopener noreferrer" class="indexer-tag cuiden indexer-link" data-tooltip="Índice CUIDEN = ${cuidenVal.toFixed(2)}. Clique para validar na base oficial (Fundación Index) ↗" aria-label="CUIDEN: ${cuidenVal.toFixed(2)} - validação externa">CUIDEN: ${cuidenVal.toFixed(2)} <i data-lucide="external-link" class="indexer-icon" aria-hidden="true"></i></a>`
+      : '';
 
     // Área como badge inline no título (antes era coluna separada)
     const areaBadge = `<span class="area-badge ${safeArea === 'Enfermagem' ? 'enfermagem' : 'outras'}">${safeArea}</span>`;
@@ -153,6 +261,27 @@ export function renderResultsTable() {
     const classificationTooltip = escapeHTML(formatClassificationTooltip(item, displayStatus));
     const jcrValue = typeof item.jcr === 'number' ? item.jcr.toFixed(2) : null;
     const citeScoreValue = typeof item.citeScore === 'number' ? item.citeScore.toFixed(2) : null;
+    const hasValidIssn = Boolean(item.issn && /^\d{4}-\d{3}[\dX]$/i.test(item.issn.trim()));
+
+    const jcrCell = jcrValue !== null
+      ? (hasValidIssn
+          ? `<a href="https://mjl.clarivate.com/search-results?issn=${encodeURIComponent(item.issn)}" target="_blank" rel="noopener noreferrer" class="metric-link" data-tooltip="Fator de Impacto JCR = ${jcrValue}. Clique para validar na Clarivate Master Journal List (Web of Science) ↗" aria-label="JCR ${jcrValue} - validar na Master Journal List">${jcrValue} <i data-lucide="external-link" class="metric-icon" aria-hidden="true"></i></a>`
+          : `<span class="metric-value">${jcrValue}</span>`)
+      : `
+        <span class="metric-missing" data-tooltip="Métrica JCR não disponível para este periódico na base de dados.">
+          - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
+        </span>
+      `;
+
+    const citeScoreCell = citeScoreValue !== null
+      ? (hasValidIssn
+          ? `<a href="https://www.scopus.com/sources.uri?sortField=citeScore&sortDirection=desc&searchTerms=${encodeURIComponent(item.issn)}&searchType=issn" target="_blank" rel="noopener noreferrer" class="metric-link" data-tooltip="CiteScore = ${citeScoreValue}. Clique para validar no Scopus Preview (Elsevier) ↗" aria-label="CiteScore ${citeScoreValue} - validar no Scopus">${citeScoreValue} <i data-lucide="external-link" class="metric-icon" aria-hidden="true"></i></a>`
+          : `<span class="metric-value">${citeScoreValue}</span>`)
+      : `
+        <span class="metric-missing" data-tooltip="Métrica CiteScore não disponível para este periódico na base de dados.">
+          - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
+        </span>
+      `;
 
     row.innerHTML = `
       <td>
@@ -167,16 +296,8 @@ export function renderResultsTable() {
         </div>
       </td>
       <td class="issn-cell">${safeIssn}</td>
-      <td>${jcrValue !== null ? jcrValue : `
-        <span class="metric-missing" data-tooltip="Métrica JCR não disponível para este periódico na base de dados.">
-          - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
-        </span>
-      `}</td>
-      <td>${citeScoreValue !== null ? citeScoreValue : `
-        <span class="metric-missing" data-tooltip="Métrica CiteScore não disponível para este periódico na base de dados.">
-          - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
-        </span>
-      `}</td>
+      <td>${jcrCell}</td>
+      <td>${citeScoreCell}</td>
       <td>
         <div class="indexers-cell">
           ${indexersTags || `
@@ -184,7 +305,7 @@ export function renderResultsTable() {
               - <i data-lucide="help-circle" class="help-icon" style="width: 12px; height: 12px;"></i>
             </span>
           `}
-          ${cuidenVal !== null ? `<br><span class="indexer-tag cuiden">CUIDEN: ${cuidenVal.toFixed(2)}</span>` : ''}
+          ${cuidenTag}
         </div>
       </td>
       <td>
