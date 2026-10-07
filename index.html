@@ -544,6 +544,7 @@
                 <label for="sort-by" class="sr-only">Ordenar resultados</label>
                 <select id="sort-by" class="select-filter" aria-label="Ordenar resultados">
                   <option value="relevance" selected>Maior relevância</option>
+                  <option value="year">Ano (mais recente)</option>
                   <option value="recent">Ordem de entrada</option>
                   <option value="estrato">Estrato (A1 → NC)</option>
                   <option value="jcr">JCR (maior)</option>
@@ -558,10 +559,11 @@
                   <thead>
                     <tr>
                       <th scope="col">Título / Revista</th>
+                      <th scope="col" style="text-align: center;">Ano</th>
                       <th scope="col">ISSN</th>
                       <th scope="col">JCR</th>
                       <th scope="col">CiteScore</th>
-                      <th scope="col">Indexadores Ativos <span class="th-hint" data-tooltip="Clique nos indexadores ou métricas para abrir a comprovação oficial na base">(clique para validar)</span></th>
+                      <th scope="col">Indexadores Ativos</th>
                       <th scope="col">Estrato CAPES</th>
                     </tr>
                   </thead>

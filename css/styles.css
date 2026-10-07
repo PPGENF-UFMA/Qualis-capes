@@ -2348,13 +2348,19 @@ body.light-theme .indexer-tag.indexer-link:hover {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-primary);
   text-decoration: none;
   padding: 2px 6px;
   border-radius: 6px;
   border: 1px solid transparent;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.metric-value {
+  font-weight: 400;
+  color: var(--text-primary);
+  padding: 2px 6px;
 }
 
 .metric-link:hover {
@@ -3153,6 +3159,12 @@ body.light-theme .shimmer-effect {
 
 .skeleton-bar.title {
   width: 90%;
+}
+
+.skeleton-bar.year {
+  width: 44px;
+  height: 20px;
+  border-radius: 6px;
 }
 
 .skeleton-bar.issn {
@@ -5177,6 +5189,32 @@ body.light-theme .footer-logo-cpi {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.year-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.year-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+body.light-theme .year-badge {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
 }
 
 .issn-cell {

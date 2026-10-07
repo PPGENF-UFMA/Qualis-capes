@@ -6,7 +6,7 @@
 import dom from './dom.js';
 import appState from './state.js';
 import { getFilteredItems, isTechnicalError, isProvisionalResult } from './state.js';
-import { escapeHTML } from './utils.js';
+import { escapeHTML, getJournalTitle, cleanJournalTitle, getRevenfPid } from './utils.js';
 import { updateAnalytics } from './charts.js';
 
 let lattesCandidatesModal = null;
@@ -52,17 +52,16 @@ function getIndexerValidationInfo(rawIndexer, issn, item) {
   const hasValidIssn = Boolean(issn && /^\d{4}-\d{3}[\dX]$/i.test(issn.trim()));
 
   if (upper === 'SCIELO') {
-    const cleanTitle = (item?.title || '')
-      .replace(/\s*\((?:online|impresso|print|eletr[ôo]nico)\)\s*/gi, '')
-      .replace(/\s*-\s*(?:online|impresso|print|eletr[ôo]nico)\s*/gi, '')
-      .trim();
+    const journalTitle = getJournalTitle(item);
     const dateStr = item?.scieloUpdatedAt ? ` (verificado em ${formatDate(item.scieloUpdatedAt)})` : '';
     
     // O motor de busca do SciELO (search.scielo.org) indexa revistas pelo campo ta:(TÍTULO)
-    const queryStr = cleanTitle ? `(ta:("${cleanTitle}"))` : (hasValidIssn ? issn : '');
+    const queryStr = journalTitle ? `(ta:("${cleanJournalTitle(journalTitle)}"))` : (hasValidIssn ? issn : '');
     const url = queryStr
       ? `https://search.scielo.org/?q=${encodeURIComponent(queryStr)}&lang=pt`
-      : 'https://search.scielo.org/';
+      : (hasValidIssn
+        ? `https://www.scielo.br/scielo.php?script=sci_serial&pid=${safeIssn}&lng=pt&nrm=iso`
+        : 'https://search.scielo.org/');
 
     return {
       url,
@@ -98,9 +97,11 @@ function getIndexerValidationInfo(rawIndexer, issn, item) {
   }
 
   if (upper === 'REVENF') {
+    const pid = getRevenfPid(issn);
+    const hasValidPid = Boolean(pid && /^\d{4}-\d{3}[\dX]$/i.test(pid.trim()));
     return {
-      url: hasValidIssn
-        ? `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${safeIssn}&lng=pt&nrm=iso`
+      url: hasValidPid
+        ? `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${encodeURIComponent(pid)}&lng=pt&nrm=iso`
         : 'https://www.revenf.bvs.br/scielo.php?script=sci_alphabetic&lng=pt&nrm=iso',
       tooltip: 'Indexado no Portal de Revistas de Enfermagem (Rev@Enf / SciELO). Clique para validar na coleção oficial ↗',
       label: 'RevEnf'
@@ -130,8 +131,8 @@ function getIndexerValidationInfo(rawIndexer, issn, item) {
 
   if (upper === 'CUIDEN' || upper === 'RIC/CUIDEN') {
     return {
-      url: 'http://www.index-f.com/cuiden/',
-      tooltip: 'Indexado no RIC/CUIDEN (Fundación Index). Clique para consultar na base CUIDEN ↗',
+      url: 'https://fundacionindex.com/?page_id=1190',
+      tooltip: 'Indexado no RIC/CUIDEN (Fundación Index). Clique para validar no último ranking publicado ↗',
       label: rawIndexer
     };
   }
@@ -195,7 +196,7 @@ export function renderResultsTable() {
   if (filtered.length === 0) {
     dom.resultsTableBody.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">
+        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">
           Nenhum artigo correspondente aos filtros aplicados.
         </td>
       </tr>
@@ -235,7 +236,7 @@ export function renderResultsTable() {
 
     const cuidenVal = (item.metrics && typeof item.metrics.cuiden === 'number') ? item.metrics.cuiden : null;
     const cuidenTag = cuidenVal !== null
-      ? `<br><a href="http://www.index-f.com/cuiden/" target="_blank" rel="noopener noreferrer" class="indexer-tag cuiden indexer-link" data-tooltip="Índice CUIDEN = ${cuidenVal.toFixed(2)}. Clique para validar na base oficial (Fundación Index) ↗" aria-label="CUIDEN: ${cuidenVal.toFixed(2)} - validação externa">CUIDEN: ${cuidenVal.toFixed(2)} <i data-lucide="external-link" class="indexer-icon" aria-hidden="true"></i></a>`
+      ? `<br><a href="https://fundacionindex.com/?page_id=1190" target="_blank" rel="noopener noreferrer" class="indexer-tag cuiden indexer-link" data-tooltip="Índice CUIDEN = ${cuidenVal.toFixed(2)}. Clique para validar no último ranking publicado (Fundación Index) ↗" aria-label="CUIDEN: ${cuidenVal.toFixed(2)} - validação externa">CUIDEN: ${cuidenVal.toFixed(2)} <i data-lucide="external-link" class="indexer-icon" aria-hidden="true"></i></a>`
       : '';
 
     // Área como badge inline no título (antes era coluna separada)
@@ -283,6 +284,11 @@ export function renderResultsTable() {
         </span>
       `;
 
+    const safeYear = item.year ? escapeHTML(String(item.year)) : null;
+    const yearCell = safeYear
+      ? `<span class="year-badge" title="Ano de publicação: ${safeYear}">${safeYear}</span>`
+      : `<span class="metric-missing" data-tooltip="Ano de publicação não informado">-</span>`;
+
     row.innerHTML = `
       <td>
         <div class="table-title-cell" title="${safeTitle}">
@@ -295,6 +301,7 @@ export function renderResultsTable() {
           </div>
         </div>
       </td>
+      <td class="year-cell">${yearCell}</td>
       <td class="issn-cell">${safeIssn}</td>
       <td>${jcrCell}</td>
       <td>${citeScoreCell}</td>
@@ -435,6 +442,7 @@ export function showTableSkeletons(rowCount = 3) {
           <div class="skeleton-bar shimmer-effect" style="width: 80px; height: 14px;"></div>
         </div>
       </td>
+      <td><div class="skeleton-bar year shimmer-effect"></div></td>
       <td><div class="skeleton-bar issn shimmer-effect"></div></td>
       <td><div class="skeleton-bar metric shimmer-effect"></div></td>
       <td><div class="skeleton-bar metric shimmer-effect"></div></td>

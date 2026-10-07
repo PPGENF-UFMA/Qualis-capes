@@ -785,6 +785,9 @@ function applyArticleMetadata(classified, article) {
     classified.lattesJournalRaw = article.journalRaw;
   }
 
+  classified.journalTitle = (classified.title !== 'Periódico Não Identificado na Base' ? classified.title : '') || article.journal || '';
+  classified.articleTitle = article.title || '';
+
   if (article.title && classified.title === 'Periódico Não Identificado na Base') {
     classified.title = `[Não Identificado] ${article.journal}`;
   } else if (article.title && classified.title) {
@@ -942,10 +945,17 @@ async function handleUploadedFile(file) {
     const record = records[i];
     const classified = classifiedRecords[i] || createTechnicalErrorResult(record.issn, 'Resposta ausente no lote.');
 
+    classified.journalTitle = (classified.title !== 'Periódico Não Identificado na Base' ? classified.title : '') || record.journal || '';
+    classified.articleTitle = record.title || '';
+
     if (record.title && record.title !== 'Artigo Importado' && classified.title === 'Periódico Não Identificado na Base') {
       classified.title = record.title;
     } else if (record.title && record.title !== 'Artigo Importado' && classified.title) {
       classified.title = `${record.title} (${classified.title})`;
+    }
+
+    if (record.year) {
+      classified.year = record.year;
     }
 
     addClassifiedItem(classified);

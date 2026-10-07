@@ -273,6 +273,8 @@ def _unclassified_work(work: dict, reason: str) -> dict:
     return {
         "issn": "N/A",
         "title": f"[Nao Identificado] {title} ({journal})",
+        "journalTitle": journal,
+        "articleTitle": title,
         "area": "Outras Areas",
         "jcr": None,
         "citeScore": None,
@@ -338,6 +340,8 @@ async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unc
     classified = await enricher.enrich_and_classify(issn, http_client)
     journal_label = journal or classified.get("title") or "Periodico identificado"
     article_title = title or "Artigo ORCID sem titulo"
+    classified["journalTitle"] = classified.get("title") or journal_label
+    classified["articleTitle"] = article_title
     if article_title and classified.get("title"):
         classified["title"] = f"{article_title} ({journal_label})"
     classified["year"] = year

@@ -61,6 +61,13 @@ export function sortItems(items, sortVal = 'recent') {
     case 'relevance':
       sorted.sort((a, b) => computeRelevanceScore(b) - computeRelevanceScore(a));
       break;
+    case 'year':
+      sorted.sort((a, b) => {
+        const yearA = parseInt(a.year, 10) || 0;
+        const yearB = parseInt(b.year, 10) || 0;
+        return yearB !== yearA ? yearB - yearA : computeRelevanceScore(b) - computeRelevanceScore(a);
+      });
+      break;
     case 'estrato':
       sorted.sort((a, b) => {
         const diff = (ESTRATO_WEIGHTS[b.classification?.estrato] ?? 0)

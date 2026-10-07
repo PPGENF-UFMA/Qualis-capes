@@ -59,3 +59,12 @@ def test_crossref_date_parts_year_prefers_publication_dates():
     }
 
     assert orcid_client._date_parts_year(message) == 2023
+
+
+def test_unclassified_work_includes_journal_and_article_title():
+    work = {"title": "Artigo Sobre Ansiedade", "journal": "Revista de Psicologia"}
+    result = orcid_client._unclassified_work(work, "Teste sem classificacao")
+
+    assert result["journalTitle"] == "Revista de Psicologia"
+    assert result["articleTitle"] == "Artigo Sobre Ansiedade"
+    assert "[Nao Identificado]" in result["title"]

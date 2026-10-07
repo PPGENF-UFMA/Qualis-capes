@@ -129,6 +129,15 @@ export function processCSVData(parsedCSV) {
     titleIndex = -1; // Evita usar a mesma coluna do ISSN
   }
 
+  // Tenta encontrar o índice da coluna de ano
+  let yearIndex = headers.findIndex(h => /^(ano|ano\s+de\s+publica[cç][aã]o|year|data|ano_pub)$/i.test(h));
+  if (yearIndex === -1) {
+    yearIndex = headers.findIndex(h => h.includes('ano') || h.includes('year'));
+  }
+  if (yearIndex === issnIndex || yearIndex === titleIndex) {
+    yearIndex = -1;
+  }
+
   const records = [];
   
   const firstDataRow = hasHeader ? 1 : 0;
@@ -147,15 +156,115 @@ export function processCSVData(parsedCSV) {
       rowTitle = row[titleIndex];
     }
 
+    let rowYear = null;
+    if (yearIndex !== -1 && row.length > yearIndex) {
+      const parsedYear = parseInt(String(row[yearIndex] || '').trim(), 10);
+      if (Number.isInteger(parsedYear) && parsedYear >= 1900 && parsedYear <= 2100) {
+        rowYear = parsedYear;
+      }
+    }
+
     records.push({
       issn: cleanIssn || rawIssn,
       inputIssn: rawIssn,
       title: rowTitle || 'Artigo Importado',
+      year: rowYear,
       originalRow: row
     });
   }
 
   return records;
+}
+
+/**
+ * Remove anotações de formato (ex: "(Online)", "- Impresso"), institucionais da CAPES
+ * e caracteres que quebram queries de busca.
+ * @param {string} title Título a ser higienizado
+ * @returns {string} Título limpo
+ */
+export function cleanJournalTitle(title) {
+  if (!title || typeof title !== 'string') return '';
+  let cleaned = title.trim();
+  // Remove anotações entre parênteses no final do nome da revista (ex: "(USP. IMPRESSO)", "(Online)", "(UFRR)")
+  cleaned = cleaned.replace(/\s*\([^()]*\)\s*$/g, '').trim();
+  cleaned = cleaned
+    .replace(/\s*-\s*(?:online|impresso|print|eletr[ôo]nico)\s*/gi, '')
+    .replace(/["\\]/g, '')
+    .trim();
+  return cleaned || title.trim();
+}
+
+/**
+ * Extrai o nome limpo do periódico de um item classificado.
+ * Trata casos de importação (ORCID, Lattes, Planilha) onde item.title contém
+ * "Título do Artigo (Nome do Periódico)".
+ * @param {object} item Objeto do periódico/artigo
+ * @returns {string} Nome limpo do periódico
+ */
+export function getJournalTitle(item) {
+  if (!item) return '';
+  if (typeof item.journalTitle === 'string' && item.journalTitle.trim()) {
+    return cleanJournalTitle(item.journalTitle);
+  }
+  if (typeof item.journal === 'string' && item.journal.trim()) {
+    return cleanJournalTitle(item.journal);
+  }
+  if (typeof item.lattesJournalRaw === 'string' && item.lattesJournalRaw.trim()) {
+    return cleanJournalTitle(item.lattesJournalRaw);
+  }
+
+  const rawTitle = (item.title || '').trim();
+  if (!rawTitle) return '';
+  if (/^\[Não Identificado\]\s*/i.test(rawTitle)) {
+    return cleanJournalTitle(rawTitle.replace(/^\[Não Identificado\]\s*/i, ''));
+  }
+
+  const lastParenMatch = rawTitle.match(/\(([^()]+)\)\s*$/);
+  if (lastParenMatch) {
+    const candidate = lastParenMatch[1].trim();
+    // Se o parêntese contiver indicação de formato/impressão (ex: "ENSP. IMPRESSO", "USP. IMPRESSO", "Online")
+    if (/(?:online|impresso|print|eletr[ôo]nico|interativo)/i.test(candidate)) {
+      const beforeLast = rawTitle.slice(0, lastParenMatch.index).trim();
+      const prevMatch = beforeLast.match(/\(([^()]+)\)\s*$/);
+      if (prevMatch && !/(?:online|impresso|print|eletr[ôo]nico|interativo)/i.test(prevMatch[1].trim())) {
+        return cleanJournalTitle(prevMatch[1]);
+      }
+      return cleanJournalTitle(beforeLast);
+    }
+    return cleanJournalTitle(candidate);
+  }
+
+  return cleanJournalTitle(rawTitle);
+}
+
+/**
+ * Mapa de e-ISSNs para o PID canônico oficial do portal Rev@Enf (BVS / SciELO).
+ * O portal Rev@Enf retorna 404 quando consultado com e-ISSNs no parâmetro pid=.
+ */
+export const REVENF_PID_MAP = {
+  '1984-0446': '0034-7167', // REBEn
+  '1980-265X': '0104-0707', // Texto & Contexto
+  '1518-8345': '0104-1169', // RLAE
+  '1982-0194': '0103-2100', // Acta Paulista
+  '2176-9133': '1414-8536', // Cogitare
+  '2316-9389': '1415-2762', // Reme
+  '1980-220X': '0080-6234', // REEUSP
+  '0102-6933': '1983-1447', // Gaúcha
+  '2177-9465': '1414-8145', // Anna Nery
+  '2175-6783': '1517-3852', // Rev Rene
+  '0102-5430': '2178-8650', // Baiana
+  '2346-3414': '2216-0973'  // Cuidarte
+};
+
+/**
+ * Retorna o PID canônico do Rev@Enf a partir do ISSN informado (p-ISSN ou e-ISSN).
+ * @param {string} issn ISSN do periódico
+ * @returns {string} PID canônico compatível com o portal Rev@Enf
+ */
+export function getRevenfPid(issn) {
+  if (!issn || typeof issn !== 'string') return '';
+  const clean = issn.trim().toUpperCase();
+  return REVENF_PID_MAP[clean] || clean;
 }
 
 /**
@@ -191,6 +300,7 @@ export function generateCSV(classifiedItems, meta = {}) {
 
   const headers = [
     'Título do Artigo',
+    'Ano',
     'ISSN',
     'Status da Consulta',
     'Área CAPES',
@@ -218,27 +328,28 @@ export function generateCSV(classifiedItems, meta = {}) {
       } else if (justUpper.includes('CITESCORE') || justUpper.includes('SCOPUS')) {
         validationLink = `https://www.scopus.com/sources.uri?sortField=citeScore&sortDirection=desc&searchTerms=${safeIssn}&searchType=issn`;
       } else if (justUpper.includes('SCIELO')) {
-        const cleanTitle = (item.title || '')
-          .replace(/\s*\((?:online|impresso|print|eletr[ôo]nico)\)\s*/gi, '')
-          .replace(/\s*-\s*(?:online|impresso|print|eletr[ôo]nico)\s*/gi, '')
-          .trim();
-        const scieloQuery = cleanTitle ? `(ta:("${cleanTitle}"))` : safeIssn;
+        const journalTitle = getJournalTitle(item);
+        const scieloQuery = journalTitle ? `(ta:("${cleanJournalTitle(journalTitle)}"))` : safeIssn;
         validationLink = `https://search.scielo.org/?q=${encodeURIComponent(scieloQuery)}&lang=pt`;
       } else if (justUpper.includes('MEDLINE')) {
         validationLink = `https://www.ncbi.nlm.nih.gov/nlmcatalog/?term=${safeIssn}`;
       } else if (justUpper.includes('LILACS') || justUpper.includes('BDENF')) {
         validationLink = `https://portal.revistas.bvs.br/pt/journals/?q=${safeIssn}`;
       } else if (justUpper.includes('REVENF')) {
-        validationLink = `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${safeIssn}&lng=pt&nrm=iso`;
+        const pid = getRevenfPid(item.issn);
+        validationLink = pid
+          ? `https://www.revenf.bvs.br/scielo.php?script=sci_serial&pid=${encodeURIComponent(pid)}&lng=pt&nrm=iso`
+          : 'https://www.revenf.bvs.br/scielo.php?script=sci_alphabetic&lng=pt&nrm=iso';
       } else if (justUpper.includes('LATINDEX')) {
         validationLink = `https://latindex.org/latindex/bAvanzada/resultado?idMod=0&send=Buscar&issn=${safeIssn}`;
       } else if (justUpper.includes('CUIDEN')) {
-        validationLink = 'http://www.index-f.com/cuiden/';
+        validationLink = 'https://fundacionindex.com/?page_id=1190';
       }
     }
 
     const row = [
       item.title,
+      item.year || '',
       item.issn,
       item.data_status === 'error' ? 'ERRO TÉCNICO' : item.data_status === 'invalid' ? 'ISSN INVÁLIDO' : item.data_status === 'partial' ? 'DADOS PARCIAIS' : 'CONCLUÍDA',
       item.area,
