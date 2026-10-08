@@ -1071,15 +1071,18 @@ python data/fetch_citescore.py --apply
 sudo systemctl restart qualis-backend
 ```
 
-### 14.3 Procedimento Específico de Atualização — Versão 2.1.0 (Setembro / 2026)
+### 14.3 Procedimento Específico de Atualização — Versão 2.1.0 (Outubro / 2026)
 
 > [!IMPORTANT]
-> A equipe do STI / UFMA que já possui a versão inicial implantada deve seguir o roteiro abaixo para aplicar os 3 commits de atualização mais recentes (`88be449`, `661d7ed` e `0e687ba`).
+> A equipe do STI / UFMA que possui a versão inicial (v1.0) implantada deve seguir o roteiro abaixo para aplicar a **Versão 2.1.0 consolidada** via branch `master`.
 
 #### O que mudou nesta versão:
 1. **Identidade Visual Oficial (CPI):** Transição de marca para **CPI (Classificador de Produção Intelectual)**, inclusão de nova pasta estática `assets/` contendo os brasões oficiais do **PPGENF** e da **UFMA** no cabeçalho e rodapé, além de conjunto completo de favicons.
-2. **Correção de Indexação SciELO e RevEnf:** Resolução dinâmica de e-ISSNs para p-ISSNs via fallback transparente, corrigindo a classificação de periódicos como *REME* (A4) e *Saúde em Debate* (A6).
-3. **Expansão Completa da Base JCR 2025:** Incorporação da base oficial completa da Clarivate Analytics (`data/jcr_all_2025.csv` com 22.643 periódicos), elevando a cobertura de Fatores de Impacto de ~2.000 para **38.631 periódicos com JCR no banco compilado**.
+2. **Expansão Completa da Base JCR 2025:** Incorporação da base oficial completa da Clarivate Analytics (`data/jcr_all_2025.csv` com 22.643 periódicos), elevando a cobertura de Fatores de Impacto de ~2.000 para **38.631 periódicos com JCR no banco compilado** (39.933 periódicos e 57.731 identificadores mapeados).
+3. **Correção e Resolução de Indexadores (SciELO e Rev@Enf):** Resolução dinâmica de e-ISSNs para p-ISSNs via fallback transparente, mapeamento canônico de PIDs para a Rev@Enf (eliminando erro 404) e busca precisa no SciELO por título do periódico.
+4. **Auditoria Externa com Links nos Badges:** Todos os badges de indexadores e métricas agora possuem links diretos de comprovação externa nas bases oficiais (Clarivate Master Journal List, Scopus Preview, Portal BVS, NLM Catalog, Fundación Index).
+5. **Coluna "Ano de Publicação", Ordenação Temporal e CSV Enriquecido:** Coluna Ano dedicada na tabela com badges tabulares, ordenação por ano mais recente e persistência de ano em exportações/importações de planilhas.
+6. **Interface Moderna com Estatísticas & Dashboard:** Navegação por abas (`Tabela Detalhada` e `Estatísticas & Dashboard`), gráficos interativos (Chart.js), KPIs de produção (IPP) e tipografia suave nas métricas.
 
 #### Roteiro de Atualização em Produção (Linux / systemd):
 
@@ -1094,8 +1097,8 @@ git pull origin master
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Limpar caches de API anteriores para forçar uso da base enriquecida
-rm -f data/*_cache.json
+# 4. Limpar caches de API anteriores para carregar a base enriquecida
+rm -f data/*_cache.json data/runtime_discoveries.json
 
 # 5. Reiniciar o serviço backend
 sudo systemctl restart qualis-backend
@@ -1113,7 +1116,7 @@ Execute os comandos de teste abaixo no terminal do servidor:
 ```bash
 # Teste 1: Verificar se a base expandida foi carregada com sucesso
 curl -s http://127.0.0.1:8080/api/v1/status | python3 -c "import sys, json; d=json.load(sys.stdin); print('Status:', d.get('status'), '| Base:', d.get('database_size'), 'periódicos')"
-# Resposta esperada: Status: ok | Base: 39933 periódicos (57.731 identificadores mapeados)
+# Resposta esperada: Status: ok | Base: 39933 periódicos
 
 # Teste 2: Testar se o JCR 2025 de um periódico internacional está ativo
 curl -s http://127.0.0.1:8080/api/v1/classify/0140-6736 | python3 -c "import sys, json; d=json.load(sys.stdin); print('The Lancet JCR:', d.get('jcr'), '| Estrato:', d.get('classification', {}).get('estrato'))"
@@ -1125,6 +1128,7 @@ curl -s http://127.0.0.1:8080/api/v1/classify/2316-9389 | python3 -c "import sys
 
 # Teste 4: No navegador, acerte a URL pública (https://qualis.ppgenf.ufma.br)
 # - Verifique no topo da página o novo logotipo CPI e os brasões da UFMA e PPGENF.
+# - Na consulta de periódicos, teste a nova coluna "Ano" e os links oficiais nos badges de indexadores.
 ```
 
 #### Plano de Rollback (Contingência):
@@ -1133,6 +1137,7 @@ Caso a equipe do STI precise retornar à versão anterior por qualquer motivo im
 cd /var/www/qualis-capes
 git checkout 76bb52a
 sudo systemctl restart qualis-backend
+sudo systemctl reload nginx
 ```
 
 ---

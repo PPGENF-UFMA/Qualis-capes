@@ -582,8 +582,6 @@ async def _resolve_alt_issn(issn: str, http_client: httpx.AsyncClient) -> str | 
                     all_issns = [normalize_issn(x) for x in source.get("issn", [])]
                     for candidate in [issn_l] + all_issns:
                         if candidate and candidate != issn:
-                            with _db_lock:
-                                _issn_index[issn] = candidate
                             return candidate
         except Exception as e:
             logger.debug("Falha ao resolver alt_issn via OpenAlex para %s: %s", issn, e)
