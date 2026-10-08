@@ -48,6 +48,9 @@ const dom = {
   kpiPendingCount: document.getElementById('kpi-pending-count'),
   kpiInternationalCoverage: document.getElementById('kpi-international-coverage'),
   kpiAreaDistribution: document.getElementById('kpi-area-distribution'),
+  kpiHIndexCard: document.getElementById('kpi-h-index-card'),
+  kpiHIndexValue: document.getElementById('kpi-h-index-value'),
+  kpiHIndexSub: document.getElementById('kpi-h-index-sub'),
   qualisChart: document.getElementById('qualis-chart'),
   indexersChart: document.getElementById('indexers-chart'),
   publicationsYearChart: document.getElementById('publications-year-chart'),
@@ -110,6 +113,7 @@ const dom = {
   orcidYearTo: document.getElementById('orcid-year-to'),
   sessionResearcherTitle: document.getElementById('session-researcher-title'),
   researcherNameDisplay: document.getElementById('researcher-name-display'),
+  researcherImpactBadges: document.getElementById('researcher-impact-badges'),
 
   // Botões de Submit (para desabilitar durante loading)
   btnSubmitSingle: document.getElementById('btn-submit-single'),

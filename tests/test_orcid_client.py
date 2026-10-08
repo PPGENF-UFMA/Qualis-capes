@@ -68,3 +68,101 @@ def test_unclassified_work_includes_journal_and_article_title():
     assert result["journalTitle"] == "Revista de Psicologia"
     assert result["articleTitle"] == "Artigo Sobre Ansiedade"
     assert "[Nao Identificado]" in result["title"]
+
+
+def test_fetch_scopus_author_metrics_success(monkeypatch):
+    import asyncio
+    import httpx
+
+    monkeypatch.setattr("api.enricher.get_api_key", lambda: "fake-key")
+
+    mock_resp = httpx.Response(
+        200,
+        json={
+            "author-retrieval-response": [
+                {
+                    "@status": "found",
+                    "h-index": "42",
+                    "coredata": {
+                        "citation-count": "1500",
+                        "document-count": "80",
+                        "link": [{"@rel": "scopus-author", "@href": "https://www.scopus.com/authid/detail.uri?authorId=123"}],
+                        "dc:identifier": "AUTHOR_ID:123",
+                    },
+                }
+            ]
+        },
+        request=httpx.Request("GET", "https://api.elsevier.com/content/author"),
+    )
+
+    class MockClient:
+        async def get(self, *args, **kwargs):
+            return mock_resp
+
+    result = asyncio.run(orcid_client.fetch_scopus_author_metrics("0000-0002-1825-0097", MockClient()))
+    assert result is not None
+    assert result["h_index"] == 42
+    assert result["citations"] == 1500
+    assert result["documents"] == 80
+    assert result["profile_url"] == "https://www.scopus.com/authid/detail.uri?authorId=123"
+    assert result["source"] == "Scopus (Elsevier)"
+
+
+def test_fetch_openalex_author_metrics_success():
+    import asyncio
+    import httpx
+
+    mock_resp = httpx.Response(
+        200,
+        json={
+            "results": [
+                {
+                    "id": "https://openalex.org/A123",
+                    "works_count": 65,
+                    "cited_by_count": 920,
+                    "summary_stats": {
+                        "h_index": 28,
+                        "i10_index": 45,
+                    },
+                }
+            ]
+        },
+        request=httpx.Request("GET", "https://api.openalex.org/authors"),
+    )
+
+    class MockClient:
+        async def get(self, *args, **kwargs):
+            return mock_resp
+
+    result = asyncio.run(orcid_client.fetch_openalex_author_metrics("0000-0002-1825-0097", MockClient()))
+    assert result is not None
+    assert result["h_index"] == 28
+    assert result["i10_index"] == 45
+    assert result["citations"] == 920
+    assert result["works_count"] == 65
+    assert result["profile_url"] == "https://openalex.org/A123"
+    assert result["source"] == "OpenAlex"
+
+
+def test_fetch_author_impact_metrics_prioritization(monkeypatch):
+    import asyncio
+
+    # Força cache vazio
+    monkeypatch.setattr("api.cache.get_author_metrics_cache", lambda: {})
+    monkeypatch.setattr("api.cache.save_author_metrics_cache", lambda data: None)
+
+    async def mock_scopus(orcid, client, **kwargs):
+        return {"h_index": 35, "citations": 2000, "source": "Scopus (Elsevier)", "available": True}
+
+    async def mock_openalex(orcid, client, **kwargs):
+        return {"h_index": 40, "i10_index": 60, "citations": 2500, "source": "OpenAlex", "available": True}
+
+    monkeypatch.setattr(orcid_client, "fetch_scopus_author_metrics", mock_scopus)
+    monkeypatch.setattr(orcid_client, "fetch_openalex_author_metrics", mock_openalex)
+
+    result = asyncio.run(orcid_client.fetch_author_impact_metrics("0000-0002-1825-0097", None))
+    assert result["h_index"] == 35
+    assert result["h_index_source"] == "Scopus"
+    assert result["citations"] == 2000
+    assert result["scopus"]["h_index"] == 35
+    assert result["openalex"]["h_index"] == 40

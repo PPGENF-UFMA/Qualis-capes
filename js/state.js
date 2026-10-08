@@ -20,6 +20,7 @@ export function isNonConclusiveResult(item) {
 const appState = {
   classifiedItems: [],
   comparisonProfiles: [],
+  authorImpactMetrics: null,
   dbSummary: { total: 0, items: [] },
   charts: {
     qualis: null,
@@ -114,6 +115,7 @@ export function addClassifiedItem(item) {
 export function clearClassifiedItems() {
   appState.classifiedItems = [];
   sessionStorage.removeItem('qualis_results');
+  clearAuthorImpactMetrics();
 }
 
 /**
@@ -214,6 +216,48 @@ function persistComparison() {
     sessionStorage.setItem('qualis_comparison', JSON.stringify(appState.comparisonProfiles));
   } catch (e) {
     console.warn('[Persistência] Falha ao salvar comparação:', e.message);
+  }
+}
+
+/**
+ * Define e persiste as métricas de impacto do pesquisador (h-index, citações).
+ */
+export function setAuthorImpactMetrics(metrics) {
+  appState.authorImpactMetrics = metrics;
+  persistAuthorImpactMetrics();
+}
+
+/**
+ * Limpa as métricas de impacto do autor.
+ */
+export function clearAuthorImpactMetrics() {
+  appState.authorImpactMetrics = null;
+  sessionStorage.removeItem('qualis_author_impact');
+}
+
+/**
+ * Restaura as métricas de impacto do autor do sessionStorage.
+ */
+export function restoreAuthorImpactMetrics() {
+  try {
+    const saved = sessionStorage.getItem('qualis_author_impact');
+    if (saved) {
+      appState.authorImpactMetrics = JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('[Persistência] Falha ao restaurar métricas de autor:', e.message);
+  }
+}
+
+function persistAuthorImpactMetrics() {
+  try {
+    if (appState.authorImpactMetrics) {
+      sessionStorage.setItem('qualis_author_impact', JSON.stringify(appState.authorImpactMetrics));
+    } else {
+      sessionStorage.removeItem('qualis_author_impact');
+    }
+  } catch (e) {
+    console.warn('[Persistência] Falha ao salvar métricas de autor:', e.message);
   }
 }
 

@@ -17,6 +17,7 @@ LILACS_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "lilacs_cache.json")
 LATINDEX_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "latindex_cache.json")
 DISCOVERIES_PATH = os.path.join(PROJECT_ROOT, "data", "runtime_discoveries.json")
 CITESCORE_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "citescore_cache.json")
+AUTHOR_METRICS_CACHE_PATH = os.path.join(PROJECT_ROOT, "data", "author_metrics_cache.json")
 
 _cache_lock = threading.RLock()
 
@@ -72,6 +73,7 @@ _scielo_cache: dict = load_json_cache(SCI_ELO_CACHE_PATH)
 _lilacs_cache: dict = load_json_cache(LILACS_CACHE_PATH)
 _latindex_cache: dict = load_json_cache(LATINDEX_CACHE_PATH)
 _citescore_cache: dict = load_json_cache(CITESCORE_CACHE_PATH)
+_author_metrics_cache: dict = load_json_cache(AUTHOR_METRICS_CACHE_PATH)
 
 _discoveries_cache: dict = load_json_cache(DISCOVERIES_PATH)
 
@@ -90,6 +92,10 @@ def get_latindex_cache() -> dict:
 
 def get_citescore_cache() -> dict:
     return _citescore_cache
+
+
+def get_author_metrics_cache() -> dict:
+    return _author_metrics_cache
 
 
 def save_scielo_cache(cache: dict):
@@ -114,6 +120,12 @@ def save_citescore_cache(cache: dict):
     with _cache_lock:
         _citescore_cache.update(cache)
         save_json_cache(CITESCORE_CACHE_PATH, _citescore_cache)
+
+
+def save_author_metrics_cache(cache: dict):
+    with _cache_lock:
+        _author_metrics_cache.update(cache)
+        save_json_cache(AUTHOR_METRICS_CACHE_PATH, _author_metrics_cache)
 
 
 # ─── Descobertas de Runtime ────────────────────────────────────────

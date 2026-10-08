@@ -6,10 +6,10 @@
  */
 
 import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
-import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX } from './utils.js';
+import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX, escapeHTML } from './utils.js';
 
 import dom from './dom.js';
-import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult } from './state.js';
+import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult, setAuthorImpactMetrics, clearAuthorImpactMetrics, restoreAuthorImpactMetrics } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js?v=20260801-compact-status';
 import { updateComparisonDashboard } from './compare.js';
@@ -38,11 +38,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   restoreResults();
   restoreComparisonProfiles();
+  restoreAuthorImpactMetrics();
   initAdaptiveIntro();
   renderRecentSearches();
   await initDatabase();
   await checkCiteScoreStatus();
   await checkCircuitsStatus();
+
+  if (appState.authorImpactMetrics) {
+    renderResearcherImpactBadges(appState.authorImpactMetrics);
+  }
 
   // Se havia resultados restaurados da sessão anterior, renderiza-os
   if (appState.classifiedItems.length > 0) {
@@ -191,10 +196,18 @@ function setupEventListeners() {
   dom.btnClear.addEventListener('click', () => {
     clearClassifiedItems();
     clearComparisonProfiles();
+    clearAuthorImpactMetrics();
     if (dom.tabComparison) dom.tabComparison.style.display = 'none';
     if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
       dom.sessionResearcherTitle.style.display = 'none';
       dom.researcherNameDisplay.textContent = '-';
+    }
+    if (dom.researcherImpactBadges) {
+      dom.researcherImpactBadges.style.display = 'none';
+      dom.researcherImpactBadges.innerHTML = '';
+    }
+    if (dom.kpiHIndexCard) {
+      dom.kpiHIndexCard.style.display = 'none';
     }
     if (dom.filterYear) {
       dom.filterYear.value = 'ALL';
@@ -833,6 +846,9 @@ async function processLattesArticles(parsedArticles, researcherName) {
     dom.sessionResearcherTitle.style.display = 'block';
   }
 
+  clearAuthorImpactMetrics();
+  renderResearcherImpactBadges(null);
+
   dom.lattesTextInput.value = '';
   
   hideLoadingState();
@@ -847,6 +863,76 @@ async function processLattesArticles(parsedArticles, researcherName) {
     showToast(`✓ ${countNew} artigos processados. ${reviewCount} precisam de revisão (linhas destacadas).`, 'warning');
   } else {
     showToast(`${countNew} artigos do currículo processados com sucesso!`, 'success');
+  }
+}
+
+/**
+ * Renderiza badges de impacto do pesquisador (Scopus e OpenAlex).
+ * @param {Object|null} metrics Objeto impact_metrics retornado pela API
+ */
+function renderResearcherImpactBadges(metrics) {
+  if (!dom.researcherImpactBadges) return;
+  if (!metrics || (metrics.scopus?.h_index == null && metrics.openalex?.h_index == null)) {
+    dom.researcherImpactBadges.style.display = 'none';
+    dom.researcherImpactBadges.innerHTML = '';
+    return;
+  }
+
+  const parts = [];
+
+  // Badge Scopus
+  if (metrics.scopus && metrics.scopus.h_index != null) {
+    const scopusH = escapeHTML(String(metrics.scopus.h_index));
+    const scopusCit = metrics.scopus.citations != null
+      ? `<span class="impact-badge-cits" title="Total de citações no Scopus">${escapeHTML(metrics.scopus.citations.toLocaleString('pt-BR'))} cit.</span>`
+      : '';
+    const scopusLink = metrics.scopus.profile_url
+      ? `<a href="${escapeHTML(metrics.scopus.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Abrir perfil oficial no Scopus" aria-label="Abrir perfil no Scopus"><i data-lucide="external-link"></i></a>`
+      : '';
+
+    parts.push(`
+      <div class="impact-badge scopus-badge" title="Índice H na base Scopus/Elsevier (critério CAPES/CNPq)">
+        <span class="impact-badge-source">Scopus</span>
+        <span class="impact-badge-val"><strong>H-Index:</strong> ${scopusH}</span>
+        ${scopusCit}
+        ${scopusLink}
+      </div>
+    `);
+  }
+
+  // Badge OpenAlex
+  if (metrics.openalex && metrics.openalex.h_index != null) {
+    const openalexH = escapeHTML(String(metrics.openalex.h_index));
+    const i10 = metrics.openalex.i10_index != null
+      ? `<span class="impact-badge-i10" title="Artigos com 10 ou mais citações (i10-index)">i10: ${escapeHTML(String(metrics.openalex.i10_index))}</span>`
+      : '';
+    const openalexCit = metrics.openalex.citations != null
+      ? `<span class="impact-badge-cits" title="Total de citações globais no OpenAlex">${escapeHTML(metrics.openalex.citations.toLocaleString('pt-BR'))} cit.</span>`
+      : '';
+    const openalexLink = metrics.openalex.profile_url
+      ? `<a href="${escapeHTML(metrics.openalex.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Abrir perfil aberto no OpenAlex" aria-label="Abrir perfil no OpenAlex"><i data-lucide="external-link"></i></a>`
+      : '';
+
+    parts.push(`
+      <div class="impact-badge openalex-badge" title="Índice H no catálogo global aberto OpenAlex">
+        <span class="impact-badge-source">OpenAlex</span>
+        <span class="impact-badge-val"><strong>H-Index:</strong> ${openalexH}</span>
+        ${i10}
+        ${openalexCit}
+        ${openalexLink}
+      </div>
+    `);
+  }
+
+  if (parts.length > 0) {
+    dom.researcherImpactBadges.innerHTML = parts.join('');
+    dom.researcherImpactBadges.style.display = 'flex';
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons({ node: dom.researcherImpactBadges });
+    }
+  } else {
+    dom.researcherImpactBadges.style.display = 'none';
+    dom.researcherImpactBadges.innerHTML = '';
   }
 }
 
@@ -873,6 +959,14 @@ function processOrcidResults(payload) {
     const rangeLabel = payload.year_from && payload.year_to ? ` (${payload.year_from}-${payload.year_to})` : '';
     dom.researcherNameDisplay.textContent = `${label}${rangeLabel}`;
     dom.sessionResearcherTitle.style.display = 'block';
+  }
+
+  if (payload.impact_metrics) {
+    setAuthorImpactMetrics(payload.impact_metrics);
+    renderResearcherImpactBadges(payload.impact_metrics);
+  } else {
+    clearAuthorImpactMetrics();
+    renderResearcherImpactBadges(null);
   }
 
   if (dom.orcidInput) dom.orcidInput.value = '';
