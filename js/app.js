@@ -404,25 +404,20 @@ function setupEventListeners() {
   if (dom.selectorOrcid) dom.selectorOrcid.addEventListener('click', () => switchInputType('orcid'));
   if (dom.selectorComparison) dom.selectorComparison.addEventListener('click', () => showComparisonModal());
 
-  // Tooltips KPI (IPP, Índice H, etc.) — toggle no click (suporte mobile e touch)
-  const kpiInfoTriggers = document.querySelectorAll('.kpi-info-trigger');
-  if (kpiInfoTriggers.length > 0) {
-    kpiInfoTriggers.forEach((trigger) => {
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const wasActive = trigger.classList.contains('active');
-        kpiInfoTriggers.forEach((t) => t.classList.remove('active'));
-        if (!wasActive) {
-          trigger.classList.add('active');
-        }
-      });
-    });
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.kpi-info-trigger')) {
-        kpiInfoTriggers.forEach((t) => t.classList.remove('active'));
+  // Tooltips informativos (IPP, Índice H, etc.) — toggle no click com delegação de eventos (desktop e touch)
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('.kpi-info-trigger');
+    if (trigger) {
+      e.stopPropagation();
+      const wasActive = trigger.classList.contains('active');
+      document.querySelectorAll('.kpi-info-trigger').forEach((t) => t.classList.remove('active'));
+      if (!wasActive) {
+        trigger.classList.add('active');
       }
-    });
-  }
+    } else {
+      document.querySelectorAll('.kpi-info-trigger').forEach((t) => t.classList.remove('active'));
+    }
+  });
 
   // Ajuda do Lattes
   if (dom.btnLattesHelp && dom.lattesHelpContent) {
@@ -884,6 +879,7 @@ async function processLattesArticles(parsedArticles, researcherName) {
 
 /**
  * Renderiza badges de impacto do pesquisador (Scopus e OpenAlex).
+ * Exibidos no cabeçalho do pesquisador com escopo de carreira e detalhamento via tooltip.
  * @param {Object|null} metrics Objeto impact_metrics retornado pela API
  */
 function renderResearcherImpactBadges(metrics) {
@@ -896,46 +892,111 @@ function renderResearcherImpactBadges(metrics) {
 
   const parts = [];
 
-  // Badge Scopus
+  // Badge Scopus (Elsevier)
   if (metrics.scopus && metrics.scopus.h_index != null) {
     const scopusH = escapeHTML(String(metrics.scopus.h_index));
-    const scopusCit = metrics.scopus.citations != null
-      ? `<span class="impact-badge-cits" title="Total de citações no Scopus">${escapeHTML(metrics.scopus.citations.toLocaleString('pt-BR'))} cit.</span>`
+    const citCount = metrics.scopus.citations != null
+      ? escapeHTML(metrics.scopus.citations.toLocaleString('pt-BR'))
+      : null;
+    const scopusCitHtml = citCount
+      ? `<span class="impact-stat-item" title="Total de citações na base Scopus"><strong class="impact-stat-val">${citCount}</strong> cit.</span>`
       : '';
-    const scopusLink = metrics.scopus.profile_url
-      ? `<a href="${escapeHTML(metrics.scopus.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Abrir perfil oficial no Scopus" aria-label="Abrir perfil no Scopus"><i data-lucide="external-link"></i></a>`
+    const scopusLinkHtml = metrics.scopus.profile_url
+      ? `<a href="${escapeHTML(metrics.scopus.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Auditar perfil oficial no Scopus/Elsevier" aria-label="Abrir perfil no Scopus"><i data-lucide="external-link"></i></a>`
       : '';
 
     parts.push(`
-      <div class="impact-badge scopus-badge" title="Índice H na base Scopus/Elsevier (critério CAPES/CNPq)">
-        <span class="impact-badge-source">Scopus</span>
-        <span class="impact-badge-val"><strong>H-Index:</strong> ${scopusH}</span>
-        ${scopusCit}
-        ${scopusLink}
+      <div class="impact-hero-badge scopus-hero-badge" role="region" aria-label="Métricas de carreira Scopus">
+        <div class="impact-badge-top">
+          <div class="impact-badge-identity">
+            <span class="impact-badge-source">Scopus</span>
+            <span class="impact-badge-scope" title="Métrica calculada sobre a trajetória histórica completa do autor">Carreira</span>
+          </div>
+          <span class="kpi-info-trigger" tabindex="0" role="button" aria-label="Informações sobre as métricas Scopus">
+            <i data-lucide="info" class="kpi-info-icon"></i>
+            <span class="kpi-info-tooltip">
+              <strong>Scopus (Elsevier) — Métricas de Carreira</strong><br>
+              • <strong>Índice H:</strong> O pesquisador possui <strong>${scopusH}</strong> artigos com pelo menos <strong>${scopusH}</strong> citações cada na base Scopus.<br>
+              ${citCount ? `• <strong>Citações Totais:</strong> <strong>${citCount}</strong> citações registradas.<br>` : ''}
+              <span class="impact-tooltip-divider"></span>
+              <span class="impact-scope-alert">
+                <strong>Escopo:</strong> Trajetória histórica global (critério de referência CAPES/CNPq), não restrita ao período filtrado na consulta.
+              </span>
+              <span class="impact-divergence-note">
+                <em>Nota: Abrange somente periódicos indexados na coleção Scopus. Pode divergir do Google Scholar (que indexa teses e anais) e do Lattes.</em>
+              </span>
+            </span>
+          </span>
+        </div>
+        <div class="impact-badge-main">
+          <div class="impact-h-block">
+            <span class="impact-h-label">H-INDEX</span>
+            <span class="impact-h-value">${scopusH}</span>
+          </div>
+          <div class="impact-subs-block">
+            ${scopusCitHtml}
+          </div>
+          ${scopusLinkHtml}
+        </div>
       </div>
     `);
   }
 
-  // Badge OpenAlex
+  // Badge OpenAlex (Catálogo Global Aberto)
   if (metrics.openalex && metrics.openalex.h_index != null) {
     const openalexH = escapeHTML(String(metrics.openalex.h_index));
-    const i10 = metrics.openalex.i10_index != null
-      ? `<span class="impact-badge-i10" title="Artigos com 10 ou mais citações (i10-index)">i10: ${escapeHTML(String(metrics.openalex.i10_index))}</span>`
+    const i10Count = metrics.openalex.i10_index != null
+      ? escapeHTML(String(metrics.openalex.i10_index))
+      : null;
+    const citCount = metrics.openalex.citations != null
+      ? escapeHTML(metrics.openalex.citations.toLocaleString('pt-BR'))
+      : null;
+
+    const i10Html = i10Count
+      ? `<span class="impact-stat-item" title="Publicações com 10 ou mais citações globais"><strong class="impact-stat-val">i10:</strong> ${i10Count}</span>`
       : '';
-    const openalexCit = metrics.openalex.citations != null
-      ? `<span class="impact-badge-cits" title="Total de citações globais no OpenAlex">${escapeHTML(metrics.openalex.citations.toLocaleString('pt-BR'))} cit.</span>`
+    const citHtml = citCount
+      ? `<span class="impact-stat-item" title="Total de citações globais computadas no OpenAlex"><strong class="impact-stat-val">${citCount}</strong> cit.</span>`
       : '';
-    const openalexLink = metrics.openalex.profile_url
-      ? `<a href="${escapeHTML(metrics.openalex.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Abrir perfil aberto no OpenAlex" aria-label="Abrir perfil no OpenAlex"><i data-lucide="external-link"></i></a>`
+    const linkHtml = metrics.openalex.profile_url
+      ? `<a href="${escapeHTML(metrics.openalex.profile_url)}" target="_blank" rel="noopener noreferrer" class="impact-badge-link" title="Auditar perfil aberto no OpenAlex" aria-label="Abrir perfil no OpenAlex"><i data-lucide="external-link"></i></a>`
       : '';
 
     parts.push(`
-      <div class="impact-badge openalex-badge" title="Índice H no catálogo global aberto OpenAlex">
-        <span class="impact-badge-source">OpenAlex</span>
-        <span class="impact-badge-val"><strong>H-Index:</strong> ${openalexH}</span>
-        ${i10}
-        ${openalexCit}
-        ${openalexLink}
+      <div class="impact-hero-badge openalex-hero-badge" role="region" aria-label="Métricas de carreira OpenAlex">
+        <div class="impact-badge-top">
+          <div class="impact-badge-identity">
+            <span class="impact-badge-source">OpenAlex</span>
+            <span class="impact-badge-scope" title="Métrica calculada sobre a trajetória histórica completa do autor">Carreira</span>
+          </div>
+          <span class="kpi-info-trigger" tabindex="0" role="button" aria-label="Informações sobre as métricas OpenAlex">
+            <i data-lucide="info" class="kpi-info-icon"></i>
+            <span class="kpi-info-tooltip">
+              <strong>OpenAlex — Métricas de Carreira</strong><br>
+              • <strong>Índice H:</strong> O pesquisador possui <strong>${openalexH}</strong> artigos com pelo menos <strong>${openalexH}</strong> citações cada.<br>
+              ${i10Count ? `• <strong>i10-Index:</strong> <strong>${i10Count}</strong> trabalhos com 10+ citações.<br>` : ''}
+              ${citCount ? `• <strong>Citações Totais:</strong> <strong>${citCount}</strong> citações em escala aberta.<br>` : ''}
+              <span class="impact-tooltip-divider"></span>
+              <span class="impact-scope-alert">
+                <strong>Escopo:</strong> Trajetória histórica global da carreira, não restrita ao período filtrado na consulta.
+              </span>
+              <span class="impact-divergence-note">
+                <em>Nota: Catálogo aberto global. Pode apresentar valores distintos de Scopus, Web of Science e Google Scholar devido às diferenças de cobertura de fontes.</em>
+              </span>
+            </span>
+          </span>
+        </div>
+        <div class="impact-badge-main">
+          <div class="impact-h-block">
+            <span class="impact-h-label">H-INDEX</span>
+            <span class="impact-h-value">${openalexH}</span>
+          </div>
+          <div class="impact-subs-block">
+            ${i10Html}
+            ${citHtml}
+          </div>
+          ${linkHtml}
+        </div>
       </div>
     `);
   }

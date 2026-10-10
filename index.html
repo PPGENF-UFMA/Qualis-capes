@@ -311,16 +311,14 @@
           </div>
 
           <!-- Título Dinâmico do Pesquisador em Análise -->
-          <div id="session-researcher-title" class="session-researcher-card"
-            style="display: none; margin-bottom: 15px; padding: 14px 20px; background: rgba(209, 26, 91, 0.08); border-left: 4px solid var(--primary-color); border-radius: 8px;">
-            <div class="researcher-header-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-              <div>
-                <span
-                  style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Currículo
-                  Analisado</span>
-                <h2
-                  style="font-family: var(--font-title); font-size: 18px; font-weight: 700; color: var(--text-primary); margin-top: 4px;"
-                  id="researcher-name-display">-</h2>
+          <div id="session-researcher-title" class="session-researcher-card" style="display: none;">
+            <div class="researcher-header-row">
+              <div class="researcher-identity-col">
+                <span class="researcher-eyebrow">
+                  <i data-lucide="user-check" class="researcher-eyebrow-icon"></i>
+                  Currículo Analisado
+                </span>
+                <h2 class="researcher-name" id="researcher-name-display">-</h2>
               </div>
               <div id="researcher-impact-badges" class="researcher-impact-badges" style="display: none;"></div>
             </div>
@@ -400,23 +398,6 @@
                 <span class="kpi-title">Cobertura Internacional</span>
                 <span class="kpi-value" id="kpi-international-coverage">0%</span>
                 <span class="kpi-sub">Scopus + WoS + Medline</span>
-              </div>
-              <div class="kpi-card" id="kpi-h-index-card" style="display: none;">
-                <span class="kpi-title">
-                  Índice H (Pesquisador)
-                  <span class="kpi-info-trigger" id="hindex-info-trigger" tabindex="0" role="button" aria-label="Saiba mais sobre o Índice H">
-                    <i data-lucide="info" class="kpi-info-icon"></i>
-                    <span class="kpi-info-tooltip" id="hindex-info-tooltip">
-                      <strong>O que é o Índice H (Hirsch)?</strong><br>
-                      Indica que o autor tem <em>H</em> publicações com pelo menos <em>H</em> citações cada.<br><br>
-                      <strong>Bases consultadas:</strong><br>
-                      • <strong>Scopus:</strong> Citações da base Elsevier (critério CAPES/CNPq).<br>
-                      • <strong>OpenAlex:</strong> Catálogo global aberto (inclui i10-index).
-                    </span>
-                  </span>
-                </span>
-                <span class="kpi-value" id="kpi-h-index-value">-</span>
-                <span class="kpi-sub" id="kpi-h-index-sub">Scopus & OpenAlex</span>
               </div>
             </div>
 

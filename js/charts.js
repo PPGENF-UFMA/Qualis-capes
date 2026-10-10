@@ -181,34 +181,6 @@ export function updateAnalytics(items = appState.classifiedItems) {
     }
   }
 
-  // Índice H do Pesquisador (quando disponível via ORCID)
-  if (dom.kpiHIndexCard && dom.kpiHIndexValue && dom.kpiHIndexSub) {
-    const metrics = appState.authorImpactMetrics;
-    const scopusH = metrics?.scopus?.h_index;
-    const openalexH = metrics?.openalex?.h_index;
-    const hasAnyH = scopusH !== null && scopusH !== undefined || openalexH !== null && openalexH !== undefined;
-
-    if (metrics && hasAnyH) {
-      dom.kpiHIndexCard.style.display = 'flex';
-      if (scopusH !== null && scopusH !== undefined && openalexH !== null && openalexH !== undefined) {
-        dom.kpiHIndexValue.textContent = `${scopusH} / ${openalexH}`;
-        const scopusCit = metrics.scopus?.citations != null ? ` (${metrics.scopus.citations.toLocaleString('pt-BR')} cit.)` : '';
-        const openalexCit = metrics.openalex?.citations != null ? ` (${metrics.openalex.citations.toLocaleString('pt-BR')} cit.)` : '';
-        dom.kpiHIndexSub.textContent = `Scopus: ${scopusH}${scopusCit} · OpenAlex: ${openalexH}${openalexCit}`;
-      } else if (scopusH !== null && scopusH !== undefined) {
-        dom.kpiHIndexValue.textContent = `${scopusH}`;
-        const cits = metrics.scopus?.citations ? ` · ${metrics.scopus.citations.toLocaleString('pt-BR')} cit.` : '';
-        dom.kpiHIndexSub.textContent = `Scopus (Elsevier)${cits}`;
-      } else if (openalexH !== null && openalexH !== undefined) {
-        dom.kpiHIndexValue.textContent = `${openalexH}`;
-        const cits = metrics.openalex?.citations ? ` · ${metrics.openalex.citations.toLocaleString('pt-BR')} cit.` : '';
-        dom.kpiHIndexSub.textContent = `OpenAlex (Aberto)${cits}`;
-      }
-    } else {
-      dom.kpiHIndexCard.style.display = 'none';
-    }
-  }
-
   // ─── DADOS PARA GRÁFICOS ─────────────────────────────────────
 
   const { qualisCounts, indexerCounts, yearAvgScores, yearEstratoCounts } = processChartData(items);

@@ -1088,18 +1088,18 @@ body.light-theme .loading-progress-track {
 /* --- CARDS DE METRICAS (KPIs) --- */
 .kpi-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .kpi-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 580px) {
   .kpi-container {
     grid-template-columns: 1fr;
   }
@@ -4364,9 +4364,9 @@ body.light-theme .tab-btn.active {
 }
 
 .kpi-container {
-  grid-template-columns: 1.35fr repeat(3, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
 }
 
 .kpi-card {
@@ -5331,137 +5331,346 @@ body.light-theme .year-badge {
   outline-offset: 3px;
 }
 
-/* ─── RESEARCHER IMPACT BADGES (ORCID H-INDEX) ──────────────────── */
+/* ─── RESEARCHER SESSION CARD & HERO IMPACT BADGES ───────────────── */
+.session-researcher-card {
+  margin-bottom: 22px;
+  padding: 16px 22px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-left: 4px solid var(--primary-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: var(--transition);
+}
+
+.researcher-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.researcher-identity-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.researcher-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--primary-color);
+}
+
+.researcher-eyebrow-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.researcher-name {
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
 .researcher-impact-badges {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
 }
 
-.impact-badge {
+.impact-hero-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 4px 14px -3px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.2s ease;
+}
+
+.impact-hero-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.35);
+}
+
+.impact-badge-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.impact-badge-identity {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.3;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.impact-badge .impact-badge-source {
+.impact-badge-source {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 2px 6px;
+  letter-spacing: 0.6px;
+  padding: 2px 7px;
   border-radius: 4px;
 }
 
-.impact-badge .impact-badge-val {
-  color: var(--text-primary);
-  font-family: var(--font-brand);
-}
-
-.impact-badge .impact-badge-val strong {
+.impact-badge-scope {
+  font-size: 10px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.impact-badge .impact-badge-cits,
-.impact-badge .impact-badge-i10 {
+.impact-badge-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.impact-h-block {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.impact-h-label {
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   color: var(--text-muted);
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  padding-left: 6px;
 }
 
-.impact-badge .impact-badge-link {
+.impact-h-value {
+  font-family: var(--font-title);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.impact-subs-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.impact-stat-item {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.impact-stat-val {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.impact-badge-link {
   display: inline-flex;
   align-items: center;
-  color: inherit;
-  opacity: 0.7;
-  transition: opacity 0.15s, transform 0.15s;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  transition: all 0.18s ease;
   margin-left: 2px;
 }
 
-.impact-badge .impact-badge-link:hover {
-  opacity: 1;
+.impact-badge-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
   transform: translateY(-1px);
 }
 
-.impact-badge .impact-badge-link svg {
-  width: 12px;
-  height: 12px;
+.impact-badge-link svg {
+  width: 13px;
+  height: 13px;
 }
 
-/* Scopus Badge */
-.impact-badge.scopus-badge {
-  background: rgba(235, 106, 31, 0.12);
-  border: 1px solid rgba(235, 106, 31, 0.35);
-  color: #ff9800;
+/* Scopus Hero Badge */
+.scopus-hero-badge {
+  border-color: rgba(235, 106, 31, 0.35);
+  background: linear-gradient(135deg, rgba(235, 106, 31, 0.12) 0%, rgba(20, 24, 33, 0.7) 100%);
 }
 
-.impact-badge.scopus-badge .impact-badge-source {
+.scopus-hero-badge .impact-badge-source {
   background: rgba(235, 106, 31, 0.25);
-  color: #ff9800;
+  color: #fb923c;
 }
 
-/* OpenAlex Badge */
-.impact-badge.openalex-badge {
-  background: rgba(37, 99, 235, 0.12);
-  border: 1px solid rgba(37, 99, 235, 0.35);
+.scopus-hero-badge .impact-h-value {
+  color: #fdba74;
+}
+
+/* OpenAlex Hero Badge */
+.openalex-hero-badge {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(20, 24, 33, 0.7) 100%);
+}
+
+.openalex-hero-badge .impact-badge-source {
+  background: rgba(59, 130, 246, 0.25);
   color: #60a5fa;
 }
 
-.impact-badge.openalex-badge .impact-badge-source {
-  background: rgba(37, 99, 235, 0.25);
-  color: #60a5fa;
+.openalex-hero-badge .impact-h-value {
+  color: #93c5fd;
 }
 
-/* Light Theme overrides */
-body.light-theme .impact-badge.scopus-badge {
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #c2410c;
-  box-shadow: 0 1px 2px rgba(194, 65, 12, 0.08);
+/* Tooltip dentro do Hero Impact Badge */
+.impact-hero-badge .kpi-info-trigger {
+  margin-left: 0;
 }
 
-body.light-theme .impact-badge.scopus-badge .impact-badge-source {
+.impact-hero-badge .kpi-info-tooltip {
+  left: auto;
+  right: -8px;
+  transform: translateY(6px);
+  width: 320px;
+}
+
+.impact-hero-badge .kpi-info-tooltip::after,
+.impact-hero-badge .kpi-info-tooltip::before {
+  left: auto;
+  right: 14px;
+  transform: none;
+}
+
+.impact-hero-badge .kpi-info-trigger:hover .kpi-info-tooltip,
+.impact-hero-badge .kpi-info-trigger:focus .kpi-info-tooltip,
+.impact-hero-badge .kpi-info-trigger.active .kpi-info-tooltip {
+  transform: translateY(0);
+}
+
+.impact-tooltip-divider {
+  display: block;
+  height: 1px;
+  background: var(--panel-border);
+  margin: 8px 0;
+}
+
+.impact-scope-alert {
+  display: block;
+  color: var(--accent);
+  margin-bottom: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.impact-divergence-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* ─── Light Theme Overrides ─────────────────────────────────────── */
+body.light-theme .session-researcher-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  border-left-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+body.light-theme .scopus-hero-badge {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fed7aa;
+  box-shadow: 0 2px 8px rgba(194, 65, 12, 0.06);
+}
+
+body.light-theme .scopus-hero-badge .impact-badge-source {
   background: #ffedd5;
   color: #c2410c;
 }
 
-body.light-theme .impact-badge.scopus-badge .impact-badge-val {
-  color: #1e293b;
+body.light-theme .scopus-hero-badge .impact-badge-scope {
+  background: rgba(194, 65, 12, 0.08);
+  color: #9a3412;
+  border-color: rgba(194, 65, 12, 0.15);
 }
 
-body.light-theme .impact-badge.scopus-badge .impact-badge-cits {
+body.light-theme .scopus-hero-badge .impact-h-value {
+  color: #9a3412;
+}
+
+body.light-theme .scopus-hero-badge .impact-subs-block {
   border-left-color: #fed7aa;
-  color: #64748b;
 }
 
-body.light-theme .impact-badge.openalex-badge {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
-  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.08);
+body.light-theme .scopus-hero-badge .impact-stat-item {
+  color: #475569;
 }
 
-body.light-theme .impact-badge.openalex-badge .impact-badge-source {
+body.light-theme .scopus-hero-badge .impact-stat-val {
+  color: #0f172a;
+}
+
+body.light-theme .scopus-hero-badge .impact-badge-link {
+  background: rgba(194, 65, 12, 0.08);
+  color: #9a3412;
+}
+
+body.light-theme .openalex-hero-badge {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #bfdbfe;
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.06);
+}
+
+body.light-theme .openalex-hero-badge .impact-badge-source {
   background: #dbeafe;
   color: #1d4ed8;
 }
 
-body.light-theme .impact-badge.openalex-badge .impact-badge-val {
-  color: #1e293b;
+body.light-theme .openalex-hero-badge .impact-badge-scope {
+  background: rgba(29, 78, 216, 0.08);
+  color: #1e40af;
+  border-color: rgba(29, 78, 216, 0.15);
 }
 
-body.light-theme .impact-badge.openalex-badge .impact-badge-cits,
-body.light-theme .impact-badge.openalex-badge .impact-badge-i10 {
+body.light-theme .openalex-hero-badge .impact-h-value {
+  color: #1e40af;
+}
+
+body.light-theme .openalex-hero-badge .impact-subs-block {
   border-left-color: #bfdbfe;
-  color: #64748b;
+}
+
+body.light-theme .openalex-hero-badge .impact-stat-item {
+  color: #475569;
+}
+
+body.light-theme .openalex-hero-badge .impact-stat-val {
+  color: #0f172a;
+}
+
+body.light-theme .openalex-hero-badge .impact-badge-link {
+  background: rgba(29, 78, 216, 0.08);
+  color: #1e40af;
 }
