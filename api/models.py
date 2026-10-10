@@ -76,8 +76,7 @@ class MatchLattesRequest(BaseModel):
 
 
 class OrcidSearchRequest(BaseModel):
-    given_names: str = Field(default="", max_length=100)
-    family_name: str = Field(default="", max_length=100)
+    name: str = Field(default="", max_length=200)
     affiliation: str = Field(default="", max_length=200)
 
 

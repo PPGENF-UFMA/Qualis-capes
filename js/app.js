@@ -522,12 +522,11 @@ function setupEventListeners() {
   if (dom.orcidSearchForm) {
     dom.orcidSearchForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const given = (dom.orcidSearchGiven?.value || '').trim();
-      const family = (dom.orcidSearchFamily?.value || '').trim();
+      const name = (dom.orcidSearchName?.value || '').trim();
       const affiliation = (dom.orcidSearchAffiliation?.value || '').trim();
 
-      if (!given && !family) {
-        showToast('Informe pelo menos o nome ou sobrenome.', 'warning');
+      if (!name) {
+        showToast('Informe o nome completo para buscar.', 'warning');
         return;
       }
 
@@ -538,7 +537,7 @@ function setupEventListeners() {
       if (dom.btnSubmitOrcidSearch) dom.btnSubmitOrcidSearch.disabled = true;
 
       try {
-        const profiles = await searchOrcidProfiles(given, family, affiliation);
+        const profiles = await searchOrcidProfiles(name, affiliation);
 
         if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
         if (dom.btnSubmitOrcidSearch) dom.btnSubmitOrcidSearch.disabled = false;

@@ -428,21 +428,19 @@ async def api_orcid_search(body: OrcidSearchRequest, request: Request):
     Utiliza a API pública expanded-search do ORCID para encontrar
     pesquisadores pelo nome e instituição de vínculo.
     """
-    given = (body.given_names or "").strip()
-    family = (body.family_name or "").strip()
-    if not given and not family:
-        raise HTTPException(status_code=400, detail="Informe pelo menos o nome ou sobrenome.")
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Informe o nome completo para buscar.")
     ip = _get_client_ip(request)
     if not _check_rate_limit(f"orcid_search:{ip}", max_requests=20, window_seconds=60):
         raise HTTPException(status_code=429, detail="Limite de buscas ORCID excedido. Tente novamente em 1 minuto.")
 
     results = await orcid_client.search_orcid_profiles(
-        given_names=given,
-        family_name=family,
+        name=name,
         affiliation=(body.affiliation or "").strip(),
         http_client=get_http_client(),
     )
-    audit_logger.info(f"orcid_search|ip={ip}|given={given[:40]}|family={family[:40]}|results={len(results)}")
+    audit_logger.info(f"orcid_search|ip={ip}|name={name[:40]}|results={len(results)}")
     return {"results": results, "count": len(results)}
 
 

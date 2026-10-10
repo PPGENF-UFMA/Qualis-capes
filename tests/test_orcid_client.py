@@ -217,20 +217,17 @@ def test_build_orcid_search_query():
     from api.orcid_client import _build_orcid_search_query
     
     # Empty query
-    assert _build_orcid_search_query("", "") == ""
-    assert _build_orcid_search_query("  ", "  ") == ""
+    assert _build_orcid_search_query("") == ""
+    assert _build_orcid_search_query("  ") == ""
     
-    # Given names only
-    assert _build_orcid_search_query("Maria", "") == 'given-names:"Maria"'
+    # Single name
+    assert _build_orcid_search_query("Maria") == '(given-and-family-names:"Maria")'
     
-    # Family name only
-    assert _build_orcid_search_query("", "Silva") == 'family-name:"Silva"'
-    
-    # Both names
-    assert _build_orcid_search_query("Maria", "Silva") == 'given-names:"Maria" AND family-name:"Silva"'
+    # Both names (split by space)
+    assert _build_orcid_search_query("Maria Silva") == '(given-and-family-names:"Maria" AND given-and-family-names:"Silva")'
     
     # Names and affiliation
-    assert _build_orcid_search_query("Maria", "Silva", "Universidade de Sao Paulo") == 'given-names:"Maria" AND family-name:"Silva" AND affiliation-org-name:"Universidade de Sao Paulo"'
+    assert _build_orcid_search_query("Maria Silva", "Universidade de Sao Paulo") == '(given-and-family-names:"Maria" AND given-and-family-names:"Silva") AND affiliation-org-name:"Universidade de Sao Paulo"'
 
 
 def test_extract_search_results():

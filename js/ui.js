@@ -868,7 +868,7 @@ export function showOrcidSearchModal() {
     if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
     if (dom.orcidSearchEmpty) dom.orcidSearchEmpty.style.display = 'none';
 
-    openManagedModal(dom.orcidSearchModal, dom.orcidSearchGiven);
+    openManagedModal(dom.orcidSearchModal, dom.orcidSearchName);
 
     if (typeof lucide !== 'undefined') {
       lucide.createIcons({

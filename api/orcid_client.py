@@ -267,23 +267,23 @@ async def fetch_person_name(orcid: str, http_client: httpx.AsyncClient) -> str:
         return ""
 
 
-def _build_orcid_search_query(given_names: str, family_name: str, affiliation: str = "") -> str:
+def _build_orcid_search_query(name: str, affiliation: str = "") -> str:
     """Build a Solr query for the ORCID expanded-search endpoint.
 
     Uses quoted phrases for multi-word terms and combines fields with AND.
     """
     parts = []
-    given_clean = given_names.strip()
-    family_clean = family_name.strip()
+    name_clean = name.strip()
     affiliation_clean = affiliation.strip()
 
-    if not given_clean and not family_clean:
+    if not name_clean:
         return ""
 
-    if given_clean:
-        parts.append(f'given-names:"{given_clean}"')
-    if family_clean:
-        parts.append(f'family-name:"{family_clean}"')
+    name_tokens = name_clean.split()
+    if name_tokens:
+        name_query = " AND ".join(f'given-and-family-names:"{t}"' for t in name_tokens)
+        parts.append(f"({name_query})")
+
     if affiliation_clean:
         parts.append(f'affiliation-org-name:"{affiliation_clean}"')
 
@@ -328,8 +328,7 @@ def _extract_search_results(payload: dict) -> list[dict]:
 
 
 async def search_orcid_profiles(
-    given_names: str,
-    family_name: str,
+    name: str,
     affiliation: str,
     http_client: httpx.AsyncClient,
     max_results: int = 15,
@@ -339,7 +338,7 @@ async def search_orcid_profiles(
     Uses the /expanded-search endpoint which returns richer data
     (including institution names) without needing per-record lookups.
     """
-    query = _build_orcid_search_query(given_names, family_name, affiliation)
+    query = _build_orcid_search_query(name, affiliation)
     if not query:
         return []
 

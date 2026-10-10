@@ -61,18 +61,16 @@ export async function analyzeOrcid(orcid, yearFrom = null, yearTo = null) {
 
 /**
  * Busca perfis ORCID por nome e afiliação.
- * @param {string} givenNames Primeiro nome / nome do meio
- * @param {string} familyName Sobrenome
+ * @param {string} name Nome completo do pesquisador
  * @param {string} affiliation Instituição (opcional)
  * @returns {Promise<Object[]>} Lista de perfis {orcid, name, institutions, profile_url}
  */
-export async function searchOrcidProfiles(givenNames, familyName, affiliation = '') {
+export async function searchOrcidProfiles(name, affiliation = '') {
   const response = await fetch('/api/v1/orcid/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      given_names: givenNames || '',
-      family_name: familyName || '',
+      name: name || '',
       affiliation: affiliation || '',
     })
   });
