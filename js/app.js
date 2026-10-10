@@ -5,7 +5,7 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
+import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchOrcidProfiles, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX, escapeHTML } from './utils.js';
 
 import dom from './dom.js';
@@ -24,7 +24,8 @@ import {
   initQuadrienios, initConsultationSidebar,
   initAdaptiveIntro,
   initCustomSelects, syncCustomSelects,
-  showClassificationInfoModal, closeClassificationInfoModal
+  showClassificationInfoModal, closeClassificationInfoModal,
+  showOrcidSearchModal, closeOrcidSearchModal
 } from './ui.js?v=20260801-editorial-selects';
 
 // ─── Inicialização ───────────────────────────────────────────────
@@ -492,6 +493,68 @@ function setupEventListeners() {
         console.error('[ORCID Submit Error]', err);
         try { hideLoadingState(); } catch (e) { /* silencioso */ }
         showToast(err.message || 'Erro ao processar ORCID.', 'error');
+      }
+    });
+  }
+
+  // ORCID Search Modal — Buscar ORCID por nome
+  if (dom.btnOrcidSearch) {
+    dom.btnOrcidSearch.addEventListener('click', () => {
+      showOrcidSearchModal();
+    });
+  }
+
+  if (dom.btnCloseOrcidSearch) {
+    dom.btnCloseOrcidSearch.addEventListener('click', () => {
+      closeOrcidSearchModal();
+    });
+  }
+
+  // Click outside modal card to close
+  if (dom.orcidSearchModal) {
+    dom.orcidSearchModal.addEventListener('click', (e) => {
+      if (e.target === dom.orcidSearchModal) {
+        closeOrcidSearchModal();
+      }
+    });
+  }
+
+  if (dom.orcidSearchForm) {
+    dom.orcidSearchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const given = (dom.orcidSearchGiven?.value || '').trim();
+      const family = (dom.orcidSearchFamily?.value || '').trim();
+      const affiliation = (dom.orcidSearchAffiliation?.value || '').trim();
+
+      if (!given && !family) {
+        showToast('Informe pelo menos o nome ou sobrenome.', 'warning');
+        return;
+      }
+
+      // Show spinner, hide results and empty state
+      if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'flex';
+      if (dom.orcidSearchResultsList) dom.orcidSearchResultsList.style.display = 'none';
+      if (dom.orcidSearchEmpty) dom.orcidSearchEmpty.style.display = 'none';
+      if (dom.btnSubmitOrcidSearch) dom.btnSubmitOrcidSearch.disabled = true;
+
+      try {
+        const profiles = await searchOrcidProfiles(given, family, affiliation);
+
+        if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
+        if (dom.btnSubmitOrcidSearch) dom.btnSubmitOrcidSearch.disabled = false;
+
+        if (!profiles || profiles.length === 0) {
+          if (dom.orcidSearchEmpty) dom.orcidSearchEmpty.style.display = 'flex';
+          return;
+        }
+
+        // Render results
+        renderOrcidSearchResults(profiles);
+      } catch (err) {
+        console.error('[ORCID Search Error]', err);
+        if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
+        if (dom.btnSubmitOrcidSearch) dom.btnSubmitOrcidSearch.disabled = false;
+        showToast(err.message || 'Erro ao buscar perfis ORCID.', 'error');
       }
     });
   }
@@ -1010,6 +1073,73 @@ function renderResearcherImpactBadges(metrics) {
   } else {
     dom.researcherImpactBadges.style.display = 'none';
     dom.researcherImpactBadges.innerHTML = '';
+  }
+}
+
+/**
+ * Renderiza os resultados da busca de perfis ORCID no modal.
+ */
+function renderOrcidSearchResults(profiles) {
+  if (!dom.orcidSearchResultsList) return;
+
+  dom.orcidSearchResultsList.innerHTML = '';
+  dom.orcidSearchResultsList.style.display = 'flex';
+
+  profiles.forEach((profile, index) => {
+    const safeName = escapeHTML(profile.name || 'Nome não disponível');
+    const safeOrcid = escapeHTML(profile.orcid || '');
+    const institutions = (profile.institutions || []).slice(0, 3);
+    const safeInstitutions = institutions.map(i => escapeHTML(i)).join(' · ');
+    const profileUrl = escapeHTML(profile.profile_url || `https://orcid.org/${profile.orcid}`);
+
+    const item = document.createElement('div');
+    item.className = 'orcid-search-result-item';
+    item.setAttribute('tabindex', '0');
+    item.innerHTML = `
+      <div class="orcid-search-result-info">
+        <div class="orcid-search-result-name">${safeName}</div>
+        <div class="orcid-search-result-orcid">
+          <i data-lucide="fingerprint" style="width:13px;height:13px;"></i>
+          ${safeOrcid}
+        </div>
+        ${safeInstitutions ? `<div class="orcid-search-result-institutions">${safeInstitutions}</div>` : ''}
+      </div>
+      <div class="orcid-search-result-actions">
+        <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="orcid-profile-link"
+           title="Ver perfil ORCID" onclick="event.stopPropagation();">
+          <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+        </a>
+        <button type="button" class="btn orcid-confirm-btn" data-orcid="${safeOrcid}" data-index="${index}">
+          <i data-lucide="check" style="width:14px;height:14px;"></i> Confirmar
+        </button>
+      </div>
+    `;
+
+    // Confirm button handler
+    const confirmBtn = item.querySelector('.orcid-confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const selectedOrcid = profile.orcid;
+        if (dom.orcidInput) {
+          dom.orcidInput.value = selectedOrcid;
+          dom.orcidInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        closeOrcidSearchModal();
+        showToast(`ORCID ${selectedOrcid} selecionado para ${profile.name}.`, 'success');
+      });
+    }
+
+    dom.orcidSearchResultsList.appendChild(item);
+  });
+
+  // Render Lucide icons inside results
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons({
+      attrs: { class: 'lucide' },
+      nameAttr: 'data-lucide',
+      node: dom.orcidSearchResultsList
+    });
   }
 }
 

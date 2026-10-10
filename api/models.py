@@ -75,6 +75,12 @@ class MatchLattesRequest(BaseModel):
     researcher_name: str | None = None
 
 
+class OrcidSearchRequest(BaseModel):
+    given_names: str = Field(default="", max_length=100)
+    family_name: str = Field(default="", max_length=100)
+    affiliation: str = Field(default="", max_length=200)
+
+
 class OrcidAnalyzeRequest(BaseModel):
     orcid: str
     year_from: int | None = None

@@ -108,6 +108,20 @@ const dom = {
   orcidInput: document.getElementById('orcid-input'),
   orcidYearFrom: document.getElementById('orcid-year-from'),
   orcidYearTo: document.getElementById('orcid-year-to'),
+
+  // ORCID Search Modal
+  btnOrcidSearch: document.getElementById('btn-orcid-search'),
+  orcidSearchModal: document.getElementById('orcid-search-modal'),
+  btnCloseOrcidSearch: document.getElementById('btn-close-orcid-search'),
+  orcidSearchForm: document.getElementById('orcid-search-form'),
+  orcidSearchGiven: document.getElementById('orcid-search-given'),
+  orcidSearchFamily: document.getElementById('orcid-search-family'),
+  orcidSearchAffiliation: document.getElementById('orcid-search-affiliation'),
+  btnSubmitOrcidSearch: document.getElementById('btn-submit-orcid-search'),
+  orcidSearchSpinner: document.getElementById('orcid-search-spinner'),
+  orcidSearchResultsList: document.getElementById('orcid-search-results-list'),
+  orcidSearchEmpty: document.getElementById('orcid-search-empty'),
+
   sessionResearcherTitle: document.getElementById('session-researcher-title'),
   researcherNameDisplay: document.getElementById('researcher-name-display'),
   researcherImpactBadges: document.getElementById('researcher-impact-badges'),

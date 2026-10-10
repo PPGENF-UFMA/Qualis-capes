@@ -35,7 +35,7 @@ from . import orcid_client
 from .models import (
     BatchClassifyRequest, BatchSearchRequest, ClassifyResponse,
     MatchBatchRequest, MatchLattesRequest,
-    OrcidAnalyzeRequest, OrcidAnalyzeResponse, SaveAliasRequest, FeedbackRequest,
+    OrcidSearchRequest, OrcidAnalyzeRequest, OrcidAnalyzeResponse, SaveAliasRequest, FeedbackRequest,
 )
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -419,6 +419,31 @@ async def api_match_lattes(body: MatchLattesRequest, request: Request):
     articles = [r for r in results if r.get("type") != "congresso"]
     audit_logger.info(f"match_lattes|ip={ip}|segments={len(results)}|articles={len(articles)}|high={sum(1 for r in articles if r.get('confidence') == 'high')}")
     return {"results": articles, "count": len(articles)}
+
+
+@router_v1.post("/orcid/search")
+async def api_orcid_search(body: OrcidSearchRequest, request: Request):
+    """Busca perfis ORCID por nome e afiliação.
+
+    Utiliza a API pública expanded-search do ORCID para encontrar
+    pesquisadores pelo nome e instituição de vínculo.
+    """
+    given = (body.given_names or "").strip()
+    family = (body.family_name or "").strip()
+    if not given and not family:
+        raise HTTPException(status_code=400, detail="Informe pelo menos o nome ou sobrenome.")
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"orcid_search:{ip}", max_requests=20, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de buscas ORCID excedido. Tente novamente em 1 minuto.")
+
+    results = await orcid_client.search_orcid_profiles(
+        given_names=given,
+        family_name=family,
+        affiliation=(body.affiliation or "").strip(),
+        http_client=get_http_client(),
+    )
+    audit_logger.info(f"orcid_search|ip={ip}|given={given[:40]}|family={family[:40]}|results={len(results)}")
+    return {"results": results, "count": len(results)}
 
 
 @router_v1.post("/orcid/analyze", response_model=OrcidAnalyzeResponse)

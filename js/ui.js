@@ -856,6 +856,45 @@ export function closeClassificationInfoModal() {
   closeManagedModal(dom.classificationInfoModal);
 }
 
+// ─── MODAL DE BUSCA ORCID ─────────────────────────────────────────
+
+/**
+ * Abre o modal de busca de ORCID por nome/afiliação.
+ */
+export function showOrcidSearchModal() {
+  if (dom.orcidSearchModal) {
+    // Resetar estado visual
+    if (dom.orcidSearchResultsList) dom.orcidSearchResultsList.style.display = 'none';
+    if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
+    if (dom.orcidSearchEmpty) dom.orcidSearchEmpty.style.display = 'none';
+
+    openManagedModal(dom.orcidSearchModal, dom.orcidSearchGiven);
+
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons({
+        attrs: { class: 'lucide' },
+        nameAttr: 'data-lucide',
+        node: dom.orcidSearchModal
+      });
+    }
+  }
+}
+
+/**
+ * Fecha o modal de busca de ORCID e limpa o formulário.
+ */
+export function closeOrcidSearchModal() {
+  closeManagedModal(dom.orcidSearchModal);
+  // Limpar formulário e resultados
+  if (dom.orcidSearchForm) dom.orcidSearchForm.reset();
+  if (dom.orcidSearchResultsList) {
+    dom.orcidSearchResultsList.innerHTML = '';
+    dom.orcidSearchResultsList.style.display = 'none';
+  }
+  if (dom.orcidSearchSpinner) dom.orcidSearchSpinner.style.display = 'none';
+  if (dom.orcidSearchEmpty) dom.orcidSearchEmpty.style.display = 'none';
+}
+
 // ─── TEMA CLARO/ESCURO ────────────────────────────────────────────
 
 /**

@@ -267,6 +267,108 @@ async def fetch_person_name(orcid: str, http_client: httpx.AsyncClient) -> str:
         return ""
 
 
+def _build_orcid_search_query(given_names: str, family_name: str, affiliation: str = "") -> str:
+    """Build a Solr query for the ORCID expanded-search endpoint.
+
+    Uses quoted phrases for multi-word terms and combines fields with AND.
+    """
+    parts = []
+    given_clean = given_names.strip()
+    family_clean = family_name.strip()
+    affiliation_clean = affiliation.strip()
+
+    if not given_clean and not family_clean:
+        return ""
+
+    if given_clean:
+        parts.append(f'given-names:"{given_clean}"')
+    if family_clean:
+        parts.append(f'family-name:"{family_clean}"')
+    if affiliation_clean:
+        parts.append(f'affiliation-org-name:"{affiliation_clean}"')
+
+    return " AND ".join(parts)
+
+
+def _extract_search_results(payload: dict) -> list[dict]:
+    """Parse the ORCID expanded-search response into a clean list of profiles."""
+    results = []
+    for entry in (payload.get("expanded-result") or []):
+        orcid_id = entry.get("orcid-id") or ""
+        if not orcid_id:
+            continue
+
+        given = entry.get("given-names") or ""
+        family = entry.get("family-names") or ""
+        credit = entry.get("credit-name") or ""
+        display_name = credit or " ".join(part for part in [given, family] if part)
+
+        # Collect institution names from the entry
+        institutions = entry.get("institution-name") or []
+        if isinstance(institutions, str):
+            institutions = [institutions]
+        # Deduplicate preserving order
+        seen_inst = set()
+        unique_institutions = []
+        for inst in institutions:
+            inst_lower = inst.strip().lower()
+            if inst_lower and inst_lower not in seen_inst:
+                seen_inst.add(inst_lower)
+                unique_institutions.append(inst.strip())
+
+        results.append({
+            "orcid": orcid_id,
+            "name": display_name,
+            "given_names": given,
+            "family_name": family,
+            "institutions": unique_institutions[:5],  # Limit to 5 for display
+            "profile_url": f"https://orcid.org/{orcid_id}",
+        })
+    return results
+
+
+async def search_orcid_profiles(
+    given_names: str,
+    family_name: str,
+    affiliation: str,
+    http_client: httpx.AsyncClient,
+    max_results: int = 15,
+) -> list[dict]:
+    """Search the ORCID registry by name and affiliation.
+
+    Uses the /expanded-search endpoint which returns richer data
+    (including institution names) without needing per-record lookups.
+    """
+    query = _build_orcid_search_query(given_names, family_name, affiliation)
+    if not query:
+        return []
+
+    headers = dict(DEFAULT_HEADERS)
+    token = await _get_orcid_access_token(http_client)
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        response = await http_client.get(
+            f"{ORCID_PUBLIC_BASE}/expanded-search/",
+            params={"q": query, "rows": str(max_results)},
+            headers=headers,
+            timeout=15,
+            follow_redirects=True,
+        )
+        if response.status_code in {401, 403}:
+            logger.warning("Busca ORCID indisponível (credenciais ausentes ou inválidas).")
+            return []
+        response.raise_for_status()
+        return _extract_search_results(response.json())
+    except httpx.HTTPStatusError as exc:
+        logger.warning(f"Erro HTTP ao buscar ORCID: {exc.response.status_code}")
+        return []
+    except Exception as exc:
+        logger.warning(f"Erro ao buscar perfis ORCID: {exc}")
+        return []
+
+
 async def fetch_public_works(orcid: str, http_client: httpx.AsyncClient) -> list[dict]:
     payload = await _orcid_get(f"/{orcid}/works", http_client)
     return _extract_work_summaries(payload)

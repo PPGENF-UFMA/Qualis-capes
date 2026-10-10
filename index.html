@@ -239,6 +239,9 @@
                   <label for="orcid-input">ORCID iD:</label>
                   <input type="text" id="orcid-input" class="text-input" placeholder="Ex: 0000-0002-1825-0097"
                     autocomplete="off" required>
+                  <button type="button" id="btn-orcid-search" class="orcid-search-link">
+                    <i data-lucide="search"></i> Buscar ORCID por nome
+                  </button>
                 </div>
                 <div class="orcid-year-grid">
                   <div class="form-group">
@@ -643,6 +646,52 @@
         classificar:</p>
       <div id="search-results-list" class="search-results-list">
         <!-- Resultados injetados via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Busca de ORCID por Nome -->
+  <div id="orcid-search-modal" class="search-modal" role="dialog" aria-modal="true"
+    aria-labelledby="orcid-search-modal-title" style="display: none;">
+    <div class="search-modal-card" style="max-width: 640px;">
+      <div class="search-modal-header">
+        <h3 id="orcid-search-modal-title" class="search-modal-title"><i data-lucide="fingerprint"></i> Buscar ORCID
+        </h3>
+        <button id="btn-close-orcid-search" class="btn-close-modal" aria-label="Fechar modal"><i
+            data-lucide="x"></i></button>
+      </div>
+      <p class="search-modal-subtitle">Informe o nome completo e, opcionalmente, a instituição de vínculo para
+        localizar o perfil ORCID do pesquisador.</p>
+      <form id="orcid-search-form" class="orcid-search-form" autocomplete="off">
+        <div class="orcid-search-grid">
+          <div class="form-group">
+            <label for="orcid-search-given">Nome:</label>
+            <input type="text" id="orcid-search-given" class="text-input" placeholder="Ex: Maria José"
+              autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="orcid-search-family">Sobrenome:</label>
+            <input type="text" id="orcid-search-family" class="text-input" placeholder="Ex: Silva" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="orcid-search-affiliation">Instituição (opcional):</label>
+          <input type="text" id="orcid-search-affiliation" class="text-input"
+            placeholder="Ex: Universidade Federal do Maranhão" autocomplete="off">
+        </div>
+        <button type="submit" id="btn-submit-orcid-search" class="btn" style="width: 100%;"><i
+            data-lucide="search"></i> Buscar Perfis</button>
+      </form>
+      <div id="orcid-search-spinner" class="orcid-search-spinner" style="display: none;">
+        <div class="orcid-search-spinner-dot"></div>
+        <span>Consultando registro ORCID…</span>
+      </div>
+      <div id="orcid-search-results-list" class="search-results-list" style="display: none;">
+        <!-- Resultados injetados via JS -->
+      </div>
+      <div id="orcid-search-empty" class="orcid-search-empty" style="display: none;">
+        <i data-lucide="user-x"></i>
+        <p>Nenhum perfil encontrado. Verifique o nome ou tente sem a instituição.</p>
       </div>
     </div>
   </div>

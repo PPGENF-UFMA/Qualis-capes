@@ -1723,6 +1723,219 @@ body.light-theme .search-result-issn {
   background: rgba(0, 0, 0, 0.05);
 }
 
+/* --- BUSCA DE ORCID POR NOME --- */
+
+.orcid-search-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  margin-top: 4px;
+  transition: var(--transition);
+  text-decoration: none;
+}
+
+.orcid-search-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.orcid-search-link .lucide {
+  width: 13px;
+  height: 13px;
+}
+
+.orcid-search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orcid-search-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .orcid-search-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Spinner */
+.orcid-search-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.orcid-search-spinner-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--panel-border);
+  border-top-color: var(--accent);
+  animation: orcid-spin 0.8s linear infinite;
+}
+
+@keyframes orcid-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.orcid-search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.orcid-search-empty .lucide {
+  width: 32px;
+  height: 32px;
+  opacity: 0.5;
+}
+
+/* Result items */
+.orcid-search-result-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  padding: 14px 16px;
+  border-radius: 10px;
+  transition: var(--transition);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  animation: orcid-result-in 0.25s ease-out both;
+}
+
+body.light-theme .orcid-search-result-item {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.orcid-search-result-item:hover {
+  background: rgba(166, 206, 57, 0.06);
+  border-color: rgba(166, 206, 57, 0.3);
+  transform: translateY(-1px);
+}
+
+@keyframes orcid-result-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.orcid-search-result-item:nth-child(1) { animation-delay: 0ms; }
+.orcid-search-result-item:nth-child(2) { animation-delay: 40ms; }
+.orcid-search-result-item:nth-child(3) { animation-delay: 80ms; }
+.orcid-search-result-item:nth-child(4) { animation-delay: 120ms; }
+.orcid-search-result-item:nth-child(5) { animation-delay: 160ms; }
+.orcid-search-result-item:nth-child(n+6) { animation-delay: 200ms; }
+
+.orcid-search-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.orcid-search-result-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orcid-search-result-orcid {
+  font-family: monospace;
+  font-size: 12px;
+  color: #a6ce39;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.orcid-search-result-institutions {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 350px;
+}
+
+.orcid-search-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.orcid-profile-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  transition: var(--transition);
+  text-decoration: none;
+}
+
+.orcid-profile-link:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(209, 26, 91, 0.08);
+}
+
+.orcid-confirm-btn {
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  min-height: auto !important;
+  gap: 4px !important;
+  background: linear-gradient(135deg, #a6ce39, #7ea62e) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  transition: var(--transition) !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+}
+
+.orcid-confirm-btn:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(166, 206, 57, 0.4) !important;
+  filter: brightness(1.08) !important;
+}
+
 /* --- SISTEMA DE ABAS PREMIUM (GLASSMORPHISM) --- */
 .tab-navigation {
   display: flex;

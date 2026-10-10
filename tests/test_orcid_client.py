@@ -212,3 +212,60 @@ def test_negative_cache_for_scopus(monkeypatch):
     assert res2["scopus"] is None
     assert res2["h_index"] == 10
 
+
+def test_build_orcid_search_query():
+    from api.orcid_client import _build_orcid_search_query
+    
+    # Empty query
+    assert _build_orcid_search_query("", "") == ""
+    assert _build_orcid_search_query("  ", "  ") == ""
+    
+    # Given names only
+    assert _build_orcid_search_query("Maria", "") == 'given-names:"Maria"'
+    
+    # Family name only
+    assert _build_orcid_search_query("", "Silva") == 'family-name:"Silva"'
+    
+    # Both names
+    assert _build_orcid_search_query("Maria", "Silva") == 'given-names:"Maria" AND family-name:"Silva"'
+    
+    # Names and affiliation
+    assert _build_orcid_search_query("Maria", "Silva", "Universidade de Sao Paulo") == 'given-names:"Maria" AND family-name:"Silva" AND affiliation-org-name:"Universidade de Sao Paulo"'
+
+
+def test_extract_search_results():
+    from api.orcid_client import _extract_search_results
+    
+    payload = {
+        "expanded-result": [
+            {
+                "orcid-id": "0000-0002-1825-0097",
+                "given-names": "Carlos",
+                "family-names": "Cunha",
+                "institution-name": ["Universidade Federal do Maranhao", "Universidade Federal do Maranhao"]
+            },
+            {
+                "orcid-id": "0000-0001-2345-6789",
+                "credit-name": "Maria Silva (credit)",
+                "institution-name": "USP"
+            },
+            {
+                # Missing ORCID, should be skipped
+                "given-names": "Invalid",
+                "family-names": "User"
+            }
+        ]
+    }
+    
+    results = _extract_search_results(payload)
+    assert len(results) == 2
+    
+    # First result: dedup institutions, fallback name format
+    assert results[0]["orcid"] == "0000-0002-1825-0097"
+    assert results[0]["name"] == "Carlos Cunha"
+    assert results[0]["institutions"] == ["Universidade Federal do Maranhao"]
+    
+    # Second result: uses credit-name, handles string institution-name
+    assert results[1]["orcid"] == "0000-0001-2345-6789"
+    assert results[1]["name"] == "Maria Silva (credit)"
+    assert results[1]["institutions"] == ["USP"]
