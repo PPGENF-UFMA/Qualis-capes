@@ -166,3 +166,49 @@ def test_fetch_author_impact_metrics_prioritization(monkeypatch):
     assert result["citations"] == 2000
     assert result["scopus"]["h_index"] == 35
     assert result["openalex"]["h_index"] == 40
+
+
+def test_check_author_match_refinement():
+    from api.scopus_client import _check_author_match
+
+    # Casos corretos
+    assert _check_author_match({"ce:surname": "Cunha", "ce:given-name": "Carlos L."}, "carlos", "cunha")
+    assert _check_author_match({"ce:surname": "Cunha", "ce:given-name": "C."}, "carlos", "cunha")
+    assert _check_author_match({"ce:surname": "Cunha", "ce:given-name": "Carlos Leonardo"}, "c", "cunha")
+
+    # Falsos positivos que NÃO devem casar
+    assert not _check_author_match({"ce:surname": "Cunha", "ce:given-name": "Claudio"}, "carlos", "cunha")
+    assert not _check_author_match({"ce:surname": "Silva", "ce:given-name": "Carlos"}, "carlos", "cunha")
+
+
+def test_negative_cache_for_scopus(monkeypatch):
+    import asyncio
+
+    fake_cache = {}
+    monkeypatch.setattr("api.cache.get_author_metrics_cache", lambda: fake_cache)
+    monkeypatch.setattr("api.cache.save_author_metrics_cache", lambda data: fake_cache.update(data))
+
+    call_count = {"scopus": 0}
+
+    async def mock_scopus_failing(orcid, client, **kwargs):
+        call_count["scopus"] += 1
+        return None
+
+    async def mock_openalex(orcid, client, **kwargs):
+        return {"h_index": 10, "source": "OpenAlex", "available": True}
+
+    monkeypatch.setattr(orcid_client, "fetch_scopus_author_metrics", mock_scopus_failing)
+    monkeypatch.setattr(orcid_client, "fetch_openalex_author_metrics", mock_openalex)
+
+    # Primeira chamada: executa mock_scopus e salva tentativa no cache
+    res1 = asyncio.run(orcid_client.fetch_author_impact_metrics("0000-0002-1825-0097", None, dois=["10.1234/abc"]))
+    assert call_count["scopus"] == 1
+    assert res1["scopus"] is None
+    assert res1["h_index"] == 10
+
+    # Segunda chamada: deve vir do cache com negative cache, sem chamar Scopus de novo!
+    res2 = asyncio.run(orcid_client.fetch_author_impact_metrics("0000-0002-1825-0097", None, dois=["10.1234/abc"]))
+    assert call_count["scopus"] == 1  # Não aumentou!
+    assert res2["scopus"] is None
+    assert res2["h_index"] == 10
+

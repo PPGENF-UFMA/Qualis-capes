@@ -35,7 +35,7 @@ from . import orcid_client
 from .models import (
     BatchClassifyRequest, BatchSearchRequest, ClassifyResponse,
     MatchBatchRequest, MatchLattesRequest,
-    OrcidAnalyzeRequest, SaveAliasRequest, FeedbackRequest,
+    OrcidAnalyzeRequest, OrcidAnalyzeResponse, SaveAliasRequest, FeedbackRequest,
 )
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -421,7 +421,7 @@ async def api_match_lattes(body: MatchLattesRequest, request: Request):
     return {"results": articles, "count": len(articles)}
 
 
-@router_v1.post("/orcid/analyze")
+@router_v1.post("/orcid/analyze", response_model=OrcidAnalyzeResponse)
 async def api_orcid_analyze(body: OrcidAnalyzeRequest, request: Request):
     if not body.orcid or not body.orcid.strip():
         raise HTTPException(status_code=400, detail="ORCID nao informado")

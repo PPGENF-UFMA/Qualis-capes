@@ -21,6 +21,7 @@ const appState = {
   classifiedItems: [],
   comparisonProfiles: [],
   authorImpactMetrics: null,
+  researcherName: null,
   dbSummary: { total: 0, items: [] },
   charts: {
     qualis: null,
@@ -116,6 +117,7 @@ export function clearClassifiedItems() {
   appState.classifiedItems = [];
   sessionStorage.removeItem('qualis_results');
   clearAuthorImpactMetrics();
+  clearResearcherName();
 }
 
 /**
@@ -258,6 +260,44 @@ function persistAuthorImpactMetrics() {
     }
   } catch (e) {
     console.warn('[Persistência] Falha ao salvar métricas de autor:', e.message);
+  }
+}
+
+/**
+ * Define e persiste o nome do pesquisador no sessionStorage.
+ */
+export function setResearcherName(name) {
+  appState.researcherName = name;
+  try {
+    if (name) {
+      sessionStorage.setItem('qualis_researcher_name', name);
+    } else {
+      sessionStorage.removeItem('qualis_researcher_name');
+    }
+  } catch (e) {
+    console.warn('[Persistência] Falha ao salvar nome do pesquisador:', e.message);
+  }
+}
+
+/**
+ * Limpa o nome do pesquisador persistido.
+ */
+export function clearResearcherName() {
+  appState.researcherName = null;
+  sessionStorage.removeItem('qualis_researcher_name');
+}
+
+/**
+ * Restaura o nome do pesquisador do sessionStorage.
+ */
+export function restoreResearcherName() {
+  try {
+    const saved = sessionStorage.getItem('qualis_researcher_name');
+    if (saved) {
+      appState.researcherName = saved;
+    }
+  } catch (e) {
+    console.warn('[Persistência] Falha ao restaurar nome do pesquisador:', e.message);
   }
 }
 

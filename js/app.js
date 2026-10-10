@@ -9,7 +9,7 @@ import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyz
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX, escapeHTML } from './utils.js';
 
 import dom from './dom.js';
-import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult, setAuthorImpactMetrics, clearAuthorImpactMetrics, restoreAuthorImpactMetrics } from './state.js';
+import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult, setAuthorImpactMetrics, clearAuthorImpactMetrics, restoreAuthorImpactMetrics, setResearcherName, clearResearcherName, restoreResearcherName } from './state.js';
 import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js?v=20260801-compact-status';
 import { updateComparisonDashboard } from './compare.js';
@@ -39,14 +39,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   restoreResults();
   restoreComparisonProfiles();
   restoreAuthorImpactMetrics();
+  restoreResearcherName();
   initAdaptiveIntro();
   renderRecentSearches();
   await initDatabase();
   await checkCiteScoreStatus();
   await checkCircuitsStatus();
 
+  if (appState.researcherName && dom.researcherNameDisplay && dom.sessionResearcherTitle) {
+    dom.researcherNameDisplay.textContent = appState.researcherName;
+    dom.sessionResearcherTitle.style.display = 'block';
+  }
+
   if (appState.authorImpactMetrics) {
     renderResearcherImpactBadges(appState.authorImpactMetrics);
+    if (dom.sessionResearcherTitle) {
+      dom.sessionResearcherTitle.style.display = 'block';
+    }
   }
 
   // Se havia resultados restaurados da sessão anterior, renderiza-os
@@ -395,16 +404,22 @@ function setupEventListeners() {
   if (dom.selectorOrcid) dom.selectorOrcid.addEventListener('click', () => switchInputType('orcid'));
   if (dom.selectorComparison) dom.selectorComparison.addEventListener('click', () => showComparisonModal());
 
-  // Tooltip IPP — toggle no click (suporte mobile)
-  const ippInfoTrigger = document.getElementById('ipp-info-trigger');
-  if (ippInfoTrigger) {
-    ippInfoTrigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      ippInfoTrigger.classList.toggle('active');
+  // Tooltips KPI (IPP, Índice H, etc.) — toggle no click (suporte mobile e touch)
+  const kpiInfoTriggers = document.querySelectorAll('.kpi-info-trigger');
+  if (kpiInfoTriggers.length > 0) {
+    kpiInfoTriggers.forEach((trigger) => {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasActive = trigger.classList.contains('active');
+        kpiInfoTriggers.forEach((t) => t.classList.remove('active'));
+        if (!wasActive) {
+          trigger.classList.add('active');
+        }
+      });
     });
     document.addEventListener('click', (e) => {
-      if (!ippInfoTrigger.contains(e.target)) {
-        ippInfoTrigger.classList.remove('active');
+      if (!e.target.closest('.kpi-info-trigger')) {
+        kpiInfoTriggers.forEach((t) => t.classList.remove('active'));
       }
     });
   }
@@ -845,6 +860,7 @@ async function processLattesArticles(parsedArticles, researcherName) {
     dom.researcherNameDisplay.textContent = researcherName;
     dom.sessionResearcherTitle.style.display = 'block';
   }
+  setResearcherName(researcherName);
 
   clearAuthorImpactMetrics();
   renderResearcherImpactBadges(null);
@@ -954,10 +970,13 @@ function processOrcidResults(payload) {
     countNew++;
   }
 
+  const label = payload.researcher_name || payload.orcid || 'ORCID';
+  const rangeLabel = payload.year_from && payload.year_to ? ` (${payload.year_from}-${payload.year_to})` : '';
+  const fullNameLabel = `${label}${rangeLabel}`;
+  setResearcherName(fullNameLabel);
+
   if (dom.sessionResearcherTitle && dom.researcherNameDisplay) {
-    const label = payload.researcher_name || payload.orcid || 'ORCID';
-    const rangeLabel = payload.year_from && payload.year_to ? ` (${payload.year_from}-${payload.year_to})` : '';
-    dom.researcherNameDisplay.textContent = `${label}${rangeLabel}`;
+    dom.researcherNameDisplay.textContent = fullNameLabel;
     dom.sessionResearcherTitle.style.display = 'block';
   }
 

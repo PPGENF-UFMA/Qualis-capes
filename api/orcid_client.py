@@ -9,14 +9,14 @@ import httpx
 
 from . import cache
 from . import enricher
+from .scopus_client import fetch_scopus_author_metrics
+from .openalex_client import fetch_openalex_author_metrics
 
 logger = logging.getLogger(__name__)
 
 ORCID_PUBLIC_BASE = os.environ.get("ORCID_PUBLIC_BASE", "https://pub.orcid.org/v3.0")
 ORCID_TOKEN_URL = os.environ.get("ORCID_TOKEN_URL", "https://orcid.org/oauth/token")
 CROSSREF_WORKS_BASE = "https://api.crossref.org/works"
-ELSEVIER_AUTHOR_BASE = os.environ.get("ELSEVIER_AUTHOR_BASE", "https://api.elsevier.com/content/author")
-OPENALEX_AUTHORS_BASE = os.environ.get("OPENALEX_AUTHORS_BASE", "https://api.openalex.org/authors")
 DEFAULT_HEADERS = {
     "Accept": "application/json",
     "User-Agent": "QualisCapesClassifier/2.0 (mailto:qualis-capes@example.invalid)",
@@ -361,273 +361,16 @@ async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unc
     return classified
 
 
-async def _fetch_scopus_author_entry(
-    params: dict,
-    http_client: httpx.AsyncClient,
-    api_key: str,
-) -> dict | None:
-    try:
-        response = await http_client.get(
-            ELSEVIER_AUTHOR_BASE,
-            params={**params, "view": "ENHANCED"},
-            headers={"X-ELS-APIKey": api_key, "Accept": "application/json"},
-            timeout=10,
-        )
-        if response.status_code != 200:
-            return None
-        entries = response.json().get("author-retrieval-response") or []
-        if not entries or entries[0].get("@status") != "found":
-            return None
-        return entries[0]
-    except Exception as exc:
-        logger.debug(f"Falha ao consultar Scopus Author: {exc}")
-        return None
-
-
-async def _discover_scopus_auid_from_dois(
-    dois: list[str],
-    researcher_name: str,
-    http_client: httpx.AsyncClient,
-    api_key: str,
-) -> str | None:
-    """Tenta descobrir o Scopus Author ID (AUID) através dos DOIs das publicações do autor."""
-    if not dois or not researcher_name:
-        return None
-
-    name_parts = [p.lower() for p in re.split(r"[\s\.\-]+", researcher_name) if len(p) >= 3]
-    if not name_parts:
-        return None
-    last_name = name_parts[-1]
-    first_name = name_parts[0]
-
-    clean_dois = []
-    for d in dois:
-        c = normalize_doi(d)
-        if c and c not in clean_dois:
-            clean_dois.append(c)
-        if len(clean_dois) >= 10:
-            break
-
-    for doi in clean_dois:
-        try:
-            r = await http_client.get(
-                "https://api.elsevier.com/content/search/scopus",
-                params={"query": f"DOI({doi})"},
-                headers={"X-ELS-APIKey": api_key, "Accept": "application/json"},
-                timeout=10,
-            )
-            if r.status_code != 200:
-                continue
-            entries = r.json().get("search-results", {}).get("entry") or []
-            if not entries or "error" in entries[0]:
-                continue
-            scopus_id = entries[0].get("dc:identifier", "").replace("SCOPUS_ID:", "").strip()
-            if not scopus_id:
-                continue
-
-            r_abs = await http_client.get(
-                f"https://api.elsevier.com/content/abstract/scopus_id/{scopus_id}",
-                params={"field": "author"},
-                headers={"X-ELS-APIKey": api_key, "Accept": "application/json"},
-                timeout=10,
-            )
-            if r_abs.status_code != 200:
-                continue
-            authors = r_abs.json().get("abstracts-retrieval-response", {}).get("authors", {}).get("author", [])
-            if isinstance(authors, dict):
-                authors = [authors]
-
-            for a in authors:
-                surn = (a.get("ce:surname") or "").lower()
-                given = (a.get("ce:given-name") or "").lower()
-                if last_name in surn:
-                    if not first_name or first_name in given or (given and given[0] == first_name[0]):
-                        auid = a.get("@auid")
-                        if auid:
-                            logger.info(f"Scopus AUID {auid} descoberto via DOI {doi} para '{researcher_name}'")
-                            return str(auid).strip()
-        except Exception as exc:
-            logger.debug(f"Erro ao checar DOI {doi} no Scopus: {exc}")
-            continue
-
-    return None
-
-
-async def _discover_scopus_auid_from_name(
-    researcher_name: str,
-    http_client: httpx.AsyncClient,
-    api_key: str,
-) -> str | None:
-    """Busca alternativa no Scopus Author Search pelo nome do pesquisador."""
-    if not researcher_name:
-        return None
-    name_parts = [p.strip() for p in researcher_name.split() if len(p.strip()) >= 2]
-    if len(name_parts) < 2:
-        return None
-    last = name_parts[-1]
-    first = name_parts[0]
-
-    try:
-        r = await http_client.get(
-            "https://api.elsevier.com/content/search/author",
-            params={"query": f"authlast({last}) and authfirst({first})"},
-            headers={"X-ELS-APIKey": api_key, "Accept": "application/json"},
-            timeout=10,
-        )
-        if r.status_code != 200:
-            return None
-        entries = r.json().get("search-results", {}).get("entry") or []
-        if not entries:
-            return None
-
-        for e in entries:
-            pref = e.get("preferred-name") or {}
-            full_pref = f"{pref.get('given-name', '')} {pref.get('surname', '')}".lower()
-            if last.lower() in full_pref and first.lower() in full_pref:
-                auid = e.get("dc:identifier", "").replace("AUTHOR_ID:", "").strip()
-                if auid:
-                    return auid
-    except Exception as exc:
-        logger.debug(f"Falha na busca por nome no Scopus: {exc}")
-    return None
-
-
-async def fetch_scopus_author_metrics(
-    orcid: str,
-    http_client: httpx.AsyncClient,
-    researcher_name: str | None = None,
-    dois: list[str] | None = None,
-) -> dict | None:
-    api_key = enricher.get_api_key()
-    if not api_key:
-        return None
-
-    # 1. Tentativa direta por ORCID
-    entry = await _fetch_scopus_author_entry({"orcid": orcid}, http_client, api_key)
-
-    # 2. Se a Elsevier retornar vazio/erro, tentar descobrir via DOIs das publicações
-    if not entry and dois and researcher_name:
-        auid = await _discover_scopus_auid_from_dois(dois, researcher_name, http_client, api_key)
-        if auid:
-            entry = await _fetch_scopus_author_entry({"author_id": auid}, http_client, api_key)
-
-    # 3. Se ainda não encontrou, tentar busca por nome no Scopus
-    if not entry and researcher_name:
-        auid = await _discover_scopus_auid_from_name(researcher_name, http_client, api_key)
-        if auid:
-            entry = await _fetch_scopus_author_entry({"author_id": auid}, http_client, api_key)
-
-    if not entry:
-        return None
-
-    core = entry.get("coredata") or {}
-
-    h_idx_raw = entry.get("h-index")
-    h_idx = None
-    if h_idx_raw is not None:
-        try:
-            h_idx = int(h_idx_raw)
-        except (ValueError, TypeError):
-            h_idx = None
-
-    citations_raw = core.get("citation-count") or core.get("cited-by-count")
-    citations = None
-    if citations_raw is not None:
-        try:
-            citations = int(citations_raw)
-        except (ValueError, TypeError):
-            citations = None
-
-    documents_raw = core.get("document-count")
-    documents = None
-    if documents_raw is not None:
-        try:
-            documents = int(documents_raw)
-        except (ValueError, TypeError):
-            documents = None
-
-    links = core.get("link") or []
-    profile_url = next((l.get("@href") for l in links if l.get("@rel") == "scopus-author"), None)
-    author_id = core.get("dc:identifier", "").replace("AUTHOR_ID:", "").strip()
-    if not profile_url and author_id:
-        profile_url = f"https://www.scopus.com/authid/detail.uri?authorId={author_id}"
-
-    return {
-        "h_index": h_idx,
-        "citations": citations,
-        "documents": documents,
-        "author_id": author_id or None,
-        "profile_url": profile_url,
-        "source": "Scopus (Elsevier)",
-        "available": True,
-    }
-
-
-async def fetch_openalex_author_metrics(orcid: str, http_client: httpx.AsyncClient) -> dict | None:
-    try:
-        response = await http_client.get(
-            OPENALEX_AUTHORS_BASE,
-            params={"filter": f"orcid:{orcid}"},
-            headers={
-                "User-Agent": "QualisClassifier/2.0 (mailto:qualis-capes@ufma.br)",
-                "Accept": "application/json",
-            },
-            timeout=10,
-        )
-        if response.status_code != 200:
-            return None
-        payload = response.json()
-        results = payload.get("results") or []
-        if not results:
-            return None
-        author = results[0]
-        stats = author.get("summary_stats") or {}
-
-        h_idx_raw = stats.get("h_index")
-        h_idx = None
-        if h_idx_raw is not None:
-            try:
-                h_idx = int(h_idx_raw)
-            except (ValueError, TypeError):
-                h_idx = None
-
-        i10_raw = stats.get("i10_index")
-        i10 = None
-        if i10_raw is not None:
-            try:
-                i10 = int(i10_raw)
-            except (ValueError, TypeError):
-                i10 = None
-
-        citations_raw = author.get("cited_by_count")
-        citations = None
-        if citations_raw is not None:
-            try:
-                citations = int(citations_raw)
-            except (ValueError, TypeError):
-                citations = None
-
-        works_raw = author.get("works_count")
-        works_count = None
-        if works_raw is not None:
-            try:
-                works_count = int(works_raw)
-            except (ValueError, TypeError):
-                works_count = None
-
-        return {
-            "h_index": h_idx,
-            "i10_index": i10,
-            "citations": citations,
-            "works_count": works_count,
-            "openalex_id": author.get("id"),
-            "profile_url": author.get("id"),
-            "source": "OpenAlex",
-            "available": True,
-        }
-    except Exception as exc:
-        logger.debug(f"OpenAlex author metrics failed for {orcid}: {exc}")
-        return None
+def _clean_cached_metrics(cached: dict) -> dict:
+    """Remove sentinelas de cache negativo antes de retornar ao chamador."""
+    cleaned = dict(cached)
+    scopus_entry = cleaned.get("scopus")
+    if isinstance(scopus_entry, dict) and not scopus_entry.get("available"):
+        cleaned["scopus"] = None
+    openalex_entry = cleaned.get("openalex")
+    if isinstance(openalex_entry, dict) and not openalex_entry.get("available"):
+        cleaned["openalex"] = None
+    return cleaned
 
 
 async def fetch_author_impact_metrics(
@@ -636,6 +379,7 @@ async def fetch_author_impact_metrics(
     researcher_name: str | None = None,
     dois: list[str] | None = None,
 ) -> dict:
+    """Obtém métricas de impacto consolidadas (Scopus e OpenAlex) com cache de 30 dias."""
     normalized = normalize_orcid(orcid)
     if not normalized:
         return {
@@ -648,10 +392,17 @@ async def fetch_author_impact_metrics(
             "updated_at": datetime.now().strftime("%Y-%m-%d"),
         }
 
-    cached = cache.check_cache_validity(cache.get_author_metrics_cache(), normalized, ttl_days=30)
-    # Se o cache já possui resultado com Scopus resolvido (ou não temos novos dados para resolver), usa cache
-    if cached and (cached.get("scopus") or not dois):
-        return cached
+    cached = cache.check_cache_validity(
+        cache.get_author_metrics_cache(), normalized, ttl_days=30
+    )
+    if cached:
+        scopus_entry = cached.get("scopus")
+        # Se Scopus já foi encontrado ou já foi tentado anteriormente, reutiliza cache
+        scopus_resolved = isinstance(scopus_entry, dict) and (
+            scopus_entry.get("available") or scopus_entry.get("attempted")
+        )
+        if scopus_resolved or not dois:
+            return _clean_cached_metrics(cached)
 
     scopus_task = asyncio.create_task(
         fetch_scopus_author_metrics(
@@ -661,9 +412,13 @@ async def fetch_author_impact_metrics(
             dois=dois,
         )
     )
-    openalex_task = asyncio.create_task(fetch_openalex_author_metrics(normalized, http_client))
+    openalex_task = asyncio.create_task(
+        fetch_openalex_author_metrics(normalized, http_client)
+    )
 
-    scopus_data, openalex_data = await asyncio.gather(scopus_task, openalex_task, return_exceptions=True)
+    scopus_data, openalex_data = await asyncio.gather(
+        scopus_task, openalex_task, return_exceptions=True
+    )
 
     if isinstance(scopus_data, Exception):
         logger.debug(f"Erro ao buscar Scopus author metrics para {normalized}: {scopus_data}")
@@ -700,8 +455,19 @@ async def fetch_author_impact_metrics(
         "updated_at": datetime.now().strftime("%Y-%m-%d"),
     }
 
-    if scopus_data or openalex_data:
-        cache.save_author_metrics_cache({normalized: result})
+    # Salva cache com sentinela para buscas negativas (evita repetir chamadas à Elsevier)
+    to_cache = dict(result)
+    to_cache["scopus"] = (
+        scopus_data
+        if scopus_data
+        else {"available": False, "attempted": True, "source": "Scopus (Elsevier)"}
+    )
+    to_cache["openalex"] = (
+        openalex_data
+        if openalex_data
+        else {"available": False, "attempted": True, "source": "OpenAlex"}
+    )
+    cache.save_author_metrics_cache({normalized: to_cache})
 
     return result
 
@@ -756,7 +522,10 @@ async def analyze_orcid_public(
     results = [item for item in await asyncio.gather(*(classify_one(work) for work in filtered)) if item]
     researcher_name = await person_task
     try:
-        impact_metrics = await metrics_task
+        impact_metrics = await asyncio.wait_for(metrics_task, timeout=5.0)
+    except asyncio.TimeoutError:
+        logger.warning("Timeout ao obter metricas de impacto (> 5s). Prosseguindo com classificacao.")
+        impact_metrics = None
     except Exception as exc:
         logger.warning(f"Erro ao obter metricas de impacto: {exc}")
         impact_metrics = None
