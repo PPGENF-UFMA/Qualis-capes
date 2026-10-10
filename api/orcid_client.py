@@ -271,6 +271,8 @@ def _build_orcid_search_query(name: str, affiliation: str = "") -> str:
     """Build a Solr query for the ORCID expanded-search endpoint.
 
     Uses quoted phrases for multi-word terms and combines fields with AND.
+    Searches across given-and-family-names, other-names, and credit-name
+    to ensure robust matching even if the user registered names differently.
     """
     parts = []
     name_clean = name.strip()
@@ -281,7 +283,12 @@ def _build_orcid_search_query(name: str, affiliation: str = "") -> str:
 
     name_tokens = name_clean.split()
     if name_tokens:
-        name_query = " AND ".join(f'given-and-family-names:"{t}"' for t in name_tokens)
+        token_queries = []
+        for t in name_tokens:
+            token_queries.append(
+                f'(given-and-family-names:"{t}" OR other-names:"{t}" OR credit-name:"{t}")'
+            )
+        name_query = " AND ".join(token_queries)
         parts.append(f"({name_query})")
 
     if affiliation_clean:

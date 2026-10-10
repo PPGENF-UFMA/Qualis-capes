@@ -221,13 +221,13 @@ def test_build_orcid_search_query():
     assert _build_orcid_search_query("  ") == ""
     
     # Single name
-    assert _build_orcid_search_query("Maria") == '(given-and-family-names:"Maria")'
+    assert _build_orcid_search_query("Maria") == '((given-and-family-names:"Maria" OR other-names:"Maria" OR credit-name:"Maria"))'
     
     # Both names (split by space)
-    assert _build_orcid_search_query("Maria Silva") == '(given-and-family-names:"Maria" AND given-and-family-names:"Silva")'
+    assert _build_orcid_search_query("Maria Silva") == '((given-and-family-names:"Maria" OR other-names:"Maria" OR credit-name:"Maria") AND (given-and-family-names:"Silva" OR other-names:"Silva" OR credit-name:"Silva"))'
     
     # Names and affiliation
-    assert _build_orcid_search_query("Maria Silva", "Universidade de Sao Paulo") == '(given-and-family-names:"Maria" AND given-and-family-names:"Silva") AND affiliation-org-name:"Universidade de Sao Paulo"'
+    assert _build_orcid_search_query("Maria Silva", "Universidade de Sao Paulo") == '((given-and-family-names:"Maria" OR other-names:"Maria" OR credit-name:"Maria") AND (given-and-family-names:"Silva" OR other-names:"Silva" OR credit-name:"Silva")) AND affiliation-org-name:"Universidade de Sao Paulo"'
 
 
 def test_extract_search_results():
