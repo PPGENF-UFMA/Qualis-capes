@@ -53,6 +53,29 @@ def normalize_doi(doi: str | None) -> str:
     return cleaned
 
 
+def normalize_canonical_doi(doi: str | None) -> str:
+    """Normaliza o DOI para uma forma canônica unificada.
+
+    Remove sufixos de idioma gerados por periódicos multilíngues (especialmente SciELO
+    no prefixo 10.1590/), como -pt, -en, -es, pt, en, es, por, eng, spa.
+    Exemplos:
+      - 10.1590/1980-220x-reeusp-2025-0180pt -> 10.1590/1980-220x-reeusp-2025-0180
+      - 10.1590/1980-220x-reeusp-2025-0180en -> 10.1590/1980-220x-reeusp-2025-0180
+      - 10.1590/0034-7167-2022-0714pt -> 10.1590/0034-7167-2022-0714
+    """
+    if not doi:
+        return ""
+    clean = normalize_doi(doi).strip()
+    clean_lower = clean.lower()
+
+    if clean_lower.startswith("10.1590/"):
+        clean = re.sub(r"[-._]?(pt|en|es|por|eng|spa)$", "", clean, flags=re.I)
+    elif re.search(r"[-._](pt|en|es|por|eng|spa)$", clean_lower):
+        clean = re.sub(r"[-._](pt|en|es|por|eng|spa)$", "", clean, flags=re.I)
+
+    return clean
+
+
 def _value(node: dict | None) -> str:
     if isinstance(node, dict):
         value = node.get("value")
@@ -95,40 +118,129 @@ def _extract_external_values(summary: dict) -> dict:
     return ids
 
 
+def _score_work_summary_priority(summary: dict, ext_values: dict) -> int:
+    """Calcula pontuação de preferência para desduplicação de resumos.
+
+    Prioriza:
+    1. Versão em Português (contexto institucional CAPES/PPGENF)
+    2. Versões com ISSN já informado
+    3. Versão com DOI base/canônico ou inglês
+    """
+    score = 0
+    doi = (ext_values.get("doi") or "").lower()
+    title = (_title_value(summary) or "").lower()
+
+    if ext_values.get("issn"):
+        score += 10
+
+    # Sufixo explícito no DOI
+    if re.search(r"[-._]?(pt|por)$", doi):
+        score += 100
+    elif re.search(r"[-._]?(en|eng)$", doi):
+        score += 50
+    elif re.search(r"[-._]?(es|spa)$", doi):
+        score += 20
+    else:
+        score += 40
+
+    # Palavras funcionais em português no título
+    pt_tokens = {" de ", " da ", " do ", " em ", " para ", " com ", " na ", " no ", " saúde ", " enfermagem ", " e "}
+    padded_title = f" {title} "
+    if any(tok in padded_title for tok in pt_tokens):
+        score += 30
+
+    return score
+
+
 def _extract_work_summaries(payload: dict) -> list[dict]:
-    works = []
-    seen = set()
+    candidate_groups: dict[str, list[dict]] = {}
+    insertion_order: list[str] = []
+
     for group in payload.get("group") or []:
         summaries = group.get("work-summary") or []
         if not summaries:
             continue
-        summary = summaries[0]
-        work_type = summary.get("type") or ""
-        journal = _journal_value(summary)
-        ext_values = _extract_external_values(summary)
-        if work_type and work_type not in ARTICLE_TYPES and not (journal or ext_values["issn"] or ext_values["doi"]):
+
+        for summary in summaries:
+            work_type = summary.get("type") or ""
+            journal = _journal_value(summary)
+            ext_values = _extract_external_values(summary)
+            if work_type and work_type not in ARTICLE_TYPES and not (journal or ext_values["issn"] or ext_values["doi"]):
+                continue
+
+            title = _title_value(summary)
+            year = _publication_year(summary)
+            canon_doi = normalize_canonical_doi(ext_values["doi"])
+            key = (canon_doi.lower() if canon_doi else None) or "|".join([
+                title.lower(),
+                journal.lower(),
+                str(year or ""),
+            ])
+
+            if key not in candidate_groups:
+                candidate_groups[key] = []
+                insertion_order.append(key)
+
+            candidate_groups[key].append({
+                "summary": summary,
+                "title": title,
+                "journal": journal,
+                "year": year,
+                "doi": ext_values["doi"],
+                "canonical_doi": canon_doi,
+                "issn": ext_values["issn"],
+                "type": work_type,
+                "put_code": summary.get("put-code"),
+                "url": _value(summary.get("url")),
+                "priority_score": _score_work_summary_priority(summary, ext_values),
+            })
+
+    works = []
+    for key in insertion_order:
+        candidates = candidate_groups[key]
+        if not candidates:
             continue
 
-        title = _title_value(summary)
-        key = ext_values["doi"].lower() or "|".join([
-            title.lower(),
-            journal.lower(),
-            str(_publication_year(summary) or ""),
-        ])
-        if key in seen:
-            continue
-        seen.add(key)
+        # Ordenar pelo maior score de prioridade de idioma e metadados
+        candidates.sort(key=lambda c: c["priority_score"], reverse=True)
+        best = candidates[0]
 
-        works.append({
-            "title": title,
-            "journal": journal,
-            "year": _publication_year(summary),
-            "doi": ext_values["doi"],
-            "issn": ext_values["issn"],
-            "type": work_type,
-            "put_code": summary.get("put-code"),
-            "url": _value(summary.get("url")),
-        })
+        # Herdar metadados complementares (ex: ISSN ou revista) se ausentes no melhor
+        inherited_issn = best["issn"]
+        inherited_journal = best["journal"]
+        inherited_year = best["year"]
+        all_dois = []
+        seen_dois = set()
+
+        for c in candidates:
+            doi_val = c.get("doi")
+            if doi_val and doi_val.lower() not in seen_dois:
+                seen_dois.add(doi_val.lower())
+                all_dois.append(doi_val)
+            if not inherited_issn and c.get("issn"):
+                inherited_issn = c["issn"]
+            if not inherited_journal and c.get("journal"):
+                inherited_journal = c["journal"]
+            if inherited_year is None and c.get("year") is not None:
+                inherited_year = c["year"]
+
+        alternate_dois = [d for d in all_dois if d.lower() != (best.get("doi") or "").lower()]
+
+        work_entry = {
+            "title": best["title"],
+            "journal": inherited_journal,
+            "year": inherited_year,
+            "doi": best["doi"],
+            "issn": inherited_issn,
+            "type": best["type"],
+            "put_code": best["put_code"],
+            "url": best["url"],
+        }
+        if alternate_dois:
+            work_entry["alternate_dois"] = alternate_dois
+
+        works.append(work_entry)
+
     return works
 
 
@@ -383,7 +495,7 @@ async def fetch_public_works(orcid: str, http_client: httpx.AsyncClient) -> list
 def _unclassified_work(work: dict, reason: str) -> dict:
     title = work.get("title") or "Artigo ORCID sem titulo"
     journal = work.get("journal") or "Periodico nao identificado"
-    return {
+    ret = {
         "issn": "N/A",
         "title": f"[Nao Identificado] {title} ({journal})",
         "journalTitle": journal,
@@ -404,6 +516,9 @@ def _unclassified_work(work: dict, reason: str) -> dict:
         "matchStage": "none",
         "orcidSource": "orcid-public",
     }
+    if work.get("alternate_dois"):
+        ret["alternateDois"] = work["alternate_dois"]
+    return ret
 
 
 async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unclassified: bool) -> dict | None:
@@ -464,6 +579,8 @@ async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unc
     classified["orcidSource"] = "orcid-public"
     classified["confidence"] = confidence
     classified["matchStage"] = match_stage or "journal-name"
+    if work.get("alternate_dois"):
+        classified["alternateDois"] = work["alternate_dois"]
     if candidates:
         classified["lattesCandidates"] = candidates
     return classified

@@ -266,3 +266,98 @@ def test_extract_search_results():
     assert results[1]["orcid"] == "0000-0001-2345-6789"
     assert results[1]["name"] == "Maria Silva (credit)"
     assert results[1]["institutions"] == ["USP"]
+
+
+def test_normalize_canonical_doi():
+    # SciELO: sufixos pt, en, es (com e sem delimitador) colapsam para o mesmo canônico
+    assert orcid_client.normalize_canonical_doi("10.1590/1980-220x-reeusp-2025-0180es") == "10.1590/1980-220x-reeusp-2025-0180"
+    assert orcid_client.normalize_canonical_doi("10.1590/1980-220x-reeusp-2025-0180en") == "10.1590/1980-220x-reeusp-2025-0180"
+    assert orcid_client.normalize_canonical_doi("10.1590/1980-220x-reeusp-2025-0180pt") == "10.1590/1980-220x-reeusp-2025-0180"
+
+    # REBEn: versão base sem sufixo vs versão com sufixo pt
+    assert orcid_client.normalize_canonical_doi("10.1590/0034-7167-2022-0714pt") == "10.1590/0034-7167-2022-0714"
+    assert orcid_client.normalize_canonical_doi("10.1590/0034-7167-2022-0714") == "10.1590/0034-7167-2022-0714"
+
+    # Não SciELO com delimitador explícito
+    assert orcid_client.normalize_canonical_doi("10.1234/artigo-pt") == "10.1234/artigo"
+    assert orcid_client.normalize_canonical_doi("10.1234/artigo-en") == "10.1234/artigo"
+
+    # DOIs sem sufixo de língua não sofrem alteração indevida
+    assert orcid_client.normalize_canonical_doi("10.1016/j.athoracsur.2020.01.015") == "10.1016/j.athoracsur.2020.01.015"
+    assert orcid_client.normalize_canonical_doi("") == ""
+    assert orcid_client.normalize_canonical_doi(None) == ""
+
+
+def test_extract_work_summaries_deduplicates_multilingual_scielo_works():
+    payload = {
+        "group": [
+            {
+                "work-summary": [
+                    {
+                        "put-code": 101,
+                        "type": "journal-article",
+                        "title": {"title": {"value": "Alfabetización en salud entre mujeres lactantes"}},
+                        "journal-title": {"value": "Revista da Escola de Enfermagem da USP"},
+                        "publication-date": {"year": {"value": "2025"}},
+                        "external-ids": {
+                            "external-id": [
+                                {"external-id-type": "doi", "external-id-value": "10.1590/1980-220x-reeusp-2025-0180es"},
+                                {"external-id-type": "issn", "external-id-value": "1980-220X"},
+                            ]
+                        },
+                    }
+                ]
+            },
+            {
+                "work-summary": [
+                    {
+                        "put-code": 102,
+                        "type": "journal-article",
+                        "title": {"title": {"value": "Health literacy among lactating women"}},
+                        "journal-title": {"value": "Revista da Escola de Enfermagem da USP"},
+                        "publication-date": {"year": {"value": "2025"}},
+                        "external-ids": {
+                            "external-id": [
+                                {"external-id-type": "doi", "external-id-value": "10.1590/1980-220x-reeusp-2025-0180en"},
+                            ]
+                        },
+                    }
+                ]
+            },
+            {
+                "work-summary": [
+                    {
+                        "put-code": 103,
+                        "type": "journal-article",
+                        "title": {"title": {"value": "Letramento em saúde entre mulheres lactantes e promoção"}},
+                        "journal-title": {"value": "Revista da Escola de Enfermagem da USP"},
+                        "publication-date": {"year": {"value": "2025"}},
+                        "external-ids": {
+                            "external-id": [
+                                {"external-id-type": "doi", "external-id-value": "10.1590/1980-220x-reeusp-2025-0180pt"},
+                            ]
+                        },
+                    }
+                ]
+            },
+        ]
+    }
+
+    works = orcid_client._extract_work_summaries(payload)
+
+    # Deve consolidar os 3 grupos em apenas 1 trabalho
+    assert len(works) == 1
+
+    selected = works[0]
+    # Deve priorizar o título em português
+    assert selected["title"] == "Letramento em saúde entre mulheres lactantes e promoção"
+    assert selected["doi"] == "10.1590/1980-220x-reeusp-2025-0180pt"
+    assert selected["year"] == 2025
+    # Deve herdar o ISSN presente na versão em espanhol
+    assert selected["issn"] == "1980-220X"
+    # Deve listar os DOIs alternativos/traduzidos
+    assert set(selected["alternate_dois"]) == {
+        "10.1590/1980-220x-reeusp-2025-0180es",
+        "10.1590/1980-220x-reeusp-2025-0180en",
+    }
+

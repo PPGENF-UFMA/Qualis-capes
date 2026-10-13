@@ -3911,8 +3911,12 @@ body.intro-condensed .intro-aside p:last-child {
 body.intro-condensed .aside-guide-btn {
   padding: 8px 18px;
   border-top: 1px solid var(--panel-border);
-  border-bottom: none;
-  border-right: 0;
+  border-bottom: 1px solid var(--panel-border);
+  border-right: 1px solid var(--panel-border);
+}
+
+body.intro-condensed .aside-guide-btn:hover {
+  padding-left: 18px;
 }
 
 
@@ -4959,7 +4963,7 @@ body.light-theme .footer-logo-cpi {
   }
 
   body.intro-condensed .intro-aside {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     padding-left: 20px;
   }
 
