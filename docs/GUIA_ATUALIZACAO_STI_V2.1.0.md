@@ -34,6 +34,11 @@ Como a equipe de TI ainda não havia aplicado a atualização inicial, este paco
 6. **Interface Moderna com Estatísticas & Dashboard:**
    - Navegação por abas (`Tabela Detalhada` e `Estatísticas & Dashboard`), gráficos interativos (Chart.js), KPIs com indicador estimado de produção (IPP) e tipografia refinada e suave nas métricas.
 
+7. **Métricas de Impacto de Carreira e Índice H (Scopus & OpenAlex):**
+   - Exibição de Hero Pills no cabeçalho com o **Índice H ($h$-index)**, **$i10$-index** e contagem total de citações do pesquisador (Scopus e OpenAlex).
+   - Algoritmo de resolução em cascata por DOIs para localizar o Scopus Author ID de docentes sem ORCID previamente associado na Elsevier.
+   - Deduplicação automática de artigos multilíngues do SciELO (versões em PT/EN/ES consolidadas em uma única entrada).
+
 ---
 
 ### 2. Procedimento de Atualização no Servidor (Linux / systemd)

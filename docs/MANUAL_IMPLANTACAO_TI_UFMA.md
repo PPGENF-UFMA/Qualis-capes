@@ -1083,6 +1083,7 @@ sudo systemctl restart qualis-backend
 4. **Auditoria Externa com Links nos Badges:** Todos os badges de indexadores e métricas agora possuem links diretos de comprovação externa nas bases oficiais (Clarivate Master Journal List, Scopus Preview, Portal BVS, NLM Catalog, Fundación Index).
 5. **Coluna "Ano de Publicação", Ordenação Temporal e CSV Enriquecido:** Coluna Ano dedicada na tabela com badges tabulares, ordenação por ano mais recente e persistência de ano em exportações/importações de planilhas.
 6. **Interface Moderna com Estatísticas & Dashboard:** Navegação por abas (`Tabela Detalhada` e `Estatísticas & Dashboard`), gráficos interativos (Chart.js), KPIs de produção (IPP) e tipografia suave nas métricas.
+7. **Métricas de Impacto de Carreira e Índice H (Scopus & OpenAlex):** Exibição de Hero Pills no cabeçalho com o **Índice H ($h$-index)**, **$i10$-index** e contagem de citações (Scopus e OpenAlex), resolução em cascata por DOIs para autores sem ORCID vinculado na Elsevier, e deduplicação automática de artigos multilíngues do SciELO.
 
 #### Roteiro de Atualização em Produção (Linux / systemd):
 
