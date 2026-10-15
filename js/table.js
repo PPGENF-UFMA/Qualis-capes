@@ -152,6 +152,16 @@ function getIndexerValidationInfo(rawIndexer, issn, item) {
   };
 }
 
+function formatPartialWarningTooltip(item) {
+  const sources = Array.isArray(item.warnings) && item.warnings.length > 0
+    ? [...new Set(item.warnings.map(w => w.source).filter(Boolean))].join(', ')
+    : '';
+  if (sources) {
+    return `Fonte(s) externa(s) indisponível(is): ${sources}. O estrato pode mudar caso essas métricas sejam obtidas.`;
+  }
+  return 'Classificação calculada com os dados disponíveis. Algumas fontes externas não responderam.';
+}
+
 function formatClassificationTooltip(item, displayStatus) {
   const messages = [item.classification?.justification || 'Critério não informado.'];
   if (isTechnicalError(item)) {
@@ -164,7 +174,14 @@ function formatClassificationTooltip(item, displayStatus) {
     messages.push('Confira o ISSN impresso/eletrônico ou pesquise pelo nome completo.');
   }
   if (item.data_status === 'partial' && !isProvisionalResult(item)) {
-    messages.push('Classificação calculada com os dados disponíveis.');
+    const sources = Array.isArray(item.warnings) && item.warnings.length > 0
+      ? [...new Set(item.warnings.map(w => w.source).filter(Boolean))].join(', ')
+      : '';
+    if (sources) {
+      messages.push(`Classificação preliminar: fonte(s) indisponível(is) no momento (${sources}). O estrato pode mudar caso essas métricas sejam obtidas.`);
+    } else {
+      messages.push('Classificação calculada com os dados disponíveis.');
+    }
   }
   return messages.join(' ');
 }
@@ -322,7 +339,9 @@ export function renderResultsTable() {
             <span class="estrato-badge ${badgeClass}">${escapeHTML(displayStatus)}</span>
             <i data-lucide="info" class="info-icon" aria-hidden="true"></i>
           </div>
-          ${item.data_status === 'partial' && !provisional ? '<span class="partial-label">dados parciais</span>' : ''}
+          ${item.data_status === 'partial' && !provisional
+            ? `<span class="partial-label" data-tooltip="${escapeHTML(formatPartialWarningTooltip(item))}" tabindex="0">dados parciais</span>`
+            : ''}
         </div>
       </td>
     `;

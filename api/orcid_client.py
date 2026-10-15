@@ -535,7 +535,9 @@ async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unc
         doi_meta = await resolve_doi_with_crossref(work["doi"], http_client)
         if doi_meta:
             title = title or doi_meta.get("title") or ""
-            journal = journal or doi_meta.get("journal") or ""
+            doi_journal = doi_meta.get("journal")
+            if doi_journal:
+                journal = doi_journal
             year = year or doi_meta.get("year")
             if doi_meta.get("issns"):
                 issn = doi_meta["issns"][0]
@@ -566,12 +568,17 @@ async def _classify_work(work: dict, http_client: httpx.AsyncClient, include_unc
         )
 
     classified = await enricher.enrich_and_classify(issn, http_client)
-    journal_label = journal or classified.get("title") or "Periodico identificado"
+    canonical_journal = (
+        (doi_meta or {}).get("journal")
+        or classified.get("title")
+        or journal
+        or "Periodico identificado"
+    )
     article_title = title or "Artigo ORCID sem titulo"
-    classified["journalTitle"] = classified.get("title") or journal_label
+    classified["journalTitle"] = canonical_journal
     classified["articleTitle"] = article_title
-    if article_title and classified.get("title"):
-        classified["title"] = f"{article_title} ({journal_label})"
+    if article_title and canonical_journal:
+        classified["title"] = f"{article_title} ({canonical_journal})"
     classified["year"] = year
     classified["doi"] = work.get("doi") or (doi_meta or {}).get("doi")
     classified["orcidPutCode"] = work.get("put_code")

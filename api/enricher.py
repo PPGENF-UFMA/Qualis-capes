@@ -1031,16 +1031,25 @@ async def enrich_and_classify(issn: str, http_client: httpx.AsyncClient) -> dict
     jcr_val = db_record.get("jcr")
     cs_val = db_record.get("citeScore")
 
+    # Avaliar se alguma falha externa pode realmente impactar o estrato
+    current_estrato = classification.get("estrato", "NC")
+    journal_area = db_record.get("area", "Outras Áreas")
+    has_impactful_warning = any(
+        engine.can_source_improve_estrato(w.get("source", ""), current_estrato, journal_area)
+        for w in warnings
+    )
+    data_status = "partial" if has_impactful_warning else "complete"
+
     return {
         "issn": normalized,
         "title": db_record.get("title", "Sem Título"),
-        "area": db_record.get("area", "Outras Áreas"),
+        "area": journal_area,
         "jcr": jcr_val,
         "citeScore": cs_val,
         "indexers": indexers,
         "metrics": db_record.get("metrics") or {"cuiden": None},
         "classification": classification,
-        "data_status": "partial" if warnings else "complete",
+        "data_status": data_status,
         "warnings": warnings,
         "scieloUpdatedAt": db_record.get("scieloUpdatedAt"),
         "lilacsUpdatedAt": db_record.get("lilacsUpdatedAt"),

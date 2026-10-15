@@ -1,5 +1,5 @@
 import unittest
-from .engine import classify_journal
+from .engine import classify_journal, can_source_improve_estrato
 
 
 class TestQualisEngine(unittest.TestCase):
@@ -207,6 +207,35 @@ class TestQualisEngine(unittest.TestCase):
     def test_empty_journal(self):
         result = classify_journal({})
         self.assertEqual(result["estrato"], "NC")
+
+    # === TESTES DE IMPACTO DE FONTES EXTERNAS (can_source_improve_estrato) ===
+
+    def test_source_improve_a1_cannot_improve(self):
+        """Se o estrato já é A1, nenhuma fonte externa pode melhorá-lo."""
+        for area in ["Enfermagem", "Outras Áreas"]:
+            for src in ["Elsevier", "CiteScore", "SciELO", "LILACS", "Latindex"]:
+                self.assertFalse(
+                    can_source_improve_estrato(src, "A1", area),
+                    f"Fonte {src} não deveria poder melhorar A1 em {area}"
+                )
+
+    def test_source_improve_elsevier_can_improve_a2(self):
+        """Elsevier (teto A1) pode melhorar um periódico que atualmente é A2."""
+        self.assertTrue(can_source_improve_estrato("Elsevier", "A2", "Enfermagem"))
+        self.assertTrue(can_source_improve_estrato("CiteScore", "A2", "Outras Áreas"))
+
+    def test_source_improve_latindex_cannot_improve_a3(self):
+        """Latindex (teto A8) NÃO pode melhorar um periódico que já é A3."""
+        self.assertFalse(can_source_improve_estrato("Latindex", "A3", "Enfermagem"))
+        self.assertFalse(can_source_improve_estrato("latindex", "A3", "Outras Áreas"))
+
+    def test_source_improve_nc_any_source_can_improve(self):
+        """Para NC, qualquer fonte externa conhecida tem potencial de melhorar o estrato."""
+        for src in ["Elsevier", "SciELO", "LILACS", "Latindex"]:
+            self.assertTrue(
+                can_source_improve_estrato(src, "NC", "Enfermagem"),
+                f"Fonte {src} deveria poder melhorar NC"
+            )
 
 
 if __name__ == "__main__":

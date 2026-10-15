@@ -10,6 +10,40 @@ indexadores) e retornar o MAIOR estrato possível ("regra do melhor caso").
 # Ordem dos estratos do maior para o menor
 ESTRATO_ORDER = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "NC"]
 
+# Teto máximo de estrato que cada fonte externa pode conceder por área
+SOURCE_CEILINGS: dict[str, dict[str, str]] = {
+    "Enfermagem": {
+        "elsevier": "A1",
+        "citescore": "A1",
+        "scielo": "A4",
+        "lilacs": "A5",
+        "latindex": "A8",
+    },
+    "Outras Áreas": {
+        "elsevier": "A1",
+        "citescore": "A1",
+        "scielo": "A6",
+        "lilacs": "A7",
+        "latindex": "A8",
+    },
+}
+
+
+def can_source_improve_estrato(source_name: str, current_estrato: str, area: str = "Outras Áreas") -> bool:
+    """Verifica se uma fonte externa indisponível tem potencial de elevar o estrato atual."""
+    source_key = (source_name or "").strip().lower()
+    ceilings = SOURCE_CEILINGS.get(area, SOURCE_CEILINGS["Outras Áreas"])
+    ceiling_estrato = ceilings.get(source_key)
+    if not ceiling_estrato:
+        # Se a fonte for desconhecida, assume conservadoramente que pode melhorar
+        return True
+
+    curr_idx = ESTRATO_ORDER.index(current_estrato) if current_estrato in ESTRATO_ORDER else len(ESTRATO_ORDER) - 1
+    ceil_idx = ESTRATO_ORDER.index(ceiling_estrato) if ceiling_estrato in ESTRATO_ORDER else len(ESTRATO_ORDER) - 1
+
+    # Índice menor na lista ESTRATO_ORDER indica estrato superior (ex: A1 = 0, A2 = 1)
+    return ceil_idx < curr_idx
+
 def _best(candidates: list[tuple[str, str]]) -> dict:
     """Retorna o melhor estrato dentre os candidatos coletados.
     

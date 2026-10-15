@@ -99,3 +99,36 @@ def test_saude_em_debate_both_issns_classify_as_a6(monkeypatch):
         assert res["classification"]["estrato"] == "A6", f"Falha para Saúde em Debate {issn}: {res['classification']}"
         assert "SCIELO" in [idx.upper() for idx in res["indexers"]]
         assert res["area"] == "Outras Áreas"
+
+
+def test_a1_journal_with_external_failure_remains_complete(monkeypatch):
+    """Periódico A1 (ex: Lancet com JCR 109) mantém data_status 'complete' mesmo com falha da Elsevier/Latindex."""
+    async def mock_elsevier(*_args):
+        return {"citeScore": None, "status": "error", "error": "Elsevier temporariamente indisponível"}
+
+    async def mock_latindex(*_args):
+        return {"latindex": False, "status": "error", "error": "Latindex indisponível"}
+
+    monkeypatch.setattr(enricher, "fetch_citescore_result", mock_elsevier)
+    monkeypatch.setattr(enricher, "fetch_latindex", mock_latindex)
+
+    # 0140-6736 é The Lancet (JCR=109.0 -> A1)
+    res = asyncio.run(enricher.enrich_and_classify("0140-6736", None))
+    assert res["classification"]["estrato"] == "A1"
+    # Apesar de haver warnings, nenhuma fonte pode melhorar A1, logo o status deve ser complete
+    assert len(res["warnings"]) > 0
+    assert res["data_status"] == "complete"
+
+
+def test_lower_stratum_journal_with_higher_ceiling_failure_becomes_partial(monkeypatch):
+    """Periódico de estrato inferior (ex: A4) vira 'partial' se fonte com teto superior (Elsevier -> A1) falhar."""
+    async def mock_elsevier(*_args):
+        return {"citeScore": None, "status": "error", "error": "Elsevier indisponível"}
+
+    monkeypatch.setattr(enricher, "fetch_citescore_result", mock_elsevier)
+
+    # 1415-2762 é REME (Enfermagem -> A4 por RevEnf). Elsevier tem teto A1 (> A4).
+    res = asyncio.run(enricher.enrich_and_classify("1415-2762", None))
+    assert res["classification"]["estrato"] == "A4"
+    assert any(w["source"] == "Elsevier" for w in res["warnings"])
+    assert res["data_status"] == "partial"

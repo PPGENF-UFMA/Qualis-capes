@@ -5536,11 +5536,19 @@ body.light-theme .year-badge {
 }
 
 .partial-label {
-  color: #2563a7;
+  color: #3b82f6;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+  display: inline-block;
+}
+
+body.light-theme .partial-label {
+  color: #2563eb;
 }
 
 .btn-review-candidates:focus-visible {
