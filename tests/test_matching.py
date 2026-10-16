@@ -315,3 +315,10 @@ def test_consigo_distinguir_cadernos_saude_coletiva_de_nutricao():
     assert result_a["issn"] == "2358-291X"  # correto, não o 0103-9946 com "E NUTRIÇÃO"
     result_b = enricher.match_journal("CADERNOS DE SAÚDE COLETIVA")
     assert result_b["issn"] == "2358-291X"
+
+
+def test_research_reviews_nursing_not_matched_to_dove_with_high_confidence():
+    """Periódico RROIJ ausente no Sucupira não deve casar falsamente com 2230-522X (Dove Press)."""
+    result = enricher.match_journal("RESEARCH & REVIEWS: JOURNAL OF NURSING AND HEALTH SCIENCES")
+    assert result["issn"] != "2230-522X"
+    assert result["confidence"] != "high"

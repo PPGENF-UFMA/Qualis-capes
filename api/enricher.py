@@ -1596,17 +1596,22 @@ def match_journal(
         none_result = {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
         return _crossref_or_none(none_result, query_norm, article_title)
 
-    fuzzy_results: list[tuple[str, str, float]] = []
+    fuzzy_results: list[tuple[str, str, float, float]] = []
     for issn in candidate_issns:
         record = db.get(issn, {})
         title = record.get("title") or ""
         if not title: continue
         norm_title = _normalize_text(title)
         db_tokens = set(norm_title.split())
+        inter = len(q_tokens_for_fuzzy & db_tokens)
+        if inter == 0: continue
+        q_recall = inter / len(q_tokens_for_fuzzy)
         jaccard = _weighted_jaccard(q_tokens_for_fuzzy, db_tokens, n)
         jw = _jaro_winkler(query_norm, norm_title)
-        score = 0.7 * jaccard + 0.3 * jw
-        fuzzy_results.append((issn, title, score))
+        raw_score = 0.7 * jaccard + 0.3 * jw
+        penalty = (q_recall ** 1.5) if q_recall < 0.75 else 1.0
+        score = raw_score * penalty
+        fuzzy_results.append((issn, title, score, q_recall))
     fuzzy_results.sort(key=lambda x: x[2], reverse=True)
     if not fuzzy_results:
         none_result = {"issn": None, "confidence": "none", "score": 0.0, "stage": "none", "candidates": []}
@@ -1614,16 +1619,17 @@ def match_journal(
 
     best = fuzzy_results[0]
     best_score = best[2]
+    best_q_recall = best[3]
     top = fuzzy_results[:top_k]
     confidence = "none"
-    if best_score >= 0.78: confidence = "high"
+    if best_score >= 0.78 and best_q_recall >= 0.75: confidence = "high"
     elif best_score >= 0.62: confidence = "review"
     _match_stats[f"conf_{confidence}"] += 1
     _match_stats["stage_jaccard"] += 1
 
     result = {"issn": best[0] if confidence != "none" else None,
               "confidence": confidence, "score": best_score, "stage": "jaccard",
-              "candidates": [{"issn": i, "title": t, "score": s} for i, t, s in top]}
+              "candidates": [{"issn": i, "title": t, "score": s} for i, t, s, _ in top]}
 
     # 5. Crossref fallback
     if best_score < 0.80 and article_title:

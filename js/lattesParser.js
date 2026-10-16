@@ -601,11 +601,13 @@ export function matchJournalToISSN(journalName, dbItems) {
     for (const t of qTokens) if (dbTokensSet.has(t)) inter++;
     if (inter === 0) continue;
     const jaccard = weightedJaccard(qTokens, dbTokensSet, df, N);
+    const qRecall = inter / qTokens.size;
     fuzzyCandidates.push({
       issn: item.issn,
       title: item.title,
       normTitle: normDbTitle,
       jaccard,
+      qRecall,
     });
   }
 
@@ -614,10 +616,12 @@ export function matchJournalToISSN(journalName, dbItems) {
   }
 
   // Combinar Jaccard + Jaro-Winkler como desempate pós-filtro
-  // Score final = 0.7 * Jaccard + 0.3 * JaroWinkler
+  // Score final = 0.7 * Jaccard + 0.3 * JaroWinkler com penalidade de recall de tokens da query
   for (const c of fuzzyCandidates) {
     const jw = jaroWinkler(normalizedQuery, c.normTitle);
-    c.score = 0.7 * c.jaccard + 0.3 * jw;
+    const rawScore = 0.7 * c.jaccard + 0.3 * jw;
+    const penalty = c.qRecall < 0.75 ? Math.pow(c.qRecall, 1.5) : 1.0;
+    c.score = rawScore * penalty;
     c.jw = jw;
   }
 
@@ -629,11 +633,11 @@ export function matchJournalToISSN(journalName, dbItems) {
   }));
 
   // Threshold adaptativo:
-  //   >= 0.78  -> "high"
-  //   0.62–0.78 -> "review"
-  //   < 0.62   -> "none"
+  //   >= 0.78 e qRecall >= 0.75 -> "high"
+  //   0.62–0.78                 -> "review"
+  //   < 0.62                    -> "none"
   let confidence = "none";
-  if (best.score >= 0.78) confidence = "high";
+  if (best.score >= 0.78 && (best.qRecall ?? 1.0) >= 0.75) confidence = "high";
   else if (best.score >= 0.62) confidence = "review";
 
   return {

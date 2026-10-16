@@ -192,6 +192,12 @@ const EXTRA = [
     expectedJournal: 'REVISTA ENFERMAGEM ATUAL IN DERME',
     expectNotIssn: '1984-7602', // REVISTA ENFERMAGEM INTEGRADA — NÃO deve vencer
   },
+  {
+    id: 'EX5-ResearchReviewsNursingNaoDeveVencerDove',
+    text: 'SILVA, R. A. R. ; DECA JUNIOR, A. ; PAES, G. O. ; MENEZES, H. F. . Evaluation of the Clinical Simulation for the Teaching-Learning of the Nursing Diagnostic Reasoning. RESEARCH & REVIEWS: JOURNAL OF NURSING AND HEALTH SCIENCES, v. 7, p. 1-7, 2021.',
+    expectedIssn: null,
+    expectNotIssn: '2230-522X', // Nursing-Research and Reviews — NÃO deve vencer
+  },
 ];
 
 // --- Runner ---------------------------------------------------------------
