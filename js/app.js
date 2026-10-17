@@ -10,7 +10,6 @@ import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX, escapeH
 
 import dom from './dom.js';
 import appState, { addClassifiedItem, clearClassifiedItems, getFilteredItems, restoreResults, setComparisonProfiles, clearComparisonProfiles, restoreComparisonProfiles, isTechnicalError, isNonConclusiveResult, setAuthorImpactMetrics, clearAuthorImpactMetrics, restoreAuthorImpactMetrics, setResearcherName, clearResearcherName, restoreResearcherName } from './state.js';
-import { updateAnalytics } from './charts.js';
 import { renderResultsTable } from './table.js?v=20260801-compact-status';
 import { updateComparisonDashboard } from './compare.js';
 import {
@@ -262,53 +261,25 @@ function setupEventListeners() {
     showToast('Arquivo CSV exportado com sucesso!', 'success');
   });
 
-  // Gerar Relatório PDF (via @media print com gráficos e KPIs)
+  // Gerar Relatório PDF (download direto — jsPDF + autotable)
   if (dom.btnReport) {
-    dom.btnReport.addEventListener('click', () => {
+    dom.btnReport.addEventListener('click', async () => {
       if (appState.classifiedItems.length === 0) return;
 
-      // Preencher data no cabeçalho do relatório
-      const reportDate = dom.printReportDate;
-      if (reportDate) {
-        const now = new Date();
-        reportDate.textContent = `Gerado em ${now.toLocaleDateString('pt-BR')} às ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      showLoadingState('Gerando Relatório', 'Montando timbre, KPIs, gráficos e tabela detalhada...', 'file-down');
+      updateLoadingProgress(0, 6);
+      try {
+        const { generateReportPDF } = await import('./report.js');
+        const fileName = await generateReportPDF({
+          onProgress: (current, total) => updateLoadingProgress(current, total)
+        });
+        hideLoadingState();
+        showToast(`Relatório PDF gerado: ${fileName}`, 'success');
+      } catch (err) {
+        console.error('[Relatório PDF]', err);
+        hideLoadingState();
+        showToast(err.message || 'Falha ao gerar o relatório PDF.', 'error');
       }
-
-      // Salvar estado do tema
-      const wasDark = !document.body.classList.contains('light-theme');
-
-      // Forçar tema claro para gráficos legíveis em papel
-      if (wasDark) {
-        document.body.classList.add('light-theme');
-      }
-
-      // Garantir que a aba de analytics está ativa (gráficos precisam de dimensões)
-      const originalTab = dom.activeTab ? dom.activeTab() : null;
-      switchTab('analytics');
-
-      // Re-renderizar gráficos com tema claro
-      const filterYearVal = dom.filterYear ? dom.filterYear.value : 'ALL';
-      const dashboardItems = getFilteredItems('', 'ALL', filterYearVal);
-      updateAnalytics(dashboardItems);
-
-      // Aguardar renderização dos gráficos (Chart.js é assíncrono)
-      setTimeout(() => {
-        window.print();
-
-        // Restaurar após fechar o diálogo de impressão
-        const cleanup = () => {
-          window.removeEventListener('afterprint', cleanup);
-          if (wasDark) {
-            document.body.classList.remove('light-theme');
-          }
-          if (originalTab && originalTab.id === 'tab-table') {
-            switchTab('table');
-          }
-          // Re-renderizar com o tema original
-          updateAnalytics(dashboardItems);
-        };
-        window.addEventListener('afterprint', cleanup, { once: true });
-      }, 400);
     });
   }
 
