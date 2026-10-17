@@ -643,10 +643,25 @@ async function checkCiteScoreStatus() {
         const daysSince = Math.floor((Date.now() - compiledDate.getTime()) / 86400000);
         let statusClass = 'success';
         let warning = '';
-        if (daysSince > 180) {
+        const jcrYear = parseInt(data.database_meta.jcr_year, 10);
+        if (Number.isFinite(jcrYear)) {
+          // Ciclo anual do JCR: a edição N é publicada por volta de junho do ano N+1
+          // (ex.: JCR 2025 publicado em jun/2026). A próxima edição (N+1) é esperada
+          // em junho do ano N+2 e, se não for incorporada, a base fica desatualizada.
+          const now = new Date();
+          const warnFrom = new Date(jcrYear + 2, 6, 1);
+          const errorFrom = new Date(jcrYear + 3, 0, 1);
+          if (now >= errorFrom) {
+            statusClass = 'error';
+            warning = ` ⚠ Base desatualizada — edição JCR ${jcrYear + 1} não incorporada`;
+          } else if (now >= warnFrom) {
+            statusClass = 'warning';
+            warning = ` ⚠ Nova edição JCR ${jcrYear + 1} disponível — verificar atualização`;
+          }
+        } else if (daysSince > 545) {
           statusClass = 'error';
-          warning = ' ⚠ Desatualizado!';
-        } else if (daysSince > 90) {
+          warning = ' ⚠ Base desatualizada!';
+        } else if (daysSince > 365) {
           statusClass = 'warning';
           warning = ' ⚠ Verificar atualização';
         }

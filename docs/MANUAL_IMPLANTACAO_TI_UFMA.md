@@ -287,6 +287,8 @@ Recompile **somente** quando houver:
 3. **Novos dados do Scopus** — nova planilha Scopus
 4. **Correções nos dados** — ISSNs incorretos, áreas reclassificadas
 
+> **Indicador de atualização na interface:** A sidebar exibe "Base compilada: DD/MM/AAAA" com um alerta colorido que acompanha o **ciclo anual do JCR**, e não dias corridos arbitrários. Como a edição JCR `N` é publicada por volta de junho do ano `N+1` (ex.: JCR 2025 publicado em jun/2026), a base permanece **verde** até a próxima edição ser esperada; fica **amarela** a partir de 1º de julho do ano `N+2` ("Nova edição JCR disponível — verificar atualização") e **vermelha** a partir de 1º de janeiro do ano `N+3` ("Base desatualizada — edição JCR não incorporada"). Bases antigas sem o metadado `jcr_year` usam limiar de segurança de 365 dias (aviso) e 545 dias (erro). O ciclo de recompilação é, portanto, **anual** — não é necessário recompilar apenas porque passaram alguns meses.
+
 ### 4.3 Procedimento de Compilação
 
 ```bash
