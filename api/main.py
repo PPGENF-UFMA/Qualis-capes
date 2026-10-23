@@ -36,6 +36,7 @@ from .models import (
     BatchClassifyRequest, BatchSearchRequest, ClassifyResponse,
     MatchBatchRequest, MatchLattesRequest,
     OrcidSearchRequest, OrcidAnalyzeRequest, OrcidAnalyzeResponse, SaveAliasRequest, FeedbackRequest,
+    AuthorImpactMetrics,
 )
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -476,6 +477,53 @@ async def api_orcid_analyze(body: OrcidAnalyzeRequest, request: Request):
         f"works={result.get('works_in_range')}|classified={result.get('works_classified')}"
     )
     return result
+
+
+@router_v1.get("/author-metrics/{orcid}", response_model=AuthorImpactMetrics)
+async def api_author_metrics(
+    orcid: str,
+    request: Request,
+    name: str | None = None,
+    dois: str | None = None,
+    force_refresh: bool = False,
+):
+    """Consulta métricas cienciométricas consolidadas (Scopus e OpenAlex) para um ORCID.
+
+    Permite busca independente, carregamento assíncrono desacoplado e refresh forçado.
+    """
+    clean_orcid = orcid_client.normalize_orcid(orcid)
+    if not clean_orcid:
+        raise HTTPException(status_code=400, detail="ORCID invalido. Use o formato 0000-0000-0000-000X.")
+
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(f"metrics:{ip}", max_requests=30, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Limite de consultas de métricas excedido. Aguarde 1 minuto.")
+
+    doi_list = [d.strip() for d in dois.split(",") if d.strip()] if dois else None
+
+    scopus_auid = None
+    researcher_name = (name or "").strip()
+    try:
+        person_info = await orcid_client.fetch_person_info(clean_orcid, get_http_client())
+        if not researcher_name:
+            researcher_name = person_info.get("name") or ""
+        scopus_auid = person_info.get("scopus_author_id")
+    except Exception:
+        pass
+
+    metrics = await orcid_client.fetch_author_impact_metrics(
+        clean_orcid,
+        get_http_client(),
+        researcher_name=researcher_name or None,
+        dois=doi_list,
+        scopus_auid=scopus_auid,
+        force_refresh=force_refresh,
+    )
+
+    audit_logger.info(
+        f"author_metrics|ip={ip}|orcid={clean_orcid}|h_index={metrics.get('h_index')}|source={metrics.get('h_index_source')}"
+    )
+    return metrics
 
 
 @router_v1.post("/alias")

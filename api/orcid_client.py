@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from urllib.parse import quote
 
@@ -367,16 +368,40 @@ async def _orcid_get(path: str, http_client: httpx.AsyncClient) -> dict:
     return response.json()
 
 
-async def fetch_person_name(orcid: str, http_client: httpx.AsyncClient) -> str:
+async def fetch_person_info(orcid: str, http_client: httpx.AsyncClient) -> dict:
+    """Busca nome e identificadores externos (ex: Scopus Author ID) do perfil ORCID.
+
+    Retorna dict com chaves: name (str), scopus_author_id (str | None).
+    O Scopus Author ID é extraído dos external-identifiers públicos do ORCID,
+    que é a fonte mais confiável pois o próprio pesquisador vinculou.
+    """
+    result = {"name": "", "scopus_author_id": None}
     try:
         payload = await _orcid_get(f"/{orcid}/person", http_client)
         name = payload.get("name") or {}
         credit_name = _value(name.get("credit-name"))
         given = _value(name.get("given-names"))
         family = _value(name.get("family-name"))
-        return credit_name or " ".join(part for part in [given, family] if part)
-    except Exception:
-        return ""
+        result["name"] = credit_name or " ".join(part for part in [given, family] if part)
+
+        # Extrair Scopus Author ID dos external-identifiers
+        ext_ids = (payload.get("external-identifiers") or {}).get("external-identifier") or []
+        for ext_id in ext_ids:
+            id_type = (ext_id.get("external-id-type") or "").lower()
+            id_value = (ext_id.get("external-id-value") or "").strip()
+            if id_type == "scopus author id" and id_value:
+                result["scopus_author_id"] = id_value
+                logger.info(f"Scopus Author ID '{id_value}' encontrado no perfil ORCID {orcid}")
+                break
+    except Exception as exc:
+        logger.debug(f"Erro ao buscar person info ORCID {orcid}: {exc}")
+    return result
+
+
+async def fetch_person_name(orcid: str, http_client: httpx.AsyncClient) -> str:
+    """Wrapper de compatibilidade. Retorna apenas o nome."""
+    info = await fetch_person_info(orcid, http_client)
+    return info["name"]
 
 
 def _build_orcid_search_query(name: str, affiliation: str = "") -> str:
@@ -605,13 +630,30 @@ def _clean_cached_metrics(cached: dict) -> dict:
     return cleaned
 
 
+def _is_attempt_expired(service_entry: dict | None, max_age_seconds: int = 3600) -> bool:
+    """Verifica se uma tentativa sem sucesso (cache negativo) já expirou."""
+    if not isinstance(service_entry, dict):
+        return True
+    if service_entry.get("available"):
+        return False
+    attempted_at = service_entry.get("attempted_at")
+    if attempted_at is None:
+        return True
+    try:
+        return (time.time() - float(attempted_at)) > max_age_seconds
+    except (ValueError, TypeError):
+        return True
+
+
 async def fetch_author_impact_metrics(
     orcid: str,
     http_client: httpx.AsyncClient,
     researcher_name: str | None = None,
     dois: list[str] | None = None,
+    scopus_auid: str | None = None,
+    force_refresh: bool = False,
 ) -> dict:
-    """Obtém métricas de impacto consolidadas (Scopus e OpenAlex) com cache de 30 dias."""
+    """Obtém métricas de impacto consolidadas (Scopus e OpenAlex) com cache de 30 dias e TTL curto para falhas."""
     normalized = normalize_orcid(orcid)
     if not normalized:
         return {
@@ -624,17 +666,22 @@ async def fetch_author_impact_metrics(
             "updated_at": datetime.now().strftime("%Y-%m-%d"),
         }
 
-    cached = cache.check_cache_validity(
-        cache.get_author_metrics_cache(), normalized, ttl_days=30
-    )
-    if cached:
-        scopus_entry = cached.get("scopus")
-        # Se Scopus já foi encontrado ou já foi tentado anteriormente, reutiliza cache
-        scopus_resolved = isinstance(scopus_entry, dict) and (
-            scopus_entry.get("available") or scopus_entry.get("attempted")
+    cached = None
+    if not force_refresh:
+        cached = cache.check_cache_validity(
+            cache.get_author_metrics_cache(), normalized, ttl_days=30
         )
-        if scopus_resolved or not dois:
-            return _clean_cached_metrics(cached)
+        if cached:
+            scopus_entry = cached.get("scopus")
+            scopus_available = isinstance(scopus_entry, dict) and scopus_entry.get("available")
+            scopus_recent_attempt = (
+                isinstance(scopus_entry, dict)
+                and scopus_entry.get("attempted")
+                and not _is_attempt_expired(scopus_entry, max_age_seconds=3600)
+            )
+            scopus_resolved = scopus_available or scopus_recent_attempt
+            if scopus_resolved or not dois:
+                return _clean_cached_metrics(cached)
 
     scopus_task = asyncio.create_task(
         fetch_scopus_author_metrics(
@@ -642,6 +689,7 @@ async def fetch_author_impact_metrics(
             http_client,
             researcher_name=researcher_name,
             dois=dois,
+            scopus_auid=scopus_auid,
         )
     )
     openalex_task = asyncio.create_task(
@@ -659,7 +707,7 @@ async def fetch_author_impact_metrics(
         logger.debug(f"Erro ao buscar OpenAlex author metrics para {normalized}: {openalex_data}")
         openalex_data = None
 
-    if not openalex_data and cached and cached.get("openalex"):
+    if not openalex_data and cached and cached.get("openalex") and cached["openalex"].get("available"):
         openalex_data = cached["openalex"]
 
     primary_h = None
@@ -687,17 +735,28 @@ async def fetch_author_impact_metrics(
         "updated_at": datetime.now().strftime("%Y-%m-%d"),
     }
 
-    # Salva cache com sentinela para buscas negativas (evita repetir chamadas à Elsevier)
+    # Salva cache com sentinela temporal para buscas negativas (TTL curto de 1h para falhas transitórias)
+    now_ts = time.time()
     to_cache = dict(result)
     to_cache["scopus"] = (
         scopus_data
         if scopus_data
-        else {"available": False, "attempted": True, "source": "Scopus (Elsevier)"}
+        else {
+            "available": False,
+            "attempted": True,
+            "attempted_at": now_ts,
+            "source": "Scopus (Elsevier)",
+        }
     )
     to_cache["openalex"] = (
         openalex_data
         if openalex_data
-        else {"available": False, "attempted": True, "source": "OpenAlex"}
+        else {
+            "available": False,
+            "attempted": True,
+            "attempted_at": now_ts,
+            "source": "OpenAlex",
+        }
     )
     cache.save_author_metrics_cache({normalized: to_cache})
 
@@ -719,7 +778,7 @@ async def analyze_orcid_public(
     if year_from and year_to and (year_to - year_from) > 20:
         raise ValueError("Intervalo maximo permitido: 20 anos.")
 
-    person_task = asyncio.create_task(fetch_person_name(normalized_orcid, http_client))
+    person_task = asyncio.create_task(fetch_person_info(normalized_orcid, http_client))
     try:
         works = await fetch_public_works(normalized_orcid, http_client)
     except Exception:
@@ -729,12 +788,13 @@ async def analyze_orcid_public(
     dois = [w["doi"] for w in works if w.get("doi")]
 
     async def _resolve_metrics():
-        name = await person_task
+        person_info = await person_task
         return await fetch_author_impact_metrics(
             normalized_orcid,
             http_client,
-            researcher_name=name,
+            researcher_name=person_info["name"],
             dois=dois,
+            scopus_auid=person_info.get("scopus_author_id"),
         )
 
     metrics_task = asyncio.create_task(_resolve_metrics())
@@ -752,11 +812,12 @@ async def analyze_orcid_public(
             return await _classify_work(work, http_client, include_unclassified)
 
     results = [item for item in await asyncio.gather(*(classify_one(work) for work in filtered)) if item]
-    researcher_name = await person_task
+    person_info = await person_task
+    researcher_name = person_info["name"]
     try:
-        impact_metrics = await asyncio.wait_for(metrics_task, timeout=5.0)
+        impact_metrics = await asyncio.wait_for(metrics_task, timeout=8.0)
     except asyncio.TimeoutError:
-        logger.warning("Timeout ao obter metricas de impacto (> 5s). Prosseguindo com classificacao.")
+        logger.warning("Timeout ao obter metricas de impacto (> 8s). Prosseguindo com classificacao.")
         impact_metrics = None
     except Exception as exc:
         logger.warning(f"Erro ao obter metricas de impacto: {exc}")

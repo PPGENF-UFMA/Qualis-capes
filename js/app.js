@@ -5,7 +5,7 @@
  * de eventos. Toda lógica específica é delegada aos módulos especializados.
  */
 
-import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchOrcidProfiles, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
+import { enrichAndClassify, classifyBatch, normalizeISSN, normalizeORCID, analyzeOrcid, searchOrcidProfiles, fetchAuthorMetrics, searchByName, classifyByName, matchLattes, saveServerAlias, sendMatchFeedback, createTechnicalErrorResult } from './enricher.js';
 import { parseCSV, processCSVData, generateCSV, downloadFile, parseXLSX, escapeHTML } from './utils.js';
 
 import dom from './dom.js';
@@ -239,21 +239,28 @@ function setupEventListeners() {
     const filtered = getFilteredItems(searchVal, filterVal, filterYearVal, sortVal);
 
     // Buscar metadados da base para incluir no CSV
-    let csvMeta = {};
+    let csvMeta = {
+      date: new Date().toISOString(),
+      totalItems: filtered.length
+    };
     try {
       const statusResp = await fetch('/api/v1/status');
       if (statusResp.ok) {
         const statusData = await statusResp.json();
         const meta = statusData.database_meta || {};
-        csvMeta = {
-          date: new Date().toISOString(),
-          compiledAt: meta.compiled_at || '',
-          jcrYear: meta.jcr_year || '',
-          cuidenEdition: meta.cuiden_edition || '',
-          totalItems: filtered.length
-        };
+        csvMeta.compiledAt = meta.compiled_at || '';
+        csvMeta.jcrYear = meta.jcr_year || '';
+        csvMeta.cuidenEdition = meta.cuiden_edition || '';
       }
     } catch (_) { /* silencioso — metadados são opcionais */ }
+
+    if (appState.authorImpactMetrics) {
+      const aim = appState.authorImpactMetrics;
+      if (aim.orcid) csvMeta.orcid = aim.orcid;
+      if (aim.researcher_name) csvMeta.researcherName = aim.researcher_name;
+      if (aim.scopus?.h_index != null) csvMeta.hIndexScopus = aim.scopus.h_index;
+      if (aim.openalex?.h_index != null) csvMeta.hIndexOpenAlex = aim.openalex.h_index;
+    }
 
     const csvContent = generateCSV(filtered, csvMeta);
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -1162,6 +1169,18 @@ function processOrcidResults(payload) {
   } else {
     clearAuthorImpactMetrics();
     renderResearcherImpactBadges(null);
+    // Busca assíncrona desacoplada caso as métricas tenham demorado mais que a classificação
+    fetchAuthorMetrics(payload.orcid, {
+      name: payload.researcher_name,
+      dois: (payload.results || []).map(r => r.doi).filter(Boolean)
+    }).then(asyncMetrics => {
+      if (asyncMetrics && (asyncMetrics.scopus?.h_index != null || asyncMetrics.openalex?.h_index != null)) {
+        setAuthorImpactMetrics(asyncMetrics);
+        renderResearcherImpactBadges(asyncMetrics);
+      }
+    }).catch(err => {
+      console.debug('Carregamento assíncrono de métricas finalizado sem dados:', err);
+    });
   }
 
   if (dom.orcidInput) dom.orcidInput.value = '';

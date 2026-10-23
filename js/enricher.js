@@ -274,3 +274,31 @@ export async function sendMatchFeedback(query, wrongIssn, rightIssn) {
     console.error('[API] Erro ao enviar feedback:', error);
   }
 }
+
+/**
+ * Consulta métricas cienciométricas consolidadas (Scopus e OpenAlex) de forma independente.
+ * @param {string} orcid Identificador ORCID
+ * @param {Object} options { name?: string, dois?: string[], forceRefresh?: boolean }
+ * @returns {Promise<Object>} Métricas consolidadas { h_index, scopus, openalex, ... }
+ */
+export async function fetchAuthorMetrics(orcid, options = {}) {
+  const normalized = normalizeORCID(orcid);
+  if (!normalized) {
+    throw new Error('ORCID inválido. Use o formato 0000-0000-0000-000X.');
+  }
+  const params = new URLSearchParams();
+  if (options.name) params.set('name', options.name);
+  if (Array.isArray(options.dois) && options.dois.length > 0) {
+    params.set('dois', options.dois.slice(0, 10).join(','));
+  }
+  if (options.forceRefresh) params.set('force_refresh', 'true');
+
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetch(`/api/v1/author-metrics/${encodeURIComponent(normalized)}${qs}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || `Erro ao consultar métricas: ${response.statusText}`);
+  }
+  return data;
+}
+

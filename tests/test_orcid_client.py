@@ -181,6 +181,180 @@ def test_check_author_match_refinement():
     assert not _check_author_match({"ce:surname": "Silva", "ce:given-name": "Carlos"}, "carlos", "cunha")
 
 
+def test_parse_brazilian_name():
+    from api.scopus_client import parse_brazilian_name
+
+    p1 = parse_brazilian_name("Bruno Luciano Carneiro Alves de Oliveira")
+    assert p1["first"] == "bruno"
+    assert p1["search_first"] == "bruno"
+    assert p1["search_last"] == "oliveira"
+    assert "luciano" in p1["middles"]
+    assert "alves" in p1["middles"]
+
+    p2 = parse_brazilian_name("João de Deus Cabral Júnior")
+    assert p2["first"] == "joao"
+    assert p2["search_first"] == "joao"
+    assert p2["search_last"] == "cabral"
+    assert p2["agnome"] == "junior"
+    assert p2["last_tokens"] == {"cabral", "junior"}
+
+
+def test_check_author_match_anti_homonym():
+    from api.scopus_client import _check_author_match
+
+    # Celso José Bruno de Oliveira vs ("bruno", "oliveira") -> NÃO deve casar!
+    assert not _check_author_match(
+        {"ce:surname": "de Oliveira", "ce:given-name": "Celso José Bruno"},
+        "bruno",
+        "oliveira",
+    )
+
+    # Bruno L. C. A. de Oliveira -> DEVE casar!
+    assert _check_author_match(
+        {"ce:surname": "de Oliveira", "ce:given-name": "Bruno L. C. A."},
+        "bruno",
+        "oliveira",
+    )
+
+    # Coautor com ORCID diferente do pesquisador -> NÃO deve casar!
+    assert not _check_author_match(
+        {
+            "ce:surname": "de Oliveira",
+            "ce:given-name": "Bruno Luciano",
+            "@orcid": "0000-0002-9999-9999",
+        },
+        "bruno",
+        "oliveira",
+        target_orcid="0000-0001-8053-7972",
+    )
+
+    # Coautor com ORCID idêntico -> DEVE casar!
+    assert _check_author_match(
+        {
+            "ce:surname": "de Oliveira",
+            "ce:given-name": "Bruno Luciano",
+            "@orcid": "0000-0001-8053-7972",
+        },
+        "bruno",
+        "oliveira",
+        target_orcid="0000-0001-8053-7972",
+    )
+
+
+def test_is_orcid_conflict():
+    from api.scopus_client import _is_orcid_conflict
+
+    entry_with_other_orcid = {
+        "coredata": {"orcid": "0000-0002-1234-5678"}
+    }
+    entry_with_same_orcid = {
+        "coredata": {"orcid": "0000-0001-8053-7972"}
+    }
+    entry_without_orcid = {
+        "coredata": {}
+    }
+
+    assert _is_orcid_conflict(entry_with_other_orcid, "0000-0001-8053-7972") is True
+    assert _is_orcid_conflict(entry_with_same_orcid, "0000-0001-8053-7972") is False
+    assert _is_orcid_conflict(entry_without_orcid, "0000-0001-8053-7972") is False
+
+
+def test_score_scopus_author_candidate():
+    from api.scopus_client import _score_scopus_author_candidate, parse_brazilian_name
+
+    target_name = parse_brazilian_name("Bruno Luciano Carneiro Alves de Oliveira")
+    target_orcid = "0000-0001-8053-7972"
+
+    # Candidato 1: Celso José Bruno de Oliveira -> Primeiro nome Celso -> deve ser rejeitado (-1.0)
+    cand_celso = {
+        "preferred-name": {
+            "given-name": "Celso José Bruno",
+            "surname": "de Oliveira",
+        },
+        "affiliation-current": {"affiliation-country": "Brazil"},
+    }
+    assert _score_scopus_author_candidate(cand_celso, target_name, target_orcid) == -1.0
+
+    # Candidato 2: Bruno de Oliveira com ORCID diferente -> deve ser rejeitado (-1.0)
+    cand_wrong_orcid = {
+        "orcid": "0000-0003-9999-0000",
+        "preferred-name": {
+            "given-name": "Bruno",
+            "surname": "de Oliveira",
+        },
+    }
+    assert _score_scopus_author_candidate(cand_wrong_orcid, target_name, target_orcid) == -1.0
+
+    # Candidato 3: Bruno Luciano Carneiro Alves de Oliveira -> Pontuação 100.0 (ORCID confirmado)
+    cand_bruno = {
+        "orcid": "0000-0001-8053-7972",
+        "preferred-name": {
+            "given-name": "Bruno Luciano Carneiro Alves",
+            "surname": "de Oliveira",
+        },
+        "affiliation-current": {"affiliation-country": "Brazil"},
+        "subject-area": "NURS",
+    }
+    assert _score_scopus_author_candidate(cand_bruno, target_name, target_orcid) == 100.0
+
+    # Candidato 4: Sem ORCID, mas nomes do meio batem
+    cand_bruno_no_orcid = {
+        "preferred-name": {
+            "given-name": "Bruno Luciano",
+            "surname": "de Oliveira",
+        },
+        "affiliation-current": {"affiliation-country": "Brazil"},
+    }
+    score = _score_scopus_author_candidate(cand_bruno_no_orcid, target_name, target_orcid)
+    assert score >= 15.0
+
+
+def test_discover_scopus_auid_from_name_homonym_resolution():
+    import asyncio
+    import httpx
+    from api.scopus_client import _discover_scopus_auid_from_name
+
+    class MockSearchClient:
+        async def get(self, url, params=None, headers=None, timeout=None):
+            return httpx.Response(
+                200,
+                json={
+                    "search-results": {
+                        "entry": [
+                            {
+                                "dc:identifier": "AUTHOR_ID:58609280600",
+                                "preferred-name": {
+                                    "given-name": "Celso José Bruno",
+                                    "surname": "de Oliveira",
+                                },
+                                "affiliation-current": {"affiliation-country": "Brazil"},
+                            },
+                            {
+                                "dc:identifier": "AUTHOR_ID:56579067700",
+                                "preferred-name": {
+                                    "given-name": "Bruno Luciano Carneiro Alves",
+                                    "surname": "de Oliveira",
+                                },
+                                "affiliation-current": {"affiliation-country": "Brazil"},
+                            },
+                        ]
+                    }
+                },
+                request=httpx.Request("GET", url),
+            )
+
+    auid = asyncio.run(
+        _discover_scopus_auid_from_name(
+            "Bruno Luciano Carneiro Alves de Oliveira",
+            MockSearchClient(),
+            api_key="fake-key",
+            target_orcid="0000-0001-8053-7972",
+        )
+    )
+    # Deve selecionar o AUID correto do Bruno e descartar o homônimo Celso
+    assert auid == "56579067700"
+
+
 def test_negative_cache_for_scopus(monkeypatch):
     import asyncio
 
@@ -211,6 +385,66 @@ def test_negative_cache_for_scopus(monkeypatch):
     assert call_count["scopus"] == 1  # Não aumentou!
     assert res2["scopus"] is None
     assert res2["h_index"] == 10
+
+    # Terceira chamada com force_refresh=True: deve ignorar cache e re-tentar
+    res3 = asyncio.run(orcid_client.fetch_author_impact_metrics("0000-0002-1825-0097", None, dois=["10.1234/abc"], force_refresh=True))
+    assert call_count["scopus"] == 2  # Aumentou!
+
+
+def test_is_attempt_expired():
+    import time
+    from api.orcid_client import _is_attempt_expired
+
+    # Entrada não-dict
+    assert _is_attempt_expired(None) is True
+    assert _is_attempt_expired("invalid") is True
+
+    # Entrada com sucesso confirmado nunca expira pelo TTL curto
+    assert _is_attempt_expired({"available": True}) is False
+
+    # Entrada de cache legado sem attempted_at: expira imediatamente para liberar re-tentativa
+    assert _is_attempt_expired({"available": False, "attempted": True}) is True
+
+    # Tentativa recente (< 3600s)
+    recent_entry = {"available": False, "attempted": True, "attempted_at": time.time() - 300}
+    assert _is_attempt_expired(recent_entry, max_age_seconds=3600) is False
+
+    # Tentativa antiga (> 3600s)
+    old_entry = {"available": False, "attempted": True, "attempted_at": time.time() - 4000}
+    assert _is_attempt_expired(old_entry, max_age_seconds=3600) is True
+
+
+def test_api_author_metrics_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    async def mock_metrics(orcid, client, **kwargs):
+        return {
+            "orcid": orcid,
+            "h_index": 15,
+            "h_index_source": "Scopus",
+            "citations": 450,
+            "scopus": {"h_index": 15, "citations": 450, "available": True, "source": "Scopus (Elsevier)"},
+            "openalex": {"h_index": 16, "citations": 480, "available": True, "source": "OpenAlex"},
+            "updated_at": "2026-10-23",
+        }
+
+    monkeypatch.setattr(orcid_client, "fetch_author_impact_metrics", mock_metrics)
+
+    with TestClient(app) as client:
+        # 1. ORCID válido
+        resp = client.get("/api/v1/author-metrics/0000-0001-8053-7972?name=Bruno%20Oliveira")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["orcid"] == "0000-0001-8053-7972"
+        assert data["h_index"] == 15
+        assert data["h_index_source"] == "Scopus"
+        assert data["scopus"]["available"] is True
+
+        # 2. ORCID inválido
+        resp_bad = client.get("/api/v1/author-metrics/invalid-orcid")
+        assert resp_bad.status_code == 400
+
 
 
 def test_build_orcid_search_query():

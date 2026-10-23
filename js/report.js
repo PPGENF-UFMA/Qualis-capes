@@ -381,6 +381,16 @@ export async function generateReportPDF(opts = {}) {
     ['Itens no relatorio:', `${tableItems.length} (tabela)  |  ${kpis.total} conclusivos no dashboard`],
     ['Filtros:', describeFilters(searchVal, filterVal, filterYearVal, sortVal)]
   ];
+
+  const impact = appState.authorImpactMetrics;
+  const hasImpact = Boolean(
+    impact && (impact.scopus?.h_index != null || impact.openalex?.h_index != null || impact.h_index != null)
+  );
+
+  if (impact?.orcid) {
+    metaLines.splice(1, 0, ['Identificador ORCID:', impact.orcid]);
+  }
+
   metaLines.forEach(([label, value]) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
@@ -393,11 +403,71 @@ export async function generateReportPDF(opts = {}) {
     y += Math.max(6, wrapped.length * 4.6);
   });
 
-  // ── KPIs ──
+  // ── Métricas de Impacto Científico (Carreira) ──
+  if (hasImpact) {
+    y = ensureSpace(doc, y + 2, 35);
+    y = sectionTitle(doc, 'Metricas de impacto cientifico (Carreira)', y);
+
+    const impactCards = [];
+
+    // Card 1: Scopus
+    if (impact.scopus && impact.scopus.h_index != null) {
+      const citStr = impact.scopus.citations != null
+        ? `${impact.scopus.citations.toLocaleString('pt-BR')} citacoes`
+        : 'Base Scopus (Elsevier)';
+      impactCards.push(['Indice H (Scopus)', String(impact.scopus.h_index), citStr]);
+    } else {
+      impactCards.push(['Indice H (Scopus)', 'N/D', 'Nao indexado na Scopus']);
+    }
+
+    // Card 2: OpenAlex
+    if (impact.openalex && impact.openalex.h_index != null) {
+      const i10Str = impact.openalex.i10_index != null ? `i10: ${impact.openalex.i10_index} | ` : '';
+      const citStr = impact.openalex.citations != null
+        ? `${i10Str}${impact.openalex.citations.toLocaleString('pt-BR')} cit.`
+        : 'OpenAlex Global';
+      impactCards.push(['Indice H (OpenAlex)', String(impact.openalex.h_index), citStr]);
+    } else {
+      impactCards.push(['Indice H (OpenAlex)', 'N/D', 'Catalogo aberto']);
+    }
+
+    // Card 3: Citações globais / Referência
+    const totalCit = impact.citations != null
+      ? impact.citations.toLocaleString('pt-BR')
+      : (impact.scopus?.citations != null
+        ? impact.scopus.citations.toLocaleString('pt-BR')
+        : (impact.openalex?.citations != null ? impact.openalex.citations.toLocaleString('pt-BR') : '-'));
+    const sourceLabel = impact.h_index_source ? `Referencia: ${impact.h_index_source}` : 'Trajetoria historica';
+    impactCards.push(['Citacoes totais', String(totalCit), sourceLabel]);
+
+    const impW = (pageW - 28 - 4) / 3;
+    const impH = 20;
+    impactCards.forEach(([title, value, sub], i) => {
+      const x = 14 + i * (impW + 2);
+      const cy = y;
+      doc.setFillColor(...C.cardBg);
+      doc.setDrawColor(...C.line);
+      doc.roundedRect(x, cy, impW, impH, 1.5, 1.5, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(...C.muted);
+      doc.text(String(title).toUpperCase().slice(0, 32), x + 3, cy + 5);
+      doc.setFontSize(13);
+      doc.setTextColor(...C.primary);
+      doc.text(String(value), x + 3, cy + 12);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...C.muted);
+      doc.text(String(sub).slice(0, 40), x + 3, cy + 16.5);
+    });
+    y += impH + 6;
+  }
+
+  // ── KPIs Qualis ──
   report(2, 5);
   await tick();
   y = ensureSpace(doc, y + 2, 60);
-  y = sectionTitle(doc, 'Indicadores consolidados', y);
+  y = sectionTitle(doc, 'Indicadores consolidados (Producao)', y);
   const kpiCards = [
     ['Producao intelectual', String(kpis.total), kpis.enf === kpis.total && kpis.total > 0 ? '100% Enfermagem' : `${kpis.enf} Enf. / ${kpis.outras} Outras`],
     ['Producao qualificada (A1+A2)', String(kpis.qualified), `${kpis.qualifiedPct}% do total`],

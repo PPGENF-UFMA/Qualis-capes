@@ -288,8 +288,12 @@ export function generateCSV(classifiedItems, meta = {}) {
   const rows = [];
 
   // Bloco de metadados de auditoria (visível como comentários # no topo)
-  if (meta.date || meta.compiledAt || meta.jcrYear) {
+  if (meta.date || meta.compiledAt || meta.jcrYear || meta.orcid) {
     rows.push('# ===== METADADOS DA CONSULTA =====');
+    if (meta.researcherName) rows.push(`# Pesquisador: ${meta.researcherName}`);
+    if (meta.orcid) rows.push(`# ORCID: ${meta.orcid}`);
+    if (meta.hIndexScopus != null) rows.push(`# Indice H (Scopus): ${meta.hIndexScopus}`);
+    if (meta.hIndexOpenAlex != null) rows.push(`# Indice H (OpenAlex): ${meta.hIndexOpenAlex}`);
     if (meta.date) rows.push(`# Data da consulta: ${meta.date}`);
     if (meta.compiledAt) rows.push(`# Base compilada em: ${meta.compiledAt}`);
     if (meta.jcrYear) rows.push(`# Edicao JCR: ${meta.jcrYear}`);
