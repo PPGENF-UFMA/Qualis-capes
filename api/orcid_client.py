@@ -23,6 +23,7 @@ DEFAULT_HEADERS = {
     "User-Agent": "QualisCapesClassifier/2.0 (mailto:qualis-capes@example.invalid)",
 }
 ARTICLE_TYPES = {"journal-article", "preprint", "peer-review"}
+AUTHOR_METRICS_CACHE_TTL_DAYS = int(os.environ.get("AUTHOR_METRICS_CACHE_TTL_DAYS", 7))
 
 _orcid_token_cache: str | None = None
 
@@ -653,7 +654,7 @@ async def fetch_author_impact_metrics(
     scopus_auid: str | None = None,
     force_refresh: bool = False,
 ) -> dict:
-    """Obtém métricas de impacto consolidadas (Scopus e OpenAlex) com cache de 30 dias e TTL curto para falhas."""
+    """Obtém métricas de impacto consolidadas (Scopus e OpenAlex) com cache de 7 dias e TTL curto para falhas."""
     normalized = normalize_orcid(orcid)
     if not normalized:
         return {
@@ -669,7 +670,7 @@ async def fetch_author_impact_metrics(
     cached = None
     if not force_refresh:
         cached = cache.check_cache_validity(
-            cache.get_author_metrics_cache(), normalized, ttl_days=30
+            cache.get_author_metrics_cache(), normalized, ttl_days=AUTHOR_METRICS_CACHE_TTL_DAYS
         )
         if cached:
             scopus_entry = cached.get("scopus")

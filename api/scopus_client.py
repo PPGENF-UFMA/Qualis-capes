@@ -467,7 +467,10 @@ async def fetch_scopus_author_metrics(
             logger.info("Scopus Author API nao autorizada (401/403). Interrompendo cascata.")
             return None
         if entry and not _is_orcid_conflict(entry, orcid):
-            return _parse_scopus_metrics(entry)
+            parsed = _parse_scopus_metrics(entry)
+            if (parsed.get("documents") or 0) > 0:
+                return parsed
+            logger.info("Scopus AUID do ORCID possui 0 documentos. Continuando cascata...")
         entry = None
 
     # 1. Tentativa direta por ORCID
