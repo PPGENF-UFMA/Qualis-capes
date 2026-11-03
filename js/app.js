@@ -83,6 +83,8 @@ function initOrcidYearDefaults() {
   dom.orcidYearTo.value = String(currentYear);
 }
 
+let activeOrcidTargetInput = null;
+
 // ─── Setup de Eventos ────────────────────────────────────────────
 
 function setupEventListeners() {
@@ -411,8 +413,18 @@ function setupEventListeners() {
     dom.lattesForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const researcherName = dom.lattesResearcherName.value.trim();
+      const rawOrcid = (dom.lattesOrcidInput?.value || '').trim();
       const lattesText = dom.lattesTextInput.value.trim();
       if (!researcherName || !lattesText) return;
+
+      let normalizedOrcid = null;
+      if (rawOrcid) {
+        normalizedOrcid = normalizeORCID(rawOrcid);
+        if (!normalizedOrcid) {
+          showToast('ORCID inválido. Use o formato 0000-0000-0000-000X ou deixe em branco.', 'warning');
+          return;
+        }
+      }
 
       showLoadingState('Analisando Currículo Lattes', 'Segmentando artigos e aplicando inteligência de abreviações...', 'file-text');
 
@@ -427,14 +439,14 @@ function setupEventListeners() {
 
         hideLoadingState();
         const modalOpened = showLattesPreviewModal(parsedArticles, async () => {
-          await processLattesArticles(parsedArticles, researcherName);
+          await processLattesArticles(parsedArticles, researcherName, normalizedOrcid);
         });
 
         if (!modalOpened) {
           // Fallback: processa os artigos diretamente se o modal nao abrir
           console.log('[Lattes] Modal preview indisponivel, processando diretamente...');
           showLoadingState('Analisando Currículo Lattes', 'Classificando os artigos...', 'file-text');
-          await processLattesArticles(parsedArticles, researcherName);
+          await processLattesArticles(parsedArticles, researcherName, normalizedOrcid);
         }
       } catch (err) {
         console.error("[Lattes Submit Error]", err);
@@ -478,7 +490,18 @@ function setupEventListeners() {
   // ORCID Search Modal — Buscar ORCID por nome
   if (dom.btnOrcidSearch) {
     dom.btnOrcidSearch.addEventListener('click', () => {
+      activeOrcidTargetInput = dom.orcidInput;
       showOrcidSearchModal();
+    });
+  }
+
+  if (dom.btnLattesOrcidSearch) {
+    dom.btnLattesOrcidSearch.addEventListener('click', () => {
+      activeOrcidTargetInput = dom.lattesOrcidInput;
+      showOrcidSearchModal();
+      if (dom.orcidSearchName && dom.lattesResearcherName?.value) {
+        dom.orcidSearchName.value = dom.lattesResearcherName.value.trim();
+      }
     });
   }
 
@@ -881,7 +904,7 @@ function applyArticleMetadata(classified, article) {
  * @param {Object[]} parsedArticles Artigos parseados pelo backend
  * @param {string} researcherName Nome do pesquisador
  */
-async function processLattesArticles(parsedArticles, researcherName) {
+async function processLattesArticles(parsedArticles, researcherName, orcid = null) {
   showLoadingState('Analisando Currículo Lattes', 'Classificando os artigos...', 'file-text');
   
   let countNew = 0;
@@ -912,9 +935,28 @@ async function processLattesArticles(parsedArticles, researcherName) {
   }
   setResearcherName(researcherName);
 
-  clearAuthorImpactMetrics();
-  renderResearcherImpactBadges(null);
+  if (orcid) {
+    clearAuthorImpactMetrics();
+    renderResearcherImpactBadges(null);
+    fetchAuthorMetrics(orcid, {
+      name: researcherName,
+    }).then(asyncMetrics => {
+      if (asyncMetrics && (asyncMetrics.scopus?.h_index != null || asyncMetrics.openalex?.h_index != null)) {
+        setAuthorImpactMetrics(asyncMetrics);
+        renderResearcherImpactBadges(asyncMetrics);
+        if (dom.sessionResearcherTitle) {
+          dom.sessionResearcherTitle.style.display = 'block';
+        }
+      }
+    }).catch(err => {
+      console.debug('Carregamento assíncrono de métricas do Lattes finalizado sem dados:', err);
+    });
+  } else {
+    clearAuthorImpactMetrics();
+    renderResearcherImpactBadges(null);
+  }
 
+  if (dom.lattesOrcidInput) dom.lattesOrcidInput.value = '';
   dom.lattesTextInput.value = '';
   
   hideLoadingState();
@@ -1113,9 +1155,10 @@ function renderOrcidSearchResults(profiles) {
       confirmBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const selectedOrcid = profile.orcid;
-        if (dom.orcidInput) {
-          dom.orcidInput.value = selectedOrcid;
-          dom.orcidInput.dispatchEvent(new Event('input', { bubbles: true }));
+        const targetInput = activeOrcidTargetInput || dom.orcidInput;
+        if (targetInput) {
+          targetInput.value = selectedOrcid;
+          targetInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
         closeOrcidSearchModal();
         showToast(`ORCID ${selectedOrcid} selecionado para ${profile.name}.`, 'success');

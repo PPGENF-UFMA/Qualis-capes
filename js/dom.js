@@ -103,6 +103,8 @@ const dom = {
   paneInputLattes: document.getElementById('input-pane-lattes'),
   lattesForm: document.getElementById('lattes-form'),
   lattesResearcherName: document.getElementById('lattes-researcher-name'),
+  lattesOrcidInput: document.getElementById('lattes-orcid-input'),
+  btnLattesOrcidSearch: document.getElementById('btn-lattes-orcid-search'),
   lattesTextInput: document.getElementById('lattes-text-input'),
   orcidForm: document.getElementById('orcid-form'),
   orcidInput: document.getElementById('orcid-input'),

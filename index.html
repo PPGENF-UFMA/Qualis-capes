@@ -371,6 +371,25 @@
                     placeholder="Ex: Carlos Leonardo F. Cunha" required>
                 </div>
                 <div class="form-group">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <label for="lattes-orcid-input" style="margin-bottom: 0;">
+                      ORCID iD <span style="font-size: 11px; font-weight: normal; color: var(--text-muted);">(opcional)</span>
+                    </label>
+                    <span class="kpi-info-trigger" tabindex="0" role="button" aria-label="Informações sobre o ORCID e Índice H">
+                      <i data-lucide="info" class="kpi-info-icon"></i>
+                      <span class="kpi-info-tooltip">
+                        <strong>Métricas Cienciométricas (Índice H):</strong><br>
+                        O preenchimento do ORCID é necessário para consultar e exibir o <strong>Índice H</strong>, <strong>i10-index</strong> e total de citações (Scopus e OpenAlex) do pesquisador.
+                      </span>
+                    </span>
+                  </div>
+                  <input type="text" id="lattes-orcid-input" class="text-input"
+                    placeholder="Ex: 0000-0002-1825-0097" autocomplete="off">
+                  <button type="button" id="btn-lattes-orcid-search" class="orcid-search-link">
+                    <i data-lucide="search"></i> Buscar ORCID por nome
+                  </button>
+                </div>
+                <div class="form-group">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <label for="lattes-text-input" style="margin-bottom: 0;">Cole a lista de artigos do Lattes:</label>
                     <button type="button" id="btn-lattes-help" class="btn-text-small"
