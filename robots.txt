@@ -1,0 +1,11 @@
+# Robots.txt — Classificador Qualis CAPES (CPI - PPGENF/UFMA)
+User-agent: *
+Allow: /
+Allow: /assets/
+Allow: /css/
+Allow: /js/
+Allow: /api/health
+Disallow: /api/
+
+Sitemap: https://qualis.ppgenf.ufma.br/sitemap.xml
+

@@ -617,3 +617,19 @@ async def serve_logo():
 @app.get("/favicon.ico", include_in_schema=False)
 async def serve_favicon():
     return FileResponse(os.path.join(PROJECT_ROOT, "favicon.ico"), media_type="image/x-icon")
+
+
+@app.get("/logo.png", include_in_schema=False)
+async def serve_logo_png():
+    return FileResponse(os.path.join(_assets_dir, "logo.png"), media_type="image/png")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def serve_robots():
+    return FileResponse(os.path.join(PROJECT_ROOT, "robots.txt"), media_type="text/plain")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def serve_sitemap():
+    return FileResponse(os.path.join(PROJECT_ROOT, "sitemap.xml"), media_type="application/xml")
+
